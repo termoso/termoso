@@ -318,6 +318,7 @@ pub async fn revoke_session(state: &AppState, session_id: Uuid) -> ApiResult<()>
         .await?;
         if live == 0 {
             crate::routes::sshid::forget_device(state, device_id).await?;
+            crate::routes::ca::forget_device(state, device_id).await?;
         }
         events::publish(
             state,
@@ -341,6 +342,7 @@ pub async fn revoke_device(state: &AppState, user_id: Uuid, device_id: Uuid) -> 
     .fetch_all(&state.db)
     .await?;
     crate::routes::sshid::forget_device(state, device_id).await?;
+    crate::routes::ca::forget_device(state, device_id).await?;
     for (session_id, h) in rows {
         state.cache.del(&cache_key(&h)).await?;
         events::publish(

@@ -519,6 +519,9 @@ pub const PERMISSIONS: &[&str] = &[
     "bridges.use",
     // sshid
     "sshid.manage",
+    // ca
+    "ca.manage",
+    "ca.issue",
     // ai
     "ai.use",
     // mcp

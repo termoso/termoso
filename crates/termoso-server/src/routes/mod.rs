@@ -7,6 +7,7 @@ pub mod admin;
 pub mod ai;
 pub mod auth;
 pub mod bridges;
+pub mod ca;
 pub mod captcha;
 pub mod gdpr;
 pub mod history;
@@ -222,6 +223,15 @@ pub fn router(state: AppState) -> Router {
             put(scim_admin::set_group_vaults),
         )
         .route(
+            "/teams/{id}/ca",
+            get(ca::get).put(ca::put).delete(ca::delete),
+        )
+        .route("/teams/{id}/ca/rotate", post(ca::rotate))
+        .route("/teams/{id}/ca/issue", post(ca::issue))
+        .route("/teams/{id}/ca/certificates", get(ca::list))
+        .route("/teams/{id}/ca/certificates/{cid}/revoke", post(ca::revoke))
+        .route("/teams/{id}/ca/revoked", get(ca::revoked))
+        .route(
             "/teams/{id}/policies",
             get(policies::get).put(policies::put),
         )
@@ -367,6 +377,7 @@ pub fn router(state: AppState) -> Router {
         .route("/.well-known/assetlinks.json", get(server::assetlinks))
         .route("/captcha", get(captcha::page))
         .nest("/scim/v2", crate::scim::router())
+        .route("/ca/{team_id}", get(ca::trusted_keys))
         .route("/sshid/{handle}", get(sshid::public_default))
         .route("/sshid/{handle}/{type}", get(sshid::public_typed))
         .nest(

@@ -69,6 +69,8 @@ x509-parser = "0.18"
 # `rsa` parses keys and verifies IdP signatures (public-key operations only);
 # SP private-key operations run in AWS-LC (constant-time RSA), already in the
 # tree as the rustls crypto provider.
+# Team SSH CA: key generation and certificate signing.
+ssh-key = { version = "0.7.0-rc.11", default-features = false, features = ["std", "ed25519", "p256", "rsa"] }
 rsa = { version = "0.9", features = ["sha1", "sha2"] }
 aws-lc-rs = { workspace = true }
 # syslog_tls webhooks: raw TLS client with the OS trust store.

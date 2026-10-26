@@ -12,6 +12,7 @@ pub mod admin;
 pub mod ai;
 pub mod auth;
 pub mod bridge;
+pub mod ca;
 pub mod entities;
 pub mod error;
 pub mod live;
