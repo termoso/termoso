@@ -4,6 +4,7 @@
 mod account;
 mod agent_server;
 mod ai;
+mod automations;
 mod avatars;
 mod backup;
 mod cli;
@@ -127,6 +128,7 @@ pub fn run() {
             std::thread::spawn(quick::install_jump_list);
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(security::inactivity_watcher(handle.clone()));
+            tauri::async_runtime::spawn(automations::executor(handle.clone()));
             if !locked {
                 tauri::async_runtime::spawn(startup(handle));
             }
@@ -392,6 +394,13 @@ pub fn run() {
             commands_tools::team_ca_certificates,
             commands_tools::team_ca_revoke,
             commands_tools::team_ca_local,
+            commands_tools::team_automations,
+            commands_tools::team_automation_create,
+            commands_tools::team_automation_update,
+            commands_tools::team_automation_delete,
+            commands_tools::team_automation_run_now,
+            commands_tools::team_automation_runs,
+            commands_tools::team_automations_execute,
             commands_tools::team_idp,
             commands_tools::team_update_idp,
             commands_tools::team_test_idp,

@@ -3138,4 +3138,63 @@ export const ru: Readonly<Record<string, string>> = {
   "Revoke certificate?": "Отозвать сертификат?",
   "The device gets a new certificate on its next sync only if it is still allowed to. Hosts enforce revocation through the KRL list (Settings → revoked certificates).":
     "Устройство получит новый сертификат при следующей синхронизации, только если ему всё ещё разрешено. На хостах отзыв применяется через KRL-список (Настройки → отозванные сертификаты).",
+  "After every run": "После каждого запуска",
+  "Also e-mail team owners and admins": "Также писать владельцам и админам команды",
+  Automations: "Автоматизации",
+  Collapse: "Свернуть",
+  "Comma-separated. Audit events and webhooks fire regardless.":
+    "Через запятую. События аудита и вебхуки срабатывают в любом случае.",
+  "Cron expression": "Cron-выражение",
+  "Custom (cron)": "Своё (cron)",
+  "Delete automation?": "Удалить автоматизацию?",
+  "E-mail alert": "Оповещение по почте",
+  "Edit automation": "Изменить автоматизацию",
+  "Every Monday at 03:00": "Каждый понедельник в 03:00",
+  "Every day at 03:00": "Каждый день в 03:00",
+  Executor: "Исполнитель",
+  Expand: "Развернуть",
+  "Extra recipients": "Дополнительные получатели",
+  Finished: "Завершён",
+  "First day of the month at 03:00": "Первого числа месяца в 03:00",
+  "Host group (all hosts inside, including subgroups)":
+    "Группа хостов (все хосты внутри, включая подгруппы)",
+  "Its run history is deleted too. Hosts and the snippet stay in the vault.":
+    "История запусков тоже удалится. Хосты и сниппет останутся в хранилище.",
+  Missed: "Пропущен",
+  "Never ran": "Не запускалась",
+  "New automation": "Новая автоматизация",
+  "Next run": "Следующий запуск",
+  "No automations yet": "Автоматизаций пока нет",
+  "No runs yet": "Запусков пока нет",
+  "Not an e-mail address: {v}": "Не похоже на адрес почты: {v}",
+  "On failure": "При ошибке",
+  "Run a snippet on a set of hosts on a schedule. The server only keeps the schedule and opaque ids: the snippet and host credentials are resolved by an executor that holds the vault key — the API bridge, or a member's desktop with “Run team automations” enabled in Settings.":
+    "Запуск сниппета на наборе хостов по расписанию. Сервер хранит только расписание и непрозрачные идентификаторы: сниппет и учётные данные хостов разрешает исполнитель с ключом хранилища — API-мост или десктоп участника с включённым в настройках «Выполнять автоматизации команды».",
+  "Run history: {name}": "История запусков: {name}",
+  "Run now": "Запустить сейчас",
+  "Run queued. It starts when an executor with the vault picks it up.":
+    "Запуск поставлен в очередь. Начнётся, когда его подхватит исполнитель с этим хранилищем.",
+  "Run team automations on this computer": "Выполнять автоматизации команды на этом компьютере",
+  Schedule: "Расписание",
+  "Schedule a snippet on a group of hosts and get alerted when it fails.":
+    "Запланируйте сниппет на группе хостов и получайте оповещения при ошибках.",
+  Scheduled: "Запланирован",
+  "Scheduled snippets of your teams run here when their vault is unlocked (otherwise the API bridge or another member's desktop picks them up). Results go to the team page.":
+    "Сниппеты ваших команд по расписанию выполняются здесь, когда их хранилище разблокировано (иначе их подхватит API-мост или десктоп другого участника). Результаты — на странице команды.",
+  Snippet: "Сниппет",
+  "This vault has no hosts.": "В этом хранилище нет хостов.",
+  "This vault has no snippets yet.": "В этом хранилище ещё нет сниппетов.",
+  "Time zone": "Часовой пояс",
+  "Timeout per host, seconds": "Таймаут на хост, секунд",
+  "UTC or a fixed offset like +03:00": "UTC или фиксированное смещение вида +03:00",
+  "Unlock one of this team's vaults first: the snippet and hosts come from it.":
+    "Сначала разблокируйте одно из хранилищ команды: сниппет и хосты берутся из него.",
+  "Variables are not prompted for on a schedule; use fixed values.":
+    "По расписанию переменные не запрашиваются — используйте фиксированные значения.",
+  "Weekdays at 08:00": "По будням в 08:00",
+  "exit {code}": "код {code}",
+  "minute hour day month weekday, or @hourly / @daily / @weekly / @monthly":
+    "минута час день месяц день_недели, либо @hourly / @daily / @weekly / @monthly",
+  "{failed} of {total} failed": "{failed} из {total} с ошибкой",
+  "{total} ok": "{total} успешно",
 };

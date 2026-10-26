@@ -1970,3 +1970,63 @@ pub async fn update_install<R: Runtime>(app: AppHandle<R>) -> Result<UpdateInfo>
 pub fn update_restart<R: Runtime>(app: AppHandle<R>) {
     app.restart()
 }
+
+#[tauri::command]
+pub async fn team_automations<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+) -> Result<termoso_proto::automation::AutomationList> {
+    crate::automations::list(&app, team_id).await
+}
+
+#[tauri::command]
+pub async fn team_automation_create<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+    req: termoso_proto::automation::CreateAutomationRequest,
+) -> Result<termoso_proto::automation::Automation> {
+    crate::automations::create(&app, team_id, req).await
+}
+
+#[tauri::command]
+pub async fn team_automation_update<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+    id: Uuid,
+    req: termoso_proto::automation::UpdateAutomationRequest,
+) -> Result<termoso_proto::automation::Automation> {
+    crate::automations::update(&app, team_id, id, req).await
+}
+
+#[tauri::command]
+pub async fn team_automation_delete<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+    id: Uuid,
+) -> Result<()> {
+    crate::automations::delete(&app, team_id, id).await
+}
+
+#[tauri::command]
+pub async fn team_automation_run_now<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+    id: Uuid,
+) -> Result<termoso_proto::automation::AutomationRun> {
+    crate::automations::run_now(&app, team_id, id).await
+}
+
+#[tauri::command]
+pub async fn team_automation_runs<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+    id: Uuid,
+) -> Result<termoso_proto::automation::AutomationRunList> {
+    crate::automations::runs(&app, team_id, id).await
+}
+
+/// Run due automations right now (the executor also polls every minute).
+#[tauri::command]
+pub async fn team_automations_execute<R: Runtime>(app: AppHandle<R>) -> Result<usize> {
+    crate::automations::pass(&app).await
+}

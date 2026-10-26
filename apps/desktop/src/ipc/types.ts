@@ -108,6 +108,8 @@ export interface Settings {
   serveSshAgent: boolean;
   /** Confirm every signature the agent makes. */
   agentConfirm: boolean;
+  /** Claim and execute team automations on this computer. */
+  runAutomations: boolean;
   recordSessions: boolean;
   logRetentionDays: number;
   /** Relock a password-protected vault after this many idle minutes; 0 = never. */
@@ -2549,4 +2551,105 @@ export interface AgentServerStatus {
   exportHint: string | null;
   keys: AgentServedKey[];
   skipped: AgentSkippedKey[];
+}
+
+// ---- team automations ----------------------------------------------------
+
+export const AUTOMATION_ALERT_ON = ["never", "failure", "always"] as const;
+export type AutomationAlertOn = (typeof AUTOMATION_ALERT_ON)[number];
+export const AUTOMATION_TIMEOUT_MIN = 10;
+export const AUTOMATION_TIMEOUT_MAX = 3600;
+export const AUTOMATION_HOSTS_MAX = 200;
+
+export interface Automation {
+  id: Uuid;
+  team_id: Uuid;
+  vault_id: Uuid;
+  snippet_id: Uuid;
+  name: string;
+  host_ids: Uuid[];
+  group_id: Uuid | null;
+  schedule: string;
+  timezone: string;
+  enabled: boolean;
+  timeout_secs: number;
+  alert_on: AutomationAlertOn;
+  alert_emails: string[];
+  alert_admins: boolean;
+  last_run_at: string | null;
+  last_status: string | null;
+  next_run_at: string | null;
+  created_by: Uuid | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateAutomationRequest {
+  vault_id: Uuid;
+  snippet_id: Uuid;
+  name: string;
+  host_ids: Uuid[];
+  group_id?: Uuid | null;
+  schedule: string;
+  timezone?: string | null;
+  enabled?: boolean | null;
+  timeout_secs?: number | null;
+  alert_on?: AutomationAlertOn | null;
+  alert_emails: string[];
+  alert_admins?: boolean | null;
+}
+
+export interface UpdateAutomationRequest {
+  snippet_id?: Uuid | null;
+  name?: string | null;
+  host_ids?: Uuid[] | null;
+  /** `null` leaves the group alone; `[null]`-style clearing is not needed: pass `group_id: null` inside an object to clear. */
+  group_id?: Uuid | null;
+  schedule?: string | null;
+  timezone?: string | null;
+  enabled?: boolean | null;
+  timeout_secs?: number | null;
+  alert_on?: AutomationAlertOn | null;
+  alert_emails?: string[] | null;
+  alert_admins?: boolean | null;
+}
+
+export interface AutomationList {
+  automations: Automation[];
+}
+
+export interface HostRunResult {
+  host_id: Uuid;
+  label: string;
+  target: string;
+  exit_code: number | null;
+  stdout: string;
+  stderr: string;
+  error: string | null;
+  ms: number;
+}
+
+export type AutomationRunStatus =
+  "pending" | "running" | "done" | "failed" | "missed" | "cancelled";
+
+export interface AutomationRun {
+  id: Uuid;
+  automation_id: Uuid;
+  team_id: Uuid;
+  status: AutomationRunStatus;
+  scheduled_for: string;
+  manual: boolean;
+  claimed_by_device: Uuid | null;
+  claimed_by_name: string | null;
+  claimed_at: string | null;
+  finished_at: string | null;
+  hosts_total: number;
+  hosts_failed: number;
+  results: HostRunResult[];
+  error: string | null;
+  created_at: string;
+}
+
+export interface AutomationRunList {
+  runs: AutomationRun[];
 }

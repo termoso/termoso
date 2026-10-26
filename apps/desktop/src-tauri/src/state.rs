@@ -328,6 +328,9 @@ pub struct Settings {
     /// Run our own SSH agent (socket / named pipe) serving the vault's keys
     /// to local `ssh`, `git` and IDEs.
     pub serve_ssh_agent: bool,
+    /// Claim and execute team automations on this computer.
+    #[serde(default)]
+    pub run_automations: bool,
     /// Ask in the UI before each signature our agent makes.
     pub agent_confirm: bool,
     /// Record terminal output of every session into the encrypted log store.
@@ -436,6 +439,7 @@ impl Default for Settings {
             log_retention_days: 0,
             autostart_forwarding: true,
             serve_ssh_agent: false,
+            run_automations: false,
             agent_confirm: true,
             minimize_to_tray: false,
             sync_conflict: "newest_wins".into(),

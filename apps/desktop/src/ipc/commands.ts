@@ -140,6 +140,12 @@ import type {
   LocalTeamCertificate,
   TeamCa,
   UpdateTeamCaRequest,
+  Automation,
+  AutomationList,
+  AutomationRun,
+  AutomationRunList,
+  CreateAutomationRequest,
+  UpdateAutomationRequest,
 } from "./types";
 import type {
   AccessRequest,
@@ -871,6 +877,19 @@ export const teamCaRevoke = (teamId: Uuid, certificateId: Uuid) =>
   invoke<IssuedCertificate>("team_ca_revoke", { teamId, certificateId });
 export const teamCaLocal = (teamId: Uuid) =>
   invoke<LocalTeamCertificate | null>("team_ca_local", { teamId });
+export const teamAutomations = (teamId: Uuid) =>
+  invoke<AutomationList>("team_automations", { teamId });
+export const teamAutomationCreate = (teamId: Uuid, req: CreateAutomationRequest) =>
+  invoke<Automation>("team_automation_create", { teamId, req });
+export const teamAutomationUpdate = (teamId: Uuid, id: Uuid, req: UpdateAutomationRequest) =>
+  invoke<Automation>("team_automation_update", { teamId, id, req });
+export const teamAutomationDelete = (teamId: Uuid, id: Uuid) =>
+  invoke<null>("team_automation_delete", { teamId, id });
+export const teamAutomationRunNow = (teamId: Uuid, id: Uuid) =>
+  invoke<AutomationRun>("team_automation_run_now", { teamId, id });
+export const teamAutomationRuns = (teamId: Uuid, id: Uuid) =>
+  invoke<AutomationRunList>("team_automation_runs", { teamId, id });
+export const teamAutomationsExecute = () => invoke<number>("team_automations_execute");
 export const teamDevices = (teamId: Uuid) => invoke<TeamDeviceList>("team_devices", { teamId });
 export const teamApproveDevice = (teamId: Uuid, deviceId: Uuid) =>
   invoke<null>("team_approve_device", { teamId, deviceId });
