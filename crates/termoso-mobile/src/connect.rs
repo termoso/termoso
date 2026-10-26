@@ -654,6 +654,16 @@ async fn ssh_connect(
         .and_then(|k| k.data.passphrase.clone())
         .filter(|p| !p.is_empty())
         .map(Zeroizing::new);
+    if let Some(p) = &password
+        && termoso_core::extsecret::is_reference(p)
+    {
+        password = Some(termoso_core::extsecret::resolve(p).await?);
+    }
+    if let Some(p) = &passphrase
+        && termoso_core::extsecret::is_reference(p)
+    {
+        passphrase = Some(termoso_core::extsecret::resolve(p).await?);
+    }
     let cache_passphrases = settings.cache_passphrases && key_id.is_some();
     let mut cached_passphrase = false;
     if passphrase.is_none()

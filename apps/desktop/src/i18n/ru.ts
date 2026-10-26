@@ -3197,4 +3197,6 @@ export const ru: Readonly<Record<string, string>> = {
     "минута час день месяц день_недели, либо @hourly / @daily / @weekly / @monthly",
   "{failed} of {total} failed": "{failed} из {total} с ошибкой",
   "{total} ok": "{total} успешно",
+  "Reference: fetched from the external manager when connecting, not stored here.":
+    "Ссылка: значение берётся из внешнего менеджера при подключении и здесь не хранится.",
 };

@@ -1524,6 +1524,16 @@ async fn ssh_connect<R: Runtime>(
         .and_then(|k| k.data.passphrase.clone())
         .filter(|p| !p.is_empty())
         .map(Zeroizing::new);
+    if let Some(p) = &password
+        && termoso_core::extsecret::is_reference(p)
+    {
+        password = Some(termoso_core::extsecret::resolve(p).await?);
+    }
+    if let Some(p) = &passphrase
+        && termoso_core::extsecret::is_reference(p)
+    {
+        passphrase = Some(termoso_core::extsecret::resolve(p).await?);
+    }
     let totp = identity
         .as_ref()
         .and_then(|i| i.data.totp_secret.as_deref())

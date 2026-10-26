@@ -38,6 +38,7 @@ pub mod autocomplete;
 pub mod ca;
 pub mod cloud;
 pub mod error;
+pub mod extsecret;
 pub mod fido2;
 pub mod forward;
 pub mod hostkey;
