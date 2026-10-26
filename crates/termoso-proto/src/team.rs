@@ -708,6 +708,14 @@ schema! {
 
 // ───────────────────────────── policies ─────────────────────────────
 
+fn default_auth() -> String {
+    "any".into()
+}
+
+fn default_export() -> String {
+    "allow".into()
+}
+
 schema! {
     /// Team policies (`GET/PUT /teams/{id}/policies`). Server-enforced unless
     /// noted; the strictest value across a user's teams applies to them.
@@ -751,6 +759,20 @@ schema! {
         /// (`devices.approve`) before they can sign in.
         #[serde(default)]
         pub device_admin_approval: bool,
+        /// `any` or `keys_only`: whether hosts in team vaults may be opened
+        /// with a password or keyboard-interactive authentication.
+        #[serde(default = "default_auth")]
+        pub auth: String,
+        /// Hosts in team vaults must be reached through a jump host.
+        #[serde(default)]
+        pub jump_host_required: bool,
+        /// `allow` or `deny`: local export/backup of team vault data.
+        #[serde(default = "default_export")]
+        pub export: String,
+        /// Remote ports (`22`, `8000-8999`) members may forward from team
+        /// hosts; empty means any port.
+        #[serde(default)]
+        pub forward_ports: Vec<String>,
         /// Last change.
         pub updated_at: DateTime<Utc>,
     }
@@ -805,6 +827,14 @@ schema! {
         /// See [`TeamPolicies::device_admin_approval`].
         #[serde(default)]
         pub device_admin_approval: Option<bool>,
+        /// `any` or `keys_only`.
+        pub auth: Option<String>,
+        /// Hosts in team vaults must go through a jump host.
+        pub jump_host_required: Option<bool>,
+        /// `allow` or `deny`.
+        pub export: Option<String>,
+        /// Port allowlist (`22`, `8000-8999`); empty = any.
+        pub forward_ports: Option<Vec<String>>,
     }
 }
 

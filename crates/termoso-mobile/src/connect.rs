@@ -600,6 +600,14 @@ pub(crate) async fn connect_resolved(
     resolved: Option<&ResolvedHost>,
 ) -> Result<(Arc<SshClient>, Vec<Arc<SshClient>>)> {
     let chain = resolved.map(|r| r.chain.clone()).unwrap_or_default();
+    if let Some(r) = resolved
+        && chain.is_empty()
+        && termoso_core::policy::jump_required(&conn.store, r.host.vault_id)
+    {
+        return Err(MobileError::Invalid {
+            detail: termoso_core::policy::Denied::DirectConnection.message(),
+        });
+    }
     ssh_connect(conn, settings, target, resolved, &chain, None, None).await
 }
 
@@ -744,10 +752,21 @@ async fn ssh_connect(
                 pin.clone(),
             )?);
         }
-        if let Some(pw) = &password {
-            auth.push(AuthMethod::Password(pw.clone()));
+        // Team policy `auth = keys_only`: no password-class methods at all.
+        let keys_only =
+            resolved.is_some_and(|r| termoso_core::policy::keys_only(store, r.host.vault_id));
+        if keys_only {
+            if auth.is_empty() {
+                return Err(MobileError::Invalid {
+                    detail: termoso_core::policy::Denied::PasswordAuth.message(),
+                });
+            }
+        } else {
+            if let Some(pw) = &password {
+                auth.push(AuthMethod::Password(pw.clone()));
+            }
+            auth.push(AuthMethod::KeyboardInteractive);
         }
-        auth.push(AuthMethod::KeyboardInteractive);
 
         let ask: Arc<dyn InteractivePrompt> = Arc::new(InteractiveAsk { conn: conn.clone() });
         let interactive: Option<Arc<dyn InteractivePrompt>> = match (&totp, &password) {

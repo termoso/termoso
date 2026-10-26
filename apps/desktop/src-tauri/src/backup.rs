@@ -90,7 +90,15 @@ pub fn hosts_csv(
     vault_id: Option<Uuid>,
     include_passwords: bool,
 ) -> Result<(String, usize)> {
-    let cards = hosts::cards(store, vault_id)?;
+    if let Some(v) = vault_id
+        && termoso_core::policy::export_denied(store, v)
+    {
+        return Err(DesktopError::invalid(
+            termoso_core::policy::Denied::Export.message(),
+        ));
+    }
+    let mut cards = hosts::cards(store, vault_id)?;
+    cards.retain(|c| !termoso_core::policy::export_denied(store, c.vault_id));
     let mut out = String::new();
     out.push_str(&CSV_HEADER.join(","));
     out.push('\n');
@@ -261,14 +269,25 @@ fn dump_vault(store: &Store, vault_id: Uuid) -> Result<VaultDump> {
 }
 
 fn collect(store: &Store, vault_ids: &[Uuid]) -> Result<Payload> {
+    // Team policy `export = deny`: such vaults are skipped from "everything"
+    // and refused when asked for by name.
     let ids: Vec<Uuid> = if vault_ids.is_empty() {
         store
             .vaults()?
             .into_iter()
-            .filter(|v| v.unlocked)
+            .filter(|v| v.unlocked && !termoso_core::policy::export_denied(store, v.id))
             .map(|v| v.id)
             .collect()
     } else {
+        if let Some(id) = vault_ids
+            .iter()
+            .find(|id| termoso_core::policy::export_denied(store, **id))
+        {
+            let _ = id;
+            return Err(DesktopError::invalid(
+                termoso_core::policy::Denied::Export.message(),
+            ));
+        }
         vault_ids.to_vec()
     };
     if ids.is_empty() {

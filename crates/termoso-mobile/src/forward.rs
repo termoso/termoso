@@ -610,6 +610,13 @@ pub(crate) fn delete(store: &Store, id: Uuid) -> Result<()> {
 
 pub(crate) fn resolve_for_tunnel(store: &Store, id: Uuid) -> Result<Entity<PfRule>> {
     let e = store.require::<PfRule>(id)?;
+    if let Some(d) =
+        termoso_core::policy::check_forward(store, e.vault_id, &e.data.kind, e.data.remote_port)
+    {
+        return Err(MobileError::Invalid {
+            detail: d.message(),
+        });
+    }
     let _: ResolvedHost = store.resolve_host_in(e.data.host_id, Some(e.vault_id))?;
     Ok(e)
 }

@@ -3199,4 +3199,16 @@ export const ru: Readonly<Record<string, string>> = {
   "{total} ok": "{total} успешно",
   "Reference: fetched from the external manager when connecting, not stored here.":
     "Ссылка: значение берётся из внешнего менеджера при подключении и здесь не хранится.",
+  "Key-based authentication only": "Только аутентификация по ключу",
+  "Hosts in team vaults never try passwords or keyboard-interactive prompts; keys, certificates, SSH ID and agents still work. Honoured by the apps.":
+    "Хосты из командных хранилищ никогда не пробуют пароль и keyboard-interactive; ключи, сертификаты, SSH ID и агенты работают. Соблюдается приложениями.",
+  "Jump host required": "Обязательный jump-хост",
+  "Hosts in team vaults can be opened only through a jump host on their chain; direct connections are refused by the apps.":
+    "Хосты из командных хранилищ открываются только через jump-хост в цепочке; прямые подключения приложения отклоняют.",
+  "No local export": "Без локального экспорта",
+  "Backups, CSV export and private-key export skip or refuse team vault data on members' devices. Honoured by the apps.":
+    "Резервные копии, экспорт CSV и приватных ключей пропускают или отклоняют данные командного хранилища на устройствах участников. Соблюдается приложениями.",
+  "Forwarded ports": "Пробрасываемые порты",
+  "Remote ports members may forward from team hosts (22, 8000-8999; comma-separated, up to 100). Empty allows any; a non-empty list also disables dynamic (SOCKS) forwarding.":
+    "Удалённые порты, которые участники могут пробрасывать с командных хостов (22, 8000-8999; через запятую, до 100). Пусто — любые; непустой список также отключает динамический (SOCKS) проброс.",
 };

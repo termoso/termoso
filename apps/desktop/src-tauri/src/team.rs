@@ -481,6 +481,7 @@ pub async fn delete_ca<R: Runtime>(app: &AppHandle<R>, team_id: Uuid) -> Result<
     api(app).await?.delete_team_ca(team_id).await?;
     let state = app.state::<AppState>();
     let _ = termoso_core::ca::forget_certificates(&*state.store()?);
+    let _ = termoso_core::policy::clear(&*state.store()?);
     Ok(())
 }
 
@@ -538,6 +539,9 @@ async fn refresh_local_certificates<R: Runtime>(app: &AppHandle<R>) {
     let Ok(store) = state.store() else { return };
     if let Err(e) = termoso_core::ca::refresh_all(&api, &store).await {
         tracing::debug!("team CA refresh: {e}");
+    }
+    if let Err(e) = termoso_core::policy::refresh(&api, &store).await {
+        tracing::debug!("team policy refresh: {e}");
     }
 }
 

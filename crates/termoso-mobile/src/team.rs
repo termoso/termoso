@@ -279,6 +279,12 @@ pub struct TeamPoliciesCard {
     pub password_max_age_days: i32,
     pub ip_allowlist: Vec<String>,
     pub device_admin_approval: bool,
+    /// `any` | `keys_only`.
+    pub auth: String,
+    pub jump_host_required: bool,
+    /// `allow` | `deny`.
+    pub export: String,
+    pub forward_ports: Vec<String>,
 }
 
 /// A member device awaiting (or past) admin review.
@@ -464,6 +470,9 @@ impl AccountRuntime {
         core::refresh_vaults(&api, self.store()).await?;
         if let Err(e) = termoso_core::ca::refresh_all(&api, self.store()).await {
             tracing::debug!("team CA refresh: {e}");
+        }
+        if let Err(e) = termoso_core::policy::refresh(&api, self.store()).await {
+            tracing::debug!("team policy refresh: {e}");
         }
         self.notify_changed(SyncChange::Vaults);
         self.sync_in_background();
@@ -819,6 +828,10 @@ impl AccountRuntime {
             password_max_age_days: p.password_max_age_days,
             ip_allowlist: p.ip_allowlist,
             device_admin_approval: p.device_admin_approval,
+            auth: p.auth,
+            jump_host_required: p.jump_host_required,
+            export: p.export,
+            forward_ports: p.forward_ports,
         })
     }
 

@@ -1347,6 +1347,16 @@ async fn connect_resolved<R: Runtime>(
     session_id: Uuid,
     resolved: &ResolvedHost,
 ) -> Result<(Arc<SshClient>, Vec<Arc<SshClient>>)> {
+    if resolved.chain.is_empty()
+        && termoso_core::policy::jump_required(
+            &*app.state::<AppState>().store()?,
+            resolved.host.vault_id,
+        )
+    {
+        return Err(DesktopError::invalid(
+            termoso_core::policy::Denied::DirectConnection.message(),
+        ));
+    }
     ssh_connect(
         app,
         session_id,
@@ -1600,10 +1610,24 @@ async fn ssh_connect<R: Runtime>(
         if !agent_key_selected && state.settings().map(|s| s.use_ssh_agent).unwrap_or(true) {
             auth.push(AuthMethod::Agent);
         }
-        if let Some(pw) = &password {
-            auth.push(AuthMethod::Password(pw.clone()));
+        // Team policy `auth = keys_only`: no password-class methods at all.
+        let keys_only = resolved.is_some_and(|r| {
+            state
+                .store()
+                .is_ok_and(|st| termoso_core::policy::keys_only(&st, r.host.vault_id))
+        });
+        if keys_only {
+            if auth.is_empty() {
+                return Err(DesktopError::invalid(
+                    termoso_core::policy::Denied::PasswordAuth.message(),
+                ));
+            }
+        } else {
+            if let Some(pw) = &password {
+                auth.push(AuthMethod::Password(pw.clone()));
+            }
+            auth.push(AuthMethod::KeyboardInteractive);
         }
-        auth.push(AuthMethod::KeyboardInteractive);
 
         let ui_prompt: Arc<dyn termoso_core::ssh::InteractivePrompt> =
             Arc::new(UiInteractivePrompt {

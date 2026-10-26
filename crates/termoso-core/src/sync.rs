@@ -294,6 +294,9 @@ impl SyncEngine {
         if let Err(e) = crate::ca::refresh_all(&self.api, &self.store).await {
             tracing::debug!("team CA refresh: {e}");
         }
+        if let Err(e) = crate::policy::refresh(&self.api, &self.store).await {
+            tracing::debug!("team policy refresh: {e}");
+        }
         let _guard = self.running.lock().await;
         self.emit(SyncEvent::Started);
         match self.sync_all().await {

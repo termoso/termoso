@@ -301,7 +301,19 @@ pub async fn key_export(
     passphrase: Option<String>,
     export_passphrase: Option<String>,
 ) -> Result<String> {
+    key_export_allowed(&*state.store()?, id)?;
     Ok(keychain::export(&*state.store()?, id, passphrase, export_passphrase)?.to_string())
+}
+
+/// Team policy `export = deny` covers private keys of the team vault.
+fn key_export_allowed(store: &termoso_core::store::Store, id: Uuid) -> Result<()> {
+    let e = store.require::<termoso_core::model::SshKey>(id)?;
+    if termoso_core::policy::export_denied(store, e.vault_id) {
+        return Err(DesktopError::invalid(
+            termoso_core::policy::Denied::Export.message(),
+        ));
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -312,6 +324,7 @@ pub async fn key_export_file(
     passphrase: Option<String>,
     export_passphrase: Option<String>,
 ) -> Result<()> {
+    key_export_allowed(&*state.store()?, id)?;
     let text = keychain::export(&*state.store()?, id, passphrase, export_passphrase)?;
     write_private(&path, text.as_bytes())?;
     let public = keychain::public_key(&*state.store()?, id)?;

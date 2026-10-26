@@ -180,6 +180,10 @@ private fun PolicyRows(p: TeamPoliciesCard) {
             ),
         stringResource(R.string.ip_allow_list) to (p.ipAllowlist.joinToString(", ").ifEmpty { stringResource(R.string.everywhere) }),
         stringResource(R.string.admin_approval_new_devices) to onOff(p.deviceAdminApproval),
+        stringResource(R.string.policy_keys_only) to onOff(p.auth == "keys_only"),
+        stringResource(R.string.policy_jump_host_required) to onOff(p.jumpHostRequired),
+        stringResource(R.string.policy_no_export) to onOff(p.export == "deny"),
+        stringResource(R.string.policy_forwarded_ports) to (p.forwardPorts.joinToString(", ").ifEmpty { stringResource(R.string.any_port) }),
     )
     Column(Modifier.fillMaxWidth()) {
         rows.forEach { (k, v) ->

@@ -1555,6 +1555,11 @@
     <string name="key_rotation_age">Key rotation age</string>
     <string name="password_rotation_age">Password rotation age</string>
     <string name="ip_allow_list">IP allow-list</string>
+    <string name="policy_keys_only">Key-based authentication only</string>
+    <string name="policy_jump_host_required">Jump host required</string>
+    <string name="policy_no_export">No local export</string>
+    <string name="policy_forwarded_ports">Forwarded ports</string>
+    <string name="any_port">Any</string>
     <string name="everywhere">Everywhere</string>
     <string name="admin_approval_new_devices">Admin approval for new devices</string>
     <string name="devices_awaiting_approval">Devices awaiting approval</string>

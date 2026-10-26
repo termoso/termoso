@@ -1587,6 +1587,11 @@
     <string name="key_rotation_age">Срок ротации ключей</string>
     <string name="password_rotation_age">Срок ротации паролей</string>
     <string name="ip_allow_list">Разрешённые IP</string>
+    <string name="policy_keys_only">Только аутентификация по ключу</string>
+    <string name="policy_jump_host_required">Обязательный jump-хост</string>
+    <string name="policy_no_export">Без локального экспорта</string>
+    <string name="policy_forwarded_ports">Пробрасываемые порты</string>
+    <string name="any_port">Любые</string>
     <string name="everywhere">Отовсюду</string>
     <string name="admin_approval_new_devices">Одобрение новых устройств админом</string>
     <string name="devices_awaiting_approval">Устройства, ожидающие одобрения</string>

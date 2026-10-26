@@ -54,11 +54,13 @@ function PoliciesForm({
   const [p, setP] = useState<TeamPolicies>(saved);
   const [domains, setDomains] = useState(saved.sso_domains.join(", "));
   const [ipList, setIpList] = useState(saved.ip_allowlist.join("\n"));
+  const [fwdPorts, setFwdPorts] = useState(saved.forward_ports.join(", "));
   const dirty =
     JSON.stringify({
       ...p,
       sso_domains: parseDomains(domains),
       ip_allowlist: parseList(ipList),
+      forward_ports: parseDomains(fwdPorts),
     }) !== JSON.stringify(saved);
   const save = useMutation({
     mutationFn: () => {
@@ -77,6 +79,10 @@ function PoliciesForm({
         password_max_age_days: p.password_max_age_days,
         ip_allowlist: parseList(ipList),
         device_admin_approval: p.device_admin_approval,
+        auth: p.auth,
+        jump_host_required: p.jump_host_required,
+        export: p.export,
+        forward_ports: parseDomains(fwdPorts),
       };
       return ipc.teamUpdatePolicies(team.id, patch);
     },
@@ -315,6 +321,61 @@ function PoliciesForm({
             value={ipList}
             disabled={ro}
             onChange={(e) => setIpList(e.target.value)}
+            sx={{ width: 280 }}
+          />
+        }
+      />
+      <SettingRow
+        label={tr("Key-based authentication only")}
+        hint={tr(
+          "Hosts in team vaults never try passwords or keyboard-interactive prompts; keys, certificates, SSH ID and agents still work. Honoured by the apps.",
+        )}
+        control={
+          <Switch
+            checked={p.auth === "keys_only"}
+            disabled={ro}
+            onChange={(e) => setP({ ...p, auth: e.target.checked ? "keys_only" : "any" })}
+          />
+        }
+      />
+      <SettingRow
+        label={tr("Jump host required")}
+        hint={tr(
+          "Hosts in team vaults can be opened only through a jump host on their chain; direct connections are refused by the apps.",
+        )}
+        control={
+          <Switch
+            checked={p.jump_host_required}
+            disabled={ro}
+            onChange={(e) => setP({ ...p, jump_host_required: e.target.checked })}
+          />
+        }
+      />
+      <SettingRow
+        label={tr("No local export")}
+        hint={tr(
+          "Backups, CSV export and private-key export skip or refuse team vault data on members' devices. Honoured by the apps.",
+        )}
+        control={
+          <Switch
+            checked={p.export === "deny"}
+            disabled={ro}
+            onChange={(e) => setP({ ...p, export: e.target.checked ? "deny" : "allow" })}
+          />
+        }
+      />
+      <SettingRow
+        label={tr("Forwarded ports")}
+        hint={tr(
+          "Remote ports members may forward from team hosts (22, 8000-8999; comma-separated, up to 100). Empty allows any; a non-empty list also disables dynamic (SOCKS) forwarding.",
+        )}
+        control={
+          <TextField
+            size="small"
+            placeholder="22, 443, 8000-8999"
+            value={fwdPorts}
+            disabled={ro}
+            onChange={(e) => setFwdPorts(e.target.value)}
             sx={{ width: 280 }}
           />
         }

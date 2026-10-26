@@ -75,6 +75,11 @@ async fn policies_are_validated_and_enforced() {
         serde_json::json!({ "session_ttl_hours": 3000 }),
         serde_json::json!({ "sso_only": true }),
         serde_json::json!({ "sso_domains": ["not a domain"] }),
+        serde_json::json!({ "auth": "password" }),
+        serde_json::json!({ "export": "sometimes" }),
+        serde_json::json!({ "forward_ports": ["0"] }),
+        serde_json::json!({ "forward_ports": ["80-22"] }),
+        serde_json::json!({ "forward_ports": ["ssh"] }),
     ] {
         s.expect_status(
             Method::PUT,
@@ -106,6 +111,27 @@ async fn policies_are_validated_and_enforced() {
     assert_eq!(p["policies"]["local_keys"], "deny");
     assert_eq!(p["effective_for_me"]["session_ttl_hours"], 12);
     assert_eq!(p["effective_for_me"]["local_keys_denied_by"][0], team_id);
+    // Access policies: validated, normalised and visible to every member.
+    let p: serde_json::Value = s
+        .json(
+            Method::PUT,
+            &format!("/teams/{team_id}/policies"),
+            Some(owner.token()),
+            Some(&serde_json::json!({
+                "auth": "keys_only",
+                "jump_host_required": true,
+                "export": "deny",
+                "forward_ports": [" 22 ", "8000 - 8999", "22", "443"]
+            })),
+        )
+        .await;
+    assert_eq!(p["policies"]["auth"], "keys_only");
+    assert_eq!(p["policies"]["jump_host_required"], true);
+    assert_eq!(p["policies"]["export"], "deny");
+    assert_eq!(
+        p["policies"]["forward_ports"],
+        serde_json::json!(["22", "8000-8999", "443"])
+    );
     let teams: serde_json::Value = s
         .json(Method::GET, "/teams", Some(bob.token()), NOBODY)
         .await;

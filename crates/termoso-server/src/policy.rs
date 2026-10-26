@@ -20,30 +20,82 @@ pub const MAX_AUDIT_RETENTION_DAYS: i32 = 3650;
 pub const SESSION_RECORDING: &[&str] = &["optional", "required"];
 pub const MAX_LOG_RETENTION_DAYS: i32 = 3650;
 pub const MAX_SECRET_AGE_DAYS: i32 = 3650;
+pub const AUTH: &[&str] = &["any", "keys_only"];
+pub const EXPORT: &[&str] = &["allow", "deny"];
+pub const MAX_FORWARD_PORTS: usize = 100;
 
-type Row = (
-    String,
-    String,
-    Option<i32>,
-    bool,
-    Option<String>,
-    Vec<String>,
-    bool,
-    i32,
-    String,
-    i32,
-    i32,
-    i32,
-    Vec<String>,
-    bool,
-    DateTime<Utc>,
-);
+/// Validate a port allowlist: entries are `n` or `a-b` within 1..=65535,
+/// trimmed and de-duplicated; an empty list means "any port".
+pub fn normalize_forward_ports(list: &[String]) -> Result<Vec<String>, String> {
+    let mut out: Vec<String> = Vec::new();
+    for raw in list {
+        let e = raw.trim();
+        if e.is_empty() {
+            continue;
+        }
+        let port = |s: &str| -> Result<u16, String> {
+            s.parse::<u16>()
+                .ok()
+                .filter(|p| *p >= 1)
+                .ok_or_else(|| format!("forward_ports: `{e}` is not a port or range"))
+        };
+        let norm = match e.split_once('-') {
+            Some((a, b)) => {
+                let (a, b) = (port(a.trim())?, port(b.trim())?);
+                if a > b {
+                    return Err(format!("forward_ports: `{e}` range is reversed"));
+                }
+                format!("{a}-{b}")
+            }
+            None => port(e)?.to_string(),
+        };
+        if !out.contains(&norm) {
+            out.push(norm);
+        }
+    }
+    if out.len() > MAX_FORWARD_PORTS {
+        return Err(format!(
+            "forward_ports holds at most {MAX_FORWARD_PORTS} entries"
+        ));
+    }
+    Ok(out)
+}
+
+#[derive(sqlx::FromRow)]
+struct Row {
+    mfa: String,
+    local_keys: String,
+    session_ttl_hours: Option<i32>,
+    sso_only: bool,
+    sso_provider: Option<String>,
+    sso_domains: Vec<String>,
+    device_approval: bool,
+    audit_retention_days: i32,
+    session_recording: String,
+    log_retention_days: i32,
+    key_max_age_days: i32,
+    password_max_age_days: i32,
+    ip_allowlist: Vec<String>,
+    device_admin_approval: bool,
+    auth: String,
+    jump_host_required: bool,
+    export: String,
+    forward_ports: Vec<String>,
+    updated_at: DateTime<Utc>,
+}
+
+#[derive(sqlx::FromRow)]
+struct TeamRow {
+    team_id: Uuid,
+    #[sqlx(flatten)]
+    row: Row,
+}
 
 macro_rules! policy_select {
     ($head:literal, $tail:literal) => {
         concat!(
             $head,
-            "mfa, local_keys, session_ttl_hours, sso_only, sso_provider, sso_domains, device_approval, audit_retention_days, session_recording, log_retention_days, key_max_age_days, password_max_age_days, ip_allowlist, device_admin_approval, updated_at",
+            "mfa, local_keys, session_ttl_hours, sso_only, sso_provider, sso_domains, device_approval, audit_retention_days, session_recording, log_retention_days, key_max_age_days, password_max_age_days, ip_allowlist, device_admin_approval, auth, jump_host_required, export, forward_ports, updated_at",
             $tail
         )
     };
@@ -51,21 +103,25 @@ macro_rules! policy_select {
 
 fn from_row(r: Row) -> TeamPolicies {
     TeamPolicies {
-        mfa: r.0,
-        local_keys: r.1,
-        session_ttl_hours: r.2,
-        sso_only: r.3,
-        sso_provider: r.4,
-        sso_domains: r.5,
-        device_approval: r.6,
-        audit_retention_days: r.7,
-        session_recording: r.8,
-        log_retention_days: r.9,
-        key_max_age_days: r.10,
-        password_max_age_days: r.11,
-        ip_allowlist: r.12,
-        device_admin_approval: r.13,
-        updated_at: r.14,
+        mfa: r.mfa,
+        local_keys: r.local_keys,
+        session_ttl_hours: r.session_ttl_hours,
+        sso_only: r.sso_only,
+        sso_provider: r.sso_provider,
+        sso_domains: r.sso_domains,
+        device_approval: r.device_approval,
+        audit_retention_days: r.audit_retention_days,
+        session_recording: r.session_recording,
+        log_retention_days: r.log_retention_days,
+        key_max_age_days: r.key_max_age_days,
+        password_max_age_days: r.password_max_age_days,
+        ip_allowlist: r.ip_allowlist,
+        device_admin_approval: r.device_admin_approval,
+        auth: r.auth,
+        jump_host_required: r.jump_host_required,
+        export: r.export,
+        forward_ports: r.forward_ports,
+        updated_at: r.updated_at,
     }
 }
 
@@ -85,6 +141,10 @@ pub fn defaults() -> TeamPolicies {
         password_max_age_days: 0,
         ip_allowlist: Vec::new(),
         device_admin_approval: false,
+        auth: "any".into(),
+        jump_host_required: false,
+        export: "allow".into(),
+        forward_ports: Vec::new(),
         updated_at: Utc::now(),
     }
 }
@@ -115,37 +175,17 @@ pub async fn attach(db: &PgPool, teams: &mut [Team]) -> ApiResult<()> {
         return Ok(());
     }
     let ids: Vec<Uuid> = teams.iter().map(|t| t.id).collect();
-    let rows: Vec<(Uuid, Row)> = sqlx::query_as(policy_select!(
+    let rows: Vec<TeamRow> = sqlx::query_as(policy_select!(
         "SELECT team_id, ",
         " FROM team_policies WHERE team_id = ANY($1)"
     ))
     .bind(&ids)
     .fetch_all(db)
-    .await?
-    .into_iter()
-    .map(
-        |(id, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o): (
-            Uuid,
-            String,
-            String,
-            Option<i32>,
-            bool,
-            Option<String>,
-            Vec<String>,
-            bool,
-            i32,
-            String,
-            i32,
-            i32,
-            i32,
-            Vec<String>,
-            bool,
-            DateTime<Utc>,
-        )| { (id, (a, b, c, d, e, f, g, h, i, j, k, l, m, n, o)) },
-    )
-    .collect();
-    let mut map: HashMap<Uuid, TeamPolicies> =
-        rows.into_iter().map(|(id, r)| (id, from_row(r))).collect();
+    .await?;
+    let mut map: HashMap<Uuid, TeamPolicies> = rows
+        .into_iter()
+        .map(|r| (r.team_id, from_row(r.row)))
+        .collect();
     for t in teams.iter_mut() {
         t.policies = Some(map.remove(&t.id).unwrap_or_else(defaults));
     }
@@ -433,5 +473,17 @@ mod tests {
         assert!(!satisfies("passkey", true, false));
         assert!(satisfies("passkey", false, true));
         assert!(mfa_rank("passkey") > mfa_rank("any") && mfa_rank("any") > mfa_rank("off"));
+    }
+
+    #[test]
+    fn forward_ports_normalised() {
+        let ok =
+            normalize_forward_ports(&["22".into(), " 8000-8999 ".into(), "22".into()]).unwrap();
+        assert_eq!(ok, vec!["22", "8000-8999"]);
+        assert!(normalize_forward_ports(&["0".into()]).is_err());
+        assert!(normalize_forward_ports(&["70000".into()]).is_err());
+        assert!(normalize_forward_ports(&["443-80".into()]).is_err());
+        assert!(normalize_forward_ports(&["http".into()]).is_err());
+        assert!(normalize_forward_ports(&[]).unwrap().is_empty());
     }
 }

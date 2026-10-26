@@ -142,13 +142,32 @@ pub async fn put(
     if let Some(on) = req.device_admin_approval {
         next.device_admin_approval = on;
     }
+    if let Some(v) = req.auth {
+        if !policy::AUTH.contains(&v.as_str()) {
+            return Err(Error::bad_request("auth must be any or keys_only"));
+        }
+        next.auth = v;
+    }
+    if let Some(on) = req.jump_host_required {
+        next.jump_host_required = on;
+    }
+    if let Some(v) = req.export {
+        if !policy::EXPORT.contains(&v.as_str()) {
+            return Err(Error::bad_request("export must be allow or deny"));
+        }
+        next.export = v;
+    }
+    if let Some(list) = req.forward_ports {
+        next.forward_ports = policy::normalize_forward_ports(&list).map_err(Error::bad_request)?;
+    }
     let mut tx = state.db.begin().await?;
     sqlx::query(
         "INSERT INTO team_policies (team_id, mfa, local_keys, session_ttl_hours, sso_only, sso_provider,
                                     sso_domains, device_approval, audit_retention_days, session_recording,
                                     log_retention_days, key_max_age_days, password_max_age_days, ip_allowlist,
-                                    device_admin_approval, updated_by, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $10, $11, $12, $13, $14, $15, $16, $9, now())
+                                    device_admin_approval, auth, jump_host_required, export, forward_ports,
+                                    updated_by, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $9, now())
          ON CONFLICT (team_id) DO UPDATE SET mfa = EXCLUDED.mfa, local_keys = EXCLUDED.local_keys,
              session_ttl_hours = EXCLUDED.session_ttl_hours, sso_only = EXCLUDED.sso_only,
              sso_provider = EXCLUDED.sso_provider, sso_domains = EXCLUDED.sso_domains,
@@ -156,6 +175,8 @@ pub async fn put(
              session_recording = EXCLUDED.session_recording, log_retention_days = EXCLUDED.log_retention_days,
              key_max_age_days = EXCLUDED.key_max_age_days, password_max_age_days = EXCLUDED.password_max_age_days,
              ip_allowlist = EXCLUDED.ip_allowlist, device_admin_approval = EXCLUDED.device_admin_approval,
+             auth = EXCLUDED.auth, jump_host_required = EXCLUDED.jump_host_required,
+             export = EXCLUDED.export, forward_ports = EXCLUDED.forward_ports,
              updated_by = EXCLUDED.updated_by, updated_at = now()",
     )
     .bind(id)
@@ -174,6 +195,10 @@ pub async fn put(
     .bind(next.password_max_age_days)
     .bind(&next.ip_allowlist)
     .bind(next.device_admin_approval)
+    .bind(&next.auth)
+    .bind(next.jump_host_required)
+    .bind(&next.export)
+    .bind(&next.forward_ports)
     .execute(&mut *tx)
     .await?;
     if next.session_recording == "required" {

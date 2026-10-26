@@ -644,8 +644,15 @@ impl TermosoApp {
         passphrase: Option<String>,
         export_passphrase: Option<String>,
     ) -> Result<String> {
+        let id = parse_id(&id)?;
+        let key = self.store.require::<termoso_core::model::SshKey>(id)?;
+        if termoso_core::policy::export_denied(&self.store, key.vault_id) {
+            return Err(MobileError::Invalid {
+                detail: termoso_core::policy::Denied::Export.message(),
+            });
+        }
         let text: Zeroizing<String> =
-            keychain::export(&self.store, parse_id(&id)?, passphrase, export_passphrase)?;
+            keychain::export(&self.store, id, passphrase, export_passphrase)?;
         Ok(text.to_string())
     }
 

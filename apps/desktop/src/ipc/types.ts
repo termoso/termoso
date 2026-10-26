@@ -231,6 +231,14 @@ export interface TeamPolicies {
   password_max_age_days: number;
   ip_allowlist: string[];
   device_admin_approval: boolean;
+  /** `keys_only` = no password / keyboard-interactive auth for team hosts (client-enforced). */
+  auth: "any" | "keys_only";
+  /** Team hosts must be reached through a jump host (client-enforced). */
+  jump_host_required: boolean;
+  /** `deny` = no local export/backup of team vault data (client-enforced). */
+  export: "allow" | "deny";
+  /** Remote ports members may forward from team hosts (`22`, `8000-8999`); empty = any. */
+  forward_ports: string[];
   updated_at: string;
 }
 
