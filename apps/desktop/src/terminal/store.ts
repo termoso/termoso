@@ -10,6 +10,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebLinksAddon } from "@xterm/addon-web-links";
+import { ImageAddon } from "@xterm/addon-image";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { readText as readNativeClipboard } from "@tauri-apps/plugin-clipboard-manager";
@@ -768,6 +769,22 @@ export function mountPane(paneId: Uuid, host: HTMLElement) {
       rt.webgl = webgl;
     } catch {
       rt.webgl = null;
+    }
+    // Inline images: sixel (DCS q) and iTerm2 OSC 1337 — after the renderer so
+    // the overlay canvas sits above it. Kitty graphics are not supported by
+    // xterm.js and are left alone.
+    try {
+      rt.term.loadAddon(
+        new ImageAddon({
+          sixelSupport: true,
+          iipSupport: true,
+          sixelScrolling: true,
+          storageLimit: 64,
+          showPlaceholder: true,
+        }),
+      );
+    } catch {
+      // No canvas: fall back to text only.
     }
   }
   const ro = new ResizeObserver(() => fitPane(paneId));
