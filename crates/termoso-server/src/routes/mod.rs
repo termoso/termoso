@@ -8,6 +8,7 @@ pub mod admin;
 pub mod ai;
 pub mod auth;
 pub mod automations;
+pub mod break_glass;
 pub mod bridges;
 pub mod ca;
 pub mod captcha;
@@ -213,6 +214,14 @@ pub fn router(state: AppState) -> Router {
             "/teams/{id}/access-reviews/{rid}/cancel",
             post(access_reviews::cancel),
         )
+        .route(
+            "/teams/{id}/break-glass",
+            get(break_glass::get)
+                .put(break_glass::configure)
+                .delete(break_glass::remove),
+        )
+        .route("/teams/{id}/break-glass/use", post(break_glass::use_secret))
+        .route("/teams/{id}/break-glass/end", post(break_glass::end))
         .route(
             "/teams/{id}/audit/checkpoint",
             post(crate::audit_chain::checkpoint),

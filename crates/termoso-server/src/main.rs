@@ -48,6 +48,9 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(termoso_server::routes::access_reviews::run_scheduler(
         state.clone(),
     ));
+    tokio::spawn(termoso_server::routes::break_glass::run_expiry(
+        state.clone(),
+    ));
     tokio::spawn(termoso_server::routes::logs::run_retention(state.clone()));
     tokio::spawn(termoso_server::routes::rotation::run_reminders(
         state.clone(),

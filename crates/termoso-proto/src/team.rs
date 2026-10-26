@@ -1650,3 +1650,56 @@ schema! {
         pub undecided: Option<String>,
     }
 }
+
+schema! {
+    /// `PUT /teams/{id}/break-glass` — designate the emergency admin.
+    pub struct ConfigureBreakGlassRequest {
+        /// Team member (not the owner) who may redeem the secret.
+        pub user_id: Uuid,
+        /// How long the emergency admin role lasts once redeemed (1..=72 hours).
+        pub duration_hours: i32,
+    }
+}
+
+schema! {
+    /// Break-glass status (`GET /teams/{id}/break-glass`); the secret itself is
+    /// only in the `PUT` response, once.
+    pub struct BreakGlass {
+        /// Designated member.
+        pub user_id: Uuid,
+        /// Their e-mail.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub email: Option<String>,
+        /// Duration of the emergency role once redeemed.
+        pub duration_hours: i32,
+        /// Who set it up.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub created_by: Option<Uuid>,
+        /// When.
+        pub created_at: DateTime<Utc>,
+        /// `ready` (secret unused), `active` (redeemed, role elevated), `used`
+        /// (redeemed and ended/expired — the owner must issue a new secret).
+        pub status: String,
+        /// When the secret was redeemed.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub used_at: Option<DateTime<Utc>>,
+        /// When the emergency role ends / ended.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub expires_at: Option<DateTime<Utc>>,
+        /// Wrong secrets entered since set-up.
+        pub attempts: i32,
+        /// The secret, only in the `PUT` response.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub secret: Option<String>,
+    }
+}
+
+schema! {
+    /// `POST /teams/{id}/break-glass/use`.
+    pub struct UseBreakGlassRequest {
+        /// The secret from the envelope.
+        pub secret: String,
+        /// Why (≤ 500 chars) — goes to the audit log and the notification.
+        pub reason: String,
+    }
+}

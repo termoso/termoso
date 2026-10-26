@@ -41,3 +41,13 @@ Access tends to accumulate: people change roles, contractors finish, a vault sha
 - **Reminders.** A review is due 14 days after it opens; owners and admins get one reminder once it is overdue.
 
 The list of past reviews (`GET /api/v1/teams/{id}/access-reviews`) and their lines is the evidence an auditor asks for: who confirmed whose access, when, and what was removed.
+
+## Break-glass
+
+A team has exactly one owner. If that person is unreachable — on a plane, locked out, gone — nobody can change roles, revoke a leaked vault access or remove a departed member. Break-glass is the sealed envelope for that day.
+
+- **Set-up** (owner, fresh step-up): `PUT /api/v1/teams/{id}/break-glass` with the designated member and a duration (1–72 h) returns a one-time secret, shown once. Store it offline — a safe, a password manager the designated person does *not* control alone. `GET` shows who is designated and the status; `DELETE` removes it.
+- **Use** (the designated member only): `POST …/break-glass/use` with the secret and a reason. The member becomes a team **admin** immediately for the configured duration; every owner and admin is e-mailed, `break_glass.used` is audited (and so delivered to webhooks / SIEM) with the reason, and the previous role is remembered. Five wrong secrets lock the endpoint for 15 minutes and are audited as `break_glass.denied`.
+- **End**: the role reverts when the time is up (`break_glass.expired`) or earlier via `POST …/break-glass/end` by the owner or the member (`break_glass.ended`). A redeemed secret is spent: the owner issues a new one when they are back.
+
+Admin, not owner: the emergency role can do everything day-to-day (members, roles, vaults, policies, reviews) but cannot delete the team or transfer ownership, so a stolen envelope cannot take the team away.
