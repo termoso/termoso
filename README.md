@@ -258,6 +258,7 @@ list; the source of truth is
 | `TERMOSO_CORS_ORIGINS` | empty | extra browser origins allowed to call the API |
 | `TERMOSO_TRUST_PROXY` | `false` | honour `X-Forwarded-For` / `X-Real-IP` (set behind a reverse proxy) |
 | `TERMOSO_S3__{BUCKET,ENDPOINT,PUBLIC_ENDPOINT,REGION,ACCESS_KEY,SECRET_KEY,FORCE_PATH_STYLE,PRESIGN_SECS}` | unset | S3-compatible storage for session logs; unset = feature off |
+| `TERMOSO_LOGS_DIR` | unset | keep session logs on local disk instead of S3 (clients fetch through short-lived tokens on `/api/v1/logs/blob`); set either this or `TERMOSO_S3__*` |
 | `TERMOSO_SMTP__{HOST,PORT,USERNAME,PASSWORD,SECURITY,FROM}` | unset | outgoing e-mail (`starttls` / `tls` / `none`); unset = e-mail features off |
 | `TERMOSO_WEBAUTHN__{RP_ID,ORIGINS,RP_NAME}` | unset | passkeys / security keys as MFA |
 | `TERMOSO_SSO__<slug>__{NAME,KIND,ISSUER,CLIENT_ID,CLIENT_SECRET,SCOPES,ALLOWED_DOMAINS}` | none | OIDC providers (`google`, `github`, `microsoft` presets or any discovery URL) |
