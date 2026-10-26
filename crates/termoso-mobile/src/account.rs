@@ -556,6 +556,23 @@ impl AccountRuntime {
         })
     }
 
+    /// Facts the platform shell knows about the device (Android: storage
+    /// encryption, keyguard, StrongBox). Sent with the next sign-in / refresh.
+    pub fn set_posture(
+        &self,
+        os_version: String,
+        disk_encryption: Option<bool>,
+        screen_lock: Option<bool>,
+        secure_key_storage: Option<bool>,
+    ) {
+        termoso_core::posture::set_reported(termoso_core::posture::Posture {
+            os_version,
+            disk_encryption,
+            screen_lock,
+            secure_key_storage,
+        });
+    }
+
     pub fn set_device_name(&self, name: String) {
         let name = name.trim().to_string();
         if !name.is_empty() {

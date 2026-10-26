@@ -84,7 +84,38 @@ pub fn normalize_allowlist(input: &[String]) -> Result<Vec<String>, String> {
     Ok(out)
 }
 
-type GateRow = (Uuid, String, Vec<String>, bool);
+/// First posture requirement of a team that the device does not meet.
+/// A fact the client could not determine (`None`) counts as not met: the
+/// policy is about proof, and an old client that reports nothing is refused
+/// until it is updated.
+pub fn posture_missing(
+    device: &DeviceInfo,
+    need_disk: bool,
+    need_lock: bool,
+    need_hw: bool,
+) -> Option<&'static str> {
+    let p = device.posture.as_ref();
+    let has = |f: fn(&termoso_proto::auth::Posture) -> Option<bool>| p.and_then(f) == Some(true);
+    if need_disk && !has(|p| p.disk_encryption) {
+        Some("disk_encryption")
+    } else if need_lock && !has(|p| p.screen_lock) {
+        Some("screen_lock")
+    } else if need_hw && !has(|p| p.secure_key_storage) {
+        Some("secure_key_storage")
+    } else {
+        None
+    }
+}
+
+fn posture_label(req: &str) -> &'static str {
+    match req {
+        "disk_encryption" => "disk encryption",
+        "screen_lock" => "a screen lock",
+        _ => "a hardware-backed device key (TPM, Secure Enclave or StrongBox)",
+    }
+}
+
+type GateRow = (Uuid, String, Vec<String>, bool, bool, bool, bool, bool);
 
 /// Run at sign-in once the device row exists. Refuses with `ip_not_allowed`
 /// when any team of the user restricts networks and the client is outside,
@@ -99,16 +130,46 @@ pub async fn gate(
     ip: Option<&str>,
 ) -> ApiResult<()> {
     let rows: Vec<GateRow> = sqlx::query_as(
-        "SELECT t.id, t.name, p.ip_allowlist, p.device_admin_approval
+        "SELECT t.id, t.name, p.ip_allowlist, p.device_admin_approval,
+                p.posture_disk_encryption, p.posture_screen_lock, p.posture_secure_key,
+                m.role = 'owner'
          FROM team_members m JOIN teams t ON t.id = m.team_id JOIN team_policies p ON p.team_id = m.team_id
-         WHERE m.user_id = $1 AND (cardinality(p.ip_allowlist) > 0 OR p.device_admin_approval)
+         WHERE m.user_id = $1 AND (cardinality(p.ip_allowlist) > 0 OR p.device_admin_approval
+                                   OR p.posture_disk_encryption OR p.posture_screen_lock OR p.posture_secure_key)
          ORDER BY t.created_at",
     )
     .bind(user_id)
     .fetch_all(&state.db)
     .await?;
     let addr = ip.and_then(|s| s.parse::<IpAddr>().ok());
-    for (team_id, team_name, list, admin) in rows {
+    for (team_id, team_name, list, admin, need_disk, need_lock, need_hw, is_owner) in rows {
+        // Owners are exempt from posture (as from SSO-only) so a team can never lock itself out.
+        if let Some(missing) = (!is_owner)
+            .then(|| posture_missing(device, need_disk, need_lock, need_hw))
+            .flatten()
+        {
+            audit::record(
+                &state.db,
+                audit::Entry::system(team_id, "login.posture_denied")
+                    .user(user_id)
+                    .details(serde_json::json!({
+                        "device": device.name, "platform": device.platform,
+                        "requirement": missing, "posture": device.posture,
+                    })),
+            )
+            .await;
+            return Err(Error::new(
+                StatusCode::FORBIDDEN,
+                "device_posture",
+                format!(
+                    "The team “{team_name}” requires {} on your device",
+                    posture_label(missing)
+                ),
+            )
+            .with_details(serde_json::json!({
+                "team_id": team_id, "team_name": team_name, "requirement": missing,
+            })));
+        }
         if !ip_allowed(&list, addr) {
             audit::record(
                 &state.db,

@@ -3211,4 +3211,17 @@ export const ru: Readonly<Record<string, string>> = {
   "Forwarded ports": "Пробрасываемые порты",
   "Remote ports members may forward from team hosts (22, 8000-8999; comma-separated, up to 100). Empty allows any; a non-empty list also disables dynamic (SOCKS) forwarding.":
     "Удалённые порты, которые участники могут пробрасывать с командных хостов (22, 8000-8999; через запятую, до 100). Пусто — любые; непустой список также отключает динамический (SOCKS) проброс.",
+  "Require disk encryption": "Требовать шифрование диска",
+  "Members sign in only from devices that report an encrypted system disk (LUKS, FileVault, BitLocker, Android file-based encryption). Devices that cannot tell are refused; owners are exempt.":
+    "Участники входят только с устройств, сообщающих о зашифрованном системном диске (LUKS, FileVault, BitLocker, файловое шифрование Android). Устройства, которые не могут это подтвердить, отклоняются; владельцы освобождены.",
+  "Require a screen lock": "Требовать блокировку экрана",
+  "Members sign in only from devices with a password, PIN or biometric lock. Owners are exempt.":
+    "Участники входят только с устройств с паролем, PIN или биометрической блокировкой. Владельцы освобождены.",
+  "Require a hardware-backed device key": "Требовать аппаратный ключ устройства",
+  "Members sign in only from devices whose key lives in a TPM, Secure Enclave or StrongBox / TEE. Today only Android reports this; desktop devices are refused. Owners are exempt.":
+    "Участники входят только с устройств, чей ключ хранится в TPM, Secure Enclave или StrongBox / TEE. Сейчас это сообщает только Android; десктопы отклоняются. Владельцы освобождены.",
+  "Device posture": "Состояние устройства",
+  "Disk encryption": "Шифрование диска",
+  "Screen lock": "Блокировка экрана",
+  "Hardware key": "Аппаратный ключ",
 };

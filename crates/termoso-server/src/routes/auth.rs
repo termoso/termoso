@@ -1471,6 +1471,7 @@ mod client_version_tests {
             platform: termoso_proto::auth::Platform::Windows,
             app_version: v.into(),
             client_device_id: None,
+            posture: None,
         }
     }
 
@@ -1485,6 +1486,7 @@ mod client_version_tests {
             platform: Platform::Web,
             app_version: "0.1.0".into(),
             client_device_id: None,
+            posture: None,
         };
         assert!(check_client_version(&cfg, &d).is_ok());
     }

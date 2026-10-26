@@ -184,6 +184,9 @@ private fun PolicyRows(p: TeamPoliciesCard) {
         stringResource(R.string.policy_jump_host_required) to onOff(p.jumpHostRequired),
         stringResource(R.string.policy_no_export) to onOff(p.export == "deny"),
         stringResource(R.string.policy_forwarded_ports) to (p.forwardPorts.joinToString(", ").ifEmpty { stringResource(R.string.any_port) }),
+        stringResource(R.string.policy_require_disk_encryption) to onOff(p.postureDiskEncryption),
+        stringResource(R.string.policy_require_screen_lock) to onOff(p.postureScreenLock),
+        stringResource(R.string.policy_require_secure_key) to onOff(p.postureSecureKey),
     )
     Column(Modifier.fillMaxWidth()) {
         rows.forEach { (k, v) ->

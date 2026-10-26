@@ -17,6 +17,7 @@ Owners (and holders of `policies.manage`) set team policies in **Team → Polici
 | Audit retention, recording retention | How long audit events and session recordings are kept. |
 | Session recording | `required` switches recording on in every team vault. |
 | Key / password rotation age | Hosts whose secrets are older than the limit are flagged for rotation. |
+| Device posture: disk encryption, screen lock, hardware-backed key | At sign-in every app reports what it can prove about its device — OS version, encrypted system disk (LUKS / FileVault / BitLocker / Android FBE), screen lock, device key in TPM / Secure Enclave / StrongBox. A team may require any of the three; a device that cannot prove a required fact (including old clients that report nothing) is refused with `device_posture` and the attempt is audited (`login.posture_denied`). Owners are exempt so the team can never lock itself out. The last report is shown in **Account → Devices**. |
 
 ## Enforced by the apps
 

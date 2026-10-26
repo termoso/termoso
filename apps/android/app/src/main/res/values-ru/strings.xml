@@ -1592,6 +1592,9 @@
     <string name="policy_no_export">Без локального экспорта</string>
     <string name="policy_forwarded_ports">Пробрасываемые порты</string>
     <string name="any_port">Любые</string>
+    <string name="policy_require_disk_encryption">Требовать шифрование диска</string>
+    <string name="policy_require_screen_lock">Требовать блокировку экрана</string>
+    <string name="policy_require_secure_key">Требовать аппаратный ключ устройства</string>
     <string name="everywhere">Отовсюду</string>
     <string name="admin_approval_new_devices">Одобрение новых устройств админом</string>
     <string name="devices_awaiting_approval">Устройства, ожидающие одобрения</string>

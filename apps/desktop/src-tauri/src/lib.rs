@@ -127,6 +127,12 @@ pub fn run() {
             #[cfg(windows)]
             std::thread::spawn(quick::install_jump_list);
             let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async {
+                // Hardware-backed device keys are not implemented on desktop yet: say so.
+                let posture = termoso_core::posture::collect(Some(false)).await;
+                tracing::debug!(?posture, "device posture");
+                termoso_core::posture::set_reported(posture);
+            });
             tauri::async_runtime::spawn(security::inactivity_watcher(handle.clone()));
             tauri::async_runtime::spawn(automations::executor(handle.clone()));
             if !locked {

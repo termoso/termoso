@@ -50,6 +50,13 @@ fn cache_key(token_hash: &str) -> String {
     format!("sess:{token_hash}")
 }
 
+/// Posture as stored in `devices.posture`; `None` leaves the stored value alone.
+pub(crate) fn posture_json(info: &DeviceInfo) -> Option<serde_json::Value> {
+    info.posture
+        .as_ref()
+        .and_then(|p| serde_json::to_value(p).ok())
+}
+
 pub fn platform_str(p: Platform) -> &'static str {
     match p {
         Platform::Windows => "windows",
@@ -92,13 +99,17 @@ pub async fn upsert_device(
         match owner {
             Some((owner,)) if owner == user_id => {
                 sqlx::query(
-                    "UPDATE devices SET name = $2, platform = $3, app_version = $4, last_seen_at = now(), last_ip = $5 WHERE id = $1",
+                    "UPDATE devices SET name = $2, platform = $3, app_version = $4, last_seen_at = now(), last_ip = $5,
+                            posture = COALESCE($6, posture),
+                            posture_at = CASE WHEN $6::jsonb IS NULL THEN posture_at ELSE now() END
+                     WHERE id = $1",
                 )
                 .bind(cid)
                 .bind(&info.name)
                 .bind(platform_str(info.platform))
                 .bind(&info.app_version)
                 .bind(ip)
+                .bind(posture_json(info))
                 .execute(db)
                 .await?;
                 return Ok((cid, false));
@@ -108,7 +119,8 @@ pub async fn upsert_device(
         }
     }
     sqlx::query(
-        "INSERT INTO devices (id, user_id, name, platform, app_version, last_ip) VALUES ($1, $2, $3, $4, $5, $6)",
+        "INSERT INTO devices (id, user_id, name, platform, app_version, last_ip, posture, posture_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, CASE WHEN $7::jsonb IS NULL THEN NULL ELSE now() END)",
     )
     .bind(id)
     .bind(user_id)
@@ -116,6 +128,7 @@ pub async fn upsert_device(
     .bind(platform_str(info.platform))
     .bind(&info.app_version)
     .bind(ip)
+    .bind(posture_json(info))
     .execute(db)
     .await?;
     Ok((id, true))

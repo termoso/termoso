@@ -773,6 +773,15 @@ schema! {
         /// hosts; empty means any port.
         #[serde(default)]
         pub forward_ports: Vec<String>,
+        /// Members may sign in only from devices whose disk is encrypted.
+        #[serde(default)]
+        pub posture_disk_encryption: bool,
+        /// Members may sign in only from devices with a screen lock.
+        #[serde(default)]
+        pub posture_screen_lock: bool,
+        /// Members may sign in only from devices whose key is in hardware (TPM / Secure Enclave / StrongBox).
+        #[serde(default)]
+        pub posture_secure_key: bool,
         /// Last change.
         pub updated_at: DateTime<Utc>,
     }
@@ -835,6 +844,15 @@ schema! {
         pub export: Option<String>,
         /// Port allowlist (`22`, `8000-8999`); empty = any.
         pub forward_ports: Option<Vec<String>>,
+        /// Require disk encryption on members' devices.
+        #[serde(default)]
+        pub posture_disk_encryption: Option<bool>,
+        /// Require a screen lock on members' devices.
+        #[serde(default)]
+        pub posture_screen_lock: Option<bool>,
+        /// Require a hardware-backed device key.
+        #[serde(default)]
+        pub posture_secure_key: Option<bool>,
     }
 }
 

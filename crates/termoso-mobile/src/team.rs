@@ -285,6 +285,9 @@ pub struct TeamPoliciesCard {
     /// `allow` | `deny`.
     pub export: String,
     pub forward_ports: Vec<String>,
+    pub posture_disk_encryption: bool,
+    pub posture_screen_lock: bool,
+    pub posture_secure_key: bool,
 }
 
 /// A member device awaiting (or past) admin review.
@@ -832,6 +835,9 @@ impl AccountRuntime {
             jump_host_required: p.jump_host_required,
             export: p.export,
             forward_ports: p.forward_ports,
+            posture_disk_encryption: p.posture_disk_encryption,
+            posture_screen_lock: p.posture_screen_lock,
+            posture_secure_key: p.posture_secure_key,
         })
     }
 

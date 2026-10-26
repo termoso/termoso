@@ -253,6 +253,7 @@ async fn register(api: &Api, n: usize) -> Result<VirtualUser, String> {
                     platform: Platform::Linux,
                     app_version: "loadtest".into(),
                     client_device_id: Some(Uuid::new_v4()),
+                    posture: None,
                 },
                 keys,
                 invite_token: None,

@@ -239,7 +239,19 @@ export interface TeamPolicies {
   export: "allow" | "deny";
   /** Remote ports members may forward from team hosts (`22`, `8000-8999`); empty = any. */
   forward_ports: string[];
+  /** Sign-in requires the device to prove disk encryption / a screen lock / a hardware-backed key. */
+  posture_disk_encryption: boolean;
+  posture_screen_lock: boolean;
+  posture_secure_key: boolean;
   updated_at: string;
+}
+
+/** What a client reported about its own device; `null` facts could not be determined. */
+export interface Posture {
+  os_version: string;
+  disk_encryption?: boolean | null;
+  screen_lock?: boolean | null;
+  secure_key_storage?: boolean | null;
 }
 
 /** One open connection of a device to a team-vault host (routing metadata only). */
@@ -1739,6 +1751,8 @@ export interface Device {
   last_seen_at: string;
   last_ip?: string | null;
   current: boolean;
+  posture?: Posture | null;
+  posture_at?: string | null;
 }
 
 export interface SsoProvider {

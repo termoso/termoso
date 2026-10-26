@@ -1002,6 +1002,19 @@ impl TermosoApp {
         self.account.set_device_name(name);
     }
 
+    /// Security facts about this device, sent with every sign-in / refresh so
+    /// team posture policies can be checked server-side.
+    pub fn set_posture(
+        &self,
+        os_version: String,
+        disk_encryption: Option<bool>,
+        screen_lock: Option<bool>,
+        secure_key_storage: Option<bool>,
+    ) {
+        self.account
+            .set_posture(os_version, disk_encryption, screen_lock, secure_key_storage);
+    }
+
     pub fn account_status(&self) -> Result<AccountStatus> {
         RUNTIME.block_on(self.account.status())
     }

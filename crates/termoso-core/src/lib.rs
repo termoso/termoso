@@ -51,6 +51,7 @@ pub mod model;
 pub mod mosh;
 pub mod osdetect;
 pub mod policy;
+pub mod posture;
 pub mod remote;
 pub mod secrets;
 pub mod sftp;

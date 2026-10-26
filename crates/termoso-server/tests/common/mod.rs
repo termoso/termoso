@@ -737,6 +737,7 @@ pub fn device(name: &str) -> DeviceInfo {
         platform: Platform::Linux,
         app_version: "test".into(),
         client_device_id: Some(Uuid::new_v4()),
+        posture: None,
     }
 }
 

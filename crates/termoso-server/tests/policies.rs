@@ -121,13 +121,32 @@ async fn policies_are_validated_and_enforced() {
                 "auth": "keys_only",
                 "jump_host_required": true,
                 "export": "deny",
-                "forward_ports": [" 22 ", "8000 - 8999", "22", "443"]
+                "forward_ports": [" 22 ", "8000 - 8999", "22", "443"],
+                "posture_disk_encryption": true,
+                "posture_secure_key": true
             })),
         )
         .await;
     assert_eq!(p["policies"]["auth"], "keys_only");
     assert_eq!(p["policies"]["jump_host_required"], true);
     assert_eq!(p["policies"]["export"], "deny");
+    assert_eq!(p["policies"]["posture_disk_encryption"], true);
+    assert_eq!(p["policies"]["posture_screen_lock"], false);
+    assert_eq!(p["policies"]["posture_secure_key"], true);
+    // Posture requirements would block bob's plain test devices below; off again.
+    let p: serde_json::Value = s
+        .json(
+            Method::PUT,
+            &format!("/teams/{team_id}/policies"),
+            Some(owner.token()),
+            Some(&serde_json::json!({
+                "posture_disk_encryption": false,
+                "posture_secure_key": false
+            })),
+        )
+        .await;
+    assert_eq!(p["policies"]["posture_disk_encryption"], false);
+    assert_eq!(p["policies"]["posture_secure_key"], false);
     assert_eq!(
         p["policies"]["forward_ports"],
         serde_json::json!(["22", "8000-8999", "443"])

@@ -44,6 +44,7 @@ pub fn device_info(
         platform,
         app_version: app_version.to_string(),
         client_device_id: Some(store.device_id()?),
+        posture: crate::posture::reported(),
     })
 }
 

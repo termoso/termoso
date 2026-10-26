@@ -81,6 +81,9 @@ struct Row {
     jump_host_required: bool,
     export: String,
     forward_ports: Vec<String>,
+    posture_disk_encryption: bool,
+    posture_screen_lock: bool,
+    posture_secure_key: bool,
     updated_at: DateTime<Utc>,
 }
 
@@ -95,7 +98,7 @@ macro_rules! policy_select {
     ($head:literal, $tail:literal) => {
         concat!(
             $head,
-            "mfa, local_keys, session_ttl_hours, sso_only, sso_provider, sso_domains, device_approval, audit_retention_days, session_recording, log_retention_days, key_max_age_days, password_max_age_days, ip_allowlist, device_admin_approval, auth, jump_host_required, export, forward_ports, updated_at",
+            "mfa, local_keys, session_ttl_hours, sso_only, sso_provider, sso_domains, device_approval, audit_retention_days, session_recording, log_retention_days, key_max_age_days, password_max_age_days, ip_allowlist, device_admin_approval, auth, jump_host_required, export, forward_ports, posture_disk_encryption, posture_screen_lock, posture_secure_key, updated_at",
             $tail
         )
     };
@@ -121,6 +124,9 @@ fn from_row(r: Row) -> TeamPolicies {
         jump_host_required: r.jump_host_required,
         export: r.export,
         forward_ports: r.forward_ports,
+        posture_disk_encryption: r.posture_disk_encryption,
+        posture_screen_lock: r.posture_screen_lock,
+        posture_secure_key: r.posture_secure_key,
         updated_at: r.updated_at,
     }
 }
@@ -145,6 +151,9 @@ pub fn defaults() -> TeamPolicies {
         jump_host_required: false,
         export: "allow".into(),
         forward_ports: Vec::new(),
+        posture_disk_encryption: false,
+        posture_screen_lock: false,
+        posture_secure_key: false,
         updated_at: Utc::now(),
     }
 }

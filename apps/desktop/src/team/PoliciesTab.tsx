@@ -83,6 +83,9 @@ function PoliciesForm({
         jump_host_required: p.jump_host_required,
         export: p.export,
         forward_ports: parseDomains(fwdPorts),
+        posture_disk_encryption: p.posture_disk_encryption,
+        posture_screen_lock: p.posture_screen_lock,
+        posture_secure_key: p.posture_secure_key,
       };
       return ipc.teamUpdatePolicies(team.id, patch);
     },
@@ -377,6 +380,45 @@ function PoliciesForm({
             disabled={ro}
             onChange={(e) => setFwdPorts(e.target.value)}
             sx={{ width: 280 }}
+          />
+        }
+      />
+      <SettingRow
+        label={tr("Require disk encryption")}
+        hint={tr(
+          "Members sign in only from devices that report an encrypted system disk (LUKS, FileVault, BitLocker, Android file-based encryption). Devices that cannot tell are refused; owners are exempt.",
+        )}
+        control={
+          <Switch
+            checked={p.posture_disk_encryption}
+            disabled={ro}
+            onChange={(e) => setP({ ...p, posture_disk_encryption: e.target.checked })}
+          />
+        }
+      />
+      <SettingRow
+        label={tr("Require a screen lock")}
+        hint={tr(
+          "Members sign in only from devices with a password, PIN or biometric lock. Owners are exempt.",
+        )}
+        control={
+          <Switch
+            checked={p.posture_screen_lock}
+            disabled={ro}
+            onChange={(e) => setP({ ...p, posture_screen_lock: e.target.checked })}
+          />
+        }
+      />
+      <SettingRow
+        label={tr("Require a hardware-backed device key")}
+        hint={tr(
+          "Members sign in only from devices whose key lives in a TPM, Secure Enclave or StrongBox / TEE. Today only Android reports this; desktop devices are refused. Owners are exempt.",
+        )}
+        control={
+          <Switch
+            checked={p.posture_secure_key}
+            disabled={ro}
+            onChange={(e) => setP({ ...p, posture_secure_key: e.target.checked })}
           />
         }
       />

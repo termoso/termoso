@@ -44,6 +44,28 @@ schema! {
         /// app re-attach to an existing device record after approval.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         pub client_device_id: Option<Uuid>,
+        /// Security facts about the device; `None` when the client cannot tell.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub posture: Option<Posture>,
+    }
+}
+
+schema! {
+    /// What a client knows about the security state of its own device.
+    /// Each fact is `None` when it could not be determined on this platform.
+    #[derive(Default, PartialEq, Eq)]
+    pub struct Posture {
+        /// OS version string, e.g. `14.5`, `10.0.22631`, `Ubuntu 24.04`, `Android 15`.
+        pub os_version: String,
+        /// System disk (or the app's data) is encrypted at rest.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub disk_encryption: Option<bool>,
+        /// A password / PIN / biometric lock protects the device.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub screen_lock: Option<bool>,
+        /// The device key is held by hardware (TPM, Secure Enclave, StrongBox / TEE).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub secure_key_storage: Option<bool>,
     }
 }
 
@@ -543,6 +565,12 @@ schema! {
         pub last_ip: Option<String>,
         /// Whether this is the device making the request.
         pub current: bool,
+        /// Last reported posture, if any.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub posture: Option<Posture>,
+        /// When `posture` was reported.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub posture_at: Option<DateTime<Utc>>,
     }
 }
 

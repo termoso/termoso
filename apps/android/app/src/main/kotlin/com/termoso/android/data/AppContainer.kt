@@ -1,6 +1,10 @@
 package com.termoso.android.data
 
 import android.content.Context
+import android.os.Build
+import android.content.pm.PackageManager
+import android.app.admin.DevicePolicyManager
+import android.app.KeyguardManager
 import com.termoso.android.QuickAction
 import android.net.Uri
 import android.os.SystemClock
@@ -273,6 +277,7 @@ class AppContainer(context: Context) {
             val sessions = SessionManager(appContext, it, localHome, linux)
             val sftp = SftpManager(appContext, it, localHome, linux)
             val forwards = ForwardManager(it)
+            reportPosture(appContext, it.app)
             val account = AccountManager(it, onSignOut = sessions::endLive)
             _vault.value = VaultState.Open(
                 repo = it,
@@ -324,4 +329,27 @@ sealed interface OpenTarget {
     data object Connections : OpenTarget
     data object Forwarding : OpenTarget
     data class Files(val connectionId: String?) : OpenTarget
+}
+
+/** What this phone can prove about itself; the server checks it against team posture policies. */
+private fun reportPosture(context: Context, app: TermosoApp) {
+    val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as? DevicePolicyManager
+    val encrypted = when (dpm?.storageEncryptionStatus) {
+        DevicePolicyManager.ENCRYPTION_STATUS_ACTIVE,
+        DevicePolicyManager.ENCRYPTION_STATUS_ACTIVE_PER_USER,
+        DevicePolicyManager.ENCRYPTION_STATUS_ACTIVE_DEFAULT_KEY,
+        -> true
+        DevicePolicyManager.ENCRYPTION_STATUS_INACTIVE, DevicePolicyManager.ENCRYPTION_STATUS_UNSUPPORTED -> false
+        else -> null
+    }
+    val keyguard = context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+    val pm = context.packageManager
+    val hardwareKey = pm.hasSystemFeature(PackageManager.FEATURE_STRONGBOX_KEYSTORE) ||
+        (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && pm.hasSystemFeature(PackageManager.FEATURE_HARDWARE_KEYSTORE))
+    app.setPosture(
+        osVersion = "Android ${Build.VERSION.RELEASE}",
+        diskEncryption = encrypted,
+        screenLock = keyguard?.isDeviceSecure,
+        secureKeyStorage = hardwareKey,
+    )
 }

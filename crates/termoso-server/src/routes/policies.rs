@@ -160,14 +160,24 @@ pub async fn put(
     if let Some(list) = req.forward_ports {
         next.forward_ports = policy::normalize_forward_ports(&list).map_err(Error::bad_request)?;
     }
+    if let Some(on) = req.posture_disk_encryption {
+        next.posture_disk_encryption = on;
+    }
+    if let Some(on) = req.posture_screen_lock {
+        next.posture_screen_lock = on;
+    }
+    if let Some(on) = req.posture_secure_key {
+        next.posture_secure_key = on;
+    }
     let mut tx = state.db.begin().await?;
     sqlx::query(
         "INSERT INTO team_policies (team_id, mfa, local_keys, session_ttl_hours, sso_only, sso_provider,
                                     sso_domains, device_approval, audit_retention_days, session_recording,
                                     log_retention_days, key_max_age_days, password_max_age_days, ip_allowlist,
                                     device_admin_approval, auth, jump_host_required, export, forward_ports,
+                                    posture_disk_encryption, posture_screen_lock, posture_secure_key,
                                     updated_by, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $9, now())
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $9, now())
          ON CONFLICT (team_id) DO UPDATE SET mfa = EXCLUDED.mfa, local_keys = EXCLUDED.local_keys,
              session_ttl_hours = EXCLUDED.session_ttl_hours, sso_only = EXCLUDED.sso_only,
              sso_provider = EXCLUDED.sso_provider, sso_domains = EXCLUDED.sso_domains,
@@ -177,6 +187,8 @@ pub async fn put(
              ip_allowlist = EXCLUDED.ip_allowlist, device_admin_approval = EXCLUDED.device_admin_approval,
              auth = EXCLUDED.auth, jump_host_required = EXCLUDED.jump_host_required,
              export = EXCLUDED.export, forward_ports = EXCLUDED.forward_ports,
+             posture_disk_encryption = EXCLUDED.posture_disk_encryption,
+             posture_screen_lock = EXCLUDED.posture_screen_lock, posture_secure_key = EXCLUDED.posture_secure_key,
              updated_by = EXCLUDED.updated_by, updated_at = now()",
     )
     .bind(id)
@@ -199,6 +211,9 @@ pub async fn put(
     .bind(next.jump_host_required)
     .bind(&next.export)
     .bind(&next.forward_ports)
+    .bind(next.posture_disk_encryption)
+    .bind(next.posture_screen_lock)
+    .bind(next.posture_secure_key)
     .execute(&mut *tx)
     .await?;
     if next.session_recording == "required" {
