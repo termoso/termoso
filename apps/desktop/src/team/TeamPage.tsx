@@ -45,6 +45,7 @@ import { SsoTab } from "./SsoTab";
 import { AccessTab } from "./AccessTab";
 import { RotationTab } from "./RotationTab";
 import { DevicesTab } from "./DevicesTab";
+import { CaTab } from "./CaTab";
 import { DataTab } from "./DataTab";
 import { RecordingsTab } from "./RecordingsTab";
 import { useMutation } from "@tanstack/react-query";
@@ -247,6 +248,7 @@ type TeamTab =
   | "access"
   | "rotation"
   | "devices"
+  | "ca"
   | "logs"
   | "data";
 
@@ -292,6 +294,7 @@ function TeamView({
       { key: "access", label: tr("Access"), show: true },
       { key: "rotation", label: tr("Rotation"), show: can(team, "rotation.manage") },
       { key: "devices", label: tr("Devices"), show: can(team, "devices.approve") },
+      { key: "ca", label: tr("SSH CA"), show: true },
       { key: "logs", label: tr("Recordings"), show: true },
       { key: "data", label: tr("Data"), show: true },
     ];
@@ -705,6 +708,8 @@ function TeamView({
         <RotationTab team={team} />
       ) : activeTab === "devices" ? (
         <DevicesTab team={team} />
+      ) : activeTab === "ca" ? (
+        <CaTab team={team} />
       ) : activeTab === "logs" ? (
         <RecordingsTab team={team} />
       ) : activeTab === "data" ? (

@@ -135,6 +135,11 @@ import type {
   WorkspacesState,
   QuietProgress,
   QuietRun,
+  IssuedCertificate,
+  IssuedCertificateList,
+  LocalTeamCertificate,
+  TeamCa,
+  UpdateTeamCaRequest,
 } from "./types";
 import type {
   AccessRequest,
@@ -854,6 +859,18 @@ export const teamScheduleDeletion = (teamId: Uuid, confirmName: string) =>
   invoke<TeamDataStatus>("team_schedule_deletion", { teamId, confirmName });
 export const teamCancelDeletion = (teamId: Uuid) =>
   invoke<TeamDataStatus>("team_cancel_deletion", { teamId });
+export const teamCa = (teamId: Uuid) => invoke<TeamCa | null>("team_ca", { teamId });
+export const teamUpdateCa = (teamId: Uuid, patch: UpdateTeamCaRequest) =>
+  invoke<TeamCa>("team_update_ca", { teamId, patch });
+export const teamDeleteCa = (teamId: Uuid) => invoke<null>("team_delete_ca", { teamId });
+export const teamRotateCa = (teamId: Uuid, graceHours: number | null) =>
+  invoke<TeamCa>("team_rotate_ca", { teamId, graceHours });
+export const teamCaCertificates = (teamId: Uuid) =>
+  invoke<IssuedCertificateList>("team_ca_certificates", { teamId });
+export const teamCaRevoke = (teamId: Uuid, certificateId: Uuid) =>
+  invoke<IssuedCertificate>("team_ca_revoke", { teamId, certificateId });
+export const teamCaLocal = (teamId: Uuid) =>
+  invoke<LocalTeamCertificate | null>("team_ca_local", { teamId });
 export const teamDevices = (teamId: Uuid) => invoke<TeamDeviceList>("team_devices", { teamId });
 export const teamApproveDevice = (teamId: Uuid, deviceId: Uuid) =>
   invoke<null>("team_approve_device", { teamId, deviceId });

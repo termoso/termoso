@@ -1492,6 +1492,62 @@ pub async fn team_policies<R: Runtime>(
 }
 
 #[tauri::command]
+pub async fn team_ca<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+) -> Result<Option<termoso_proto::ca::TeamCa>> {
+    team::ca(&app, team_id).await
+}
+
+#[tauri::command]
+pub async fn team_update_ca<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+    patch: termoso_proto::ca::UpdateTeamCaRequest,
+) -> Result<termoso_proto::ca::TeamCa> {
+    team::update_ca(&app, team_id, patch).await
+}
+
+#[tauri::command]
+pub async fn team_delete_ca<R: Runtime>(app: AppHandle<R>, team_id: Uuid) -> Result<()> {
+    team::delete_ca(&app, team_id).await
+}
+
+#[tauri::command]
+pub async fn team_rotate_ca<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+    grace_hours: Option<i32>,
+) -> Result<termoso_proto::ca::TeamCa> {
+    team::rotate_ca(&app, team_id, grace_hours).await
+}
+
+#[tauri::command]
+pub async fn team_ca_certificates<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+) -> Result<termoso_proto::ca::IssuedCertificateList> {
+    team::ca_certificates(&app, team_id).await
+}
+
+#[tauri::command]
+pub async fn team_ca_revoke<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+    certificate_id: Uuid,
+) -> Result<termoso_proto::ca::IssuedCertificate> {
+    team::ca_revoke(&app, team_id, certificate_id).await
+}
+
+#[tauri::command]
+pub async fn team_ca_local<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+) -> Result<Option<termoso_core::ca::CachedCert>> {
+    team::ca_local(&app, team_id).await
+}
+
+#[tauri::command]
 pub async fn team_update_policies<R: Runtime>(
     app: AppHandle<R>,
     team_id: Uuid,

@@ -2354,6 +2354,77 @@ export interface TeamDeviceList {
   devices: TeamDevice[];
 }
 
+// ───────────────────────────── team SSH CA ─────────────────────────────
+
+export interface TeamCa {
+  team_id: Uuid;
+  key_type: string;
+  public_key: string;
+  fingerprint: string;
+  principals: string[];
+  ttl_hours: number;
+  extensions: string[];
+  enabled: boolean;
+  retired_public_key?: string | null;
+  retired_until?: string | null;
+  trusted_keys_url: string;
+  active_certificates: number;
+  created_at: string;
+  rotated_at?: string | null;
+  updated_at: string;
+}
+
+export interface UpdateTeamCaRequest {
+  principals?: string[] | null;
+  ttl_hours?: number | null;
+  extensions?: string[] | null;
+  enabled?: boolean | null;
+}
+
+export interface IssuedCertificate {
+  id: Uuid;
+  team_id: Uuid;
+  user_id: Uuid;
+  user_email: string;
+  device_id?: Uuid | null;
+  device_name?: string | null;
+  serial: number;
+  key_type: SshIdKeyType;
+  key_fingerprint: string;
+  key_id: string;
+  principals: string[];
+  valid_after: string;
+  valid_before: string;
+  revoked_at?: string | null;
+  active: boolean;
+  current_device: boolean;
+  created_at: string;
+}
+
+export interface IssuedCertificateList {
+  certificates: IssuedCertificate[];
+}
+
+/** This device's cached certificate for a team (termoso_core::ca::CachedCert). */
+export interface LocalTeamCertificate {
+  team_id: Uuid;
+  certificate?: string | null;
+  ca_public_key?: string | null;
+  principals?: string[] | null;
+  valid_after?: string | null;
+  valid_before?: string | null;
+  checked_at: string;
+  refusal?: "no_ca" | "disabled" | "forbidden" | "error" | null;
+}
+
+export const CA_EXTENSIONS = [
+  "permit-pty",
+  "permit-port-forwarding",
+  "permit-agent-forwarding",
+  "permit-X11-forwarding",
+  "permit-user-rc",
+] as const;
+
 export interface RotationDue {
   entity_id: Uuid;
   vault_id: Uuid;

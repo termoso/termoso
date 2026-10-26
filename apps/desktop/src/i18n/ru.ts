@@ -3082,4 +3082,60 @@ export const ru: Readonly<Record<string, string>> = {
   Time: "Время",
   "Exit {code}": "Код {code}",
   error: "ошибка",
+  "SSH CA": "SSH CA (центр сертификации)",
+  "CA settings saved": "Настройки CA сохранены",
+  "Certificate authority created": "Центр сертификации создан",
+  "CA key rotated; hosts keep trusting the old key for the grace period":
+    "Ключ CA ротирован; хосты доверяют старому ключу до конца переходного периода",
+  "Certificate authority deleted": "Центр сертификации удалён",
+  "Certificate revoked": "Сертификат отозван",
+  "SSH certificate authority": "Центр сертификации SSH",
+  "The server signs short-lived certificates for members' devices; hosts trust one CA key instead of per-user authorized_keys. Leaving the team or losing a device stops new certificates without touching any host.":
+    "Сервер подписывает короткоживущие сертификаты для устройств участников; хостам достаточно доверять одному ключу CA вместо authorized_keys на каждого. Выход из команды или потеря устройства прекращают выдачу — хосты трогать не нужно.",
+  "Create certificate authority": "Создать центр сертификации",
+  "No certificate authority": "Центра сертификации нет",
+  "A team admin can create one.": "Его может создать администратор команды.",
+  Issuing: "Выдаёт",
+  "Issue certificates": "Выдавать сертификаты",
+  "Hosts need one line in sshd_config. Run this on every host of the team:":
+    "Хостам нужна одна строка в sshd_config. Выполните на каждом хосте команды:",
+  "Copy command": "Копировать команду",
+  "Copy CA public key": "Копировать открытый ключ CA",
+  "rotated {when}": "ротирован {when}",
+  "previous key trusted until {when}": "прежний ключ доверен до {when}",
+  "{count} active certificates":
+    "{count} активный сертификат|{count} активных сертификата|{count} активных сертификатов",
+  "Principals are the login names a certificate may carry (ubuntu, deploy…). A member asks for all of them or a subset; sshd matches the one they log in as.":
+    "Принципалы — имена входа, которые может нести сертификат (ubuntu, deploy…). Участник запрашивает все или часть; sshd сверяет с тем, под кем он входит.",
+  "Principals (login names)": "Принципалы (имена входа)",
+  "`{name}` is not a valid login name": "`{name}` — недопустимое имя входа",
+  "No principals yet — certificates are not issued until at least one is set.":
+    "Принципалов нет — сертификаты не выдаются, пока не задан хотя бы один.",
+  "Certificate lifetime (hours)": "Срок сертификата (часы)",
+  "1 to 168 hours": "От 1 до 168 часов",
+  "Rotate key…": "Ротировать ключ…",
+  "Delete CA…": "Удалить CA…",
+  "This device is not approved for the team yet; no certificate.":
+    "Это устройство ещё не одобрено для команды; сертификата нет.",
+  "Issuing is paused; this device has no certificate.":
+    "Выдача приостановлена; у этого устройства нет сертификата.",
+  "No certificate yet — it is requested with the next sync.":
+    "Сертификата пока нет — запросится при следующей синхронизации.",
+  "Valid until {when}": "Действует до {when}",
+  "Issued certificates": "Выданные сертификаты",
+  "Your certificates. Admins see everyone's.": "Ваши сертификаты. Администраторы видят все.",
+  "No certificates issued yet": "Сертификаты ещё не выдавались",
+  Principals: "Принципалы",
+  Serial: "Серийный номер",
+  "Valid until": "Действует до",
+  "Rotate the CA key?": "Ротировать ключ CA?",
+  "A new key is generated and published; the previous one stays in the trusted list for the grace period so hosts that re-fetch it keep accepting unexpired certificates.":
+    "Будет создан и опубликован новый ключ; прежний остаётся в списке доверенных на переходный период, чтобы хосты, перечитавшие список, продолжали принимать неистёкшие сертификаты.",
+  "Grace period (hours)": "Переходный период (часы)",
+  "Delete the certificate authority?": "Удалить центр сертификации?",
+  "No more certificates will be issued and the records are gone. Hosts that still trust the key accept unexpired certificates until they expire.":
+    "Сертификаты больше не будут выдаваться, записи удалятся. Хосты, всё ещё доверяющие ключу, принимают неистёкшие сертификаты до их истечения.",
+  "Revoke certificate?": "Отозвать сертификат?",
+  "The device gets a new certificate on its next sync only if it is still allowed to. Hosts enforce revocation through the KRL list (Settings → revoked certificates).":
+    "Устройство получит новый сертификат при следующей синхронизации, только если ему всё ещё разрешено. На хостах отзыв применяется через KRL-список (Настройки → отозванные сертификаты).",
 };

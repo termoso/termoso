@@ -32,23 +32,29 @@ pub struct DeviceKey {
     pub private_key: Zeroizing<String>,
     /// `authorized_keys` line.
     pub public_key: String,
+    /// Generation time.
     pub created_at: DateTime<Utc>,
 }
 
 /// One team's certificate for the device key, or the reason none exists.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CachedCert {
+    /// Team whose CA signed (or refused) it.
     pub team_id: Uuid,
     /// `ssh-ed25519-cert-v01@openssh.com AAAA…`; `None` after a refusal.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub certificate: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// `TrustedUserCAKeys` line of the signing key.
     pub ca_public_key: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Login names in the certificate.
     pub principals: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Start of validity.
     pub valid_after: Option<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Expiry.
     pub valid_before: Option<DateTime<Utc>>,
     /// Last time the server was asked (success or refusal).
     pub checked_at: DateTime<Utc>,
