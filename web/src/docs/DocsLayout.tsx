@@ -18,6 +18,7 @@ import { Link as RouterLink, NavLink, Outlet } from "react-router";
 import { Logo } from "@/components/Logo";
 import { ThemeToggle } from "@/layout/ThemeToggle";
 import { useAuthState } from "@/auth/store";
+import { CabinetButton } from "@/pages/landing/Shell";
 import { hrefOf, sections } from "./manifest";
 import { DocsSearch, useSearchShortcut } from "./DocsSearch";
 
@@ -179,14 +180,13 @@ export function DocsLayout() {
             <GitHubIcon />
           </IconButton>
           <ThemeToggle />
-          <Button
-            component={RouterLink}
+          <CabinetButton
             to={session ? "/account" : "/login"}
             variant="contained"
             sx={{ ml: 1, display: { xs: "none", sm: "inline-flex" } }}
           >
             {session ? "Open cabinet" : "Sign in"}
-          </Button>
+          </CabinetButton>
         </Container>
       </Box>
 
