@@ -42,7 +42,7 @@ compromised web server or mirror cannot push code to users.
    A tag with a pre-release suffix (`v0.2.0-rc.1`) is marked *pre-release*
    and never becomes `releases/latest`, so it is invisible to the default
    updater feed.
-3. The workflow builds Linux, Windows, macOS (two native builds rather than
+3. The workflow builds Linux (x86_64, aarch64), Windows (x86_64, ARM64), macOS (two native builds rather than
    one universal binary: half the download, and the updater picks the right
    one), Android and iOS in parallel, signs the artifacts (except the iOS
    `.ipa`, which is signed on the user's device), assembles a **draft**

@@ -39,6 +39,7 @@ macOS; on Linux the repository is the update channel.
 | ---------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | Linux x86_64 / aarch64 | `.deb`, `.rpm`, `.AppImage`                        | The AppImage runs on any recent distribution without installing.                                             |
 | Windows x86_64         | `_x64-setup.exe`, `_x64_en-US.msi`                 | The `.exe` installs per user, the `.msi` suits managed deployments.                                          |
+| Windows ARM64          | `_arm64-setup.exe`, `_arm64_en-US.msi`             | The `.exe` installs per user, the `.msi` suits managed deployments.                                          |
 | macOS                  | `_aarch64.dmg` (Apple Silicon), `_x64.dmg` (Intel) | Ad-hoc signed: on first launch right-click the app → **Open**, or run `xattr -cr /Applications/Termoso.app`. |
 
 ### Updates
