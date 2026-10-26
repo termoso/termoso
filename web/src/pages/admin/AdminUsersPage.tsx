@@ -219,8 +219,13 @@ export function AdminUsersPage() {
                           )}
                         </Stack>
                       </TableCell>
-                      <TableCell sx={{ display: { xs: "none", md: "table-cell" }, maxWidth: 360 }}>
-                        <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: "wrap" }}>
+                      <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>
+                        <Stack
+                          direction="row"
+                          spacing={0.5}
+                          useFlexGap
+                          sx={{ flexWrap: "wrap", maxWidth: 360 }}
+                        >
                           {(u.teams ?? []).slice(0, TEAM_CHIPS).map((t) => (
                             <Chip
                               key={t.id}
