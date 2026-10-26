@@ -11,6 +11,7 @@ pub mod account;
 pub mod admin;
 pub mod ai;
 pub mod auth;
+pub mod automation;
 pub mod bridge;
 pub mod ca;
 pub mod entities;

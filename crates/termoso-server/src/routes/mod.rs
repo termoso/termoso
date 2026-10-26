@@ -6,6 +6,7 @@ pub mod acl;
 pub mod admin;
 pub mod ai;
 pub mod auth;
+pub mod automations;
 pub mod bridges;
 pub mod ca;
 pub mod captcha;
@@ -231,6 +232,29 @@ pub fn router(state: AppState) -> Router {
         .route("/teams/{id}/ca/certificates", get(ca::list))
         .route("/teams/{id}/ca/certificates/{cid}/revoke", post(ca::revoke))
         .route("/teams/{id}/ca/revoked", get(ca::revoked))
+        .route(
+            "/teams/{id}/automations",
+            get(automations::list).post(automations::create),
+        )
+        .route(
+            "/teams/{id}/automations/runs/claim",
+            post(automations::claim),
+        )
+        .route(
+            "/teams/{id}/automations/runs/{rid}",
+            get(automations::run).patch(automations::finish),
+        )
+        .route(
+            "/teams/{id}/automations/{aid}",
+            get(automations::get)
+                .put(automations::update)
+                .delete(automations::delete),
+        )
+        .route(
+            "/teams/{id}/automations/{aid}/run",
+            post(automations::run_now),
+        )
+        .route("/teams/{id}/automations/{aid}/runs", get(automations::runs))
         .route(
             "/teams/{id}/policies",
             get(policies::get).put(policies::put),

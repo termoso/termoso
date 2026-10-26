@@ -522,6 +522,10 @@ pub const PERMISSIONS: &[&str] = &[
     // ca
     "ca.manage",
     "ca.issue",
+    // automations
+    "automations.manage",
+    "automations.view",
+    "automations.run",
     // ai
     "ai.use",
     // mcp

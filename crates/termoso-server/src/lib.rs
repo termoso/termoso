@@ -14,6 +14,7 @@ pub mod backup;
 pub mod cache;
 pub mod codes;
 pub mod config;
+pub mod cron;
 pub mod digest;
 pub mod enterprise;
 pub mod error;

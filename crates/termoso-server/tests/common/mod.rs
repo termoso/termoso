@@ -85,6 +85,8 @@ pub struct TestServer {
     pub mailpit: Option<String>,
     pub idp: oidc::MockIdp,
     pub llm: llm::MockLlm,
+    /// The running server's state, for driving background jobs directly.
+    pub state: termoso_server::state::AppState,
 }
 
 static SERVER: tokio::sync::OnceCell<Option<TestServer>> = tokio::sync::OnceCell::const_new();
@@ -343,8 +345,9 @@ async fn boot() -> Option<TestServer> {
     // Each `#[tokio::test]` owns a runtime that is torn down when the test
     // ends, so the shared server (and the mock IdP) must live on their own
     // runtime/thread.
-    let (ready_tx, ready_rx) =
-        std::sync::mpsc::channel::<anyhow::Result<(oidc::MockIdp, llm::MockLlm)>>();
+    let (ready_tx, ready_rx) = std::sync::mpsc::channel::<
+        anyhow::Result<(oidc::MockIdp, llm::MockLlm, termoso_server::state::AppState)>,
+    >();
     std::thread::Builder::new()
         .name("termoso-test-server".into())
         .spawn(move || {
@@ -386,8 +389,8 @@ async fn boot() -> Option<TestServer> {
                 };
                 tokio::spawn(termoso_server::ws::run_fanout(state.clone()));
                 tokio::spawn(termoso_server::live::run_fanout(state.clone()));
-                let app = termoso_server::app(state);
-                let _ = ready_tx.send(Ok((idp, llm)));
+                let app = termoso_server::app(state.clone());
+                let _ = ready_tx.send(Ok((idp, llm, state)));
                 axum::serve(
                     listener,
                     app.into_make_service_with_connect_info::<SocketAddr>(),
@@ -397,7 +400,7 @@ async fn boot() -> Option<TestServer> {
             });
         })
         .expect("spawn server thread");
-    let (idp, llm) = ready_rx
+    let (idp, llm, state) = ready_rx
         .recv()
         .expect("server thread died")
         .expect("server state");
@@ -411,6 +414,7 @@ async fn boot() -> Option<TestServer> {
         mailpit,
         idp,
         llm,
+        state,
     })
 }
 
@@ -628,6 +632,14 @@ impl User {
 impl TestServer {
     /// Run one statement against the test database (time travel for tests
     /// that would otherwise wait minutes or hours).
+    /// One pass of the automations scheduler (due slots → pending runs,
+    /// stale pending → missed).
+    pub async fn tick_automations(&self) {
+        termoso_server::routes::automations::tick(&self.state)
+            .await
+            .expect("automations tick");
+    }
+
     pub async fn sql(&self, statement: &str, bind: &str) {
         let mut conn = PgConnection::connect(&self.database_url)
             .await

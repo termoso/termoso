@@ -40,6 +40,9 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(termoso_server::ws::run_fanout(state.clone()));
     tokio::spawn(termoso_server::live::run_fanout(state.clone()));
     tokio::spawn(termoso_server::digest::run(state.clone()));
+    tokio::spawn(termoso_server::routes::automations::run_scheduler(
+        state.clone(),
+    ));
     tokio::spawn(termoso_server::audit::run_retention(state.clone()));
     tokio::spawn(termoso_server::routes::logs::run_retention(state.clone()));
     tokio::spawn(termoso_server::routes::rotation::run_reminders(
