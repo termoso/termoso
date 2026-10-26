@@ -1658,6 +1658,7 @@ async fn ssh_connect<R: Runtime>(
             keepalive: keepalive(&state, &ssh_cfg),
             timeout: Duration::from_secs(ssh_cfg.timeout.unwrap_or(20).clamp(1, 600) as u64),
             proxy: proxy.clone(),
+            gateway: gateway_dial(app, resolved).await,
             env: ssh_cfg.env_variables.clone(),
             agent_forwarding: ssh_cfg.agent_forwarding,
             x11: (ssh_cfg.forward_x11 && hop.is_none())
@@ -1894,6 +1895,22 @@ fn remember_username(state: &AppState, resolved: &ResolvedHost, username: &str) 
     remember_on_identity(state, resolved, username, "username", |i| {
         i.username = username.to_string()
     });
+}
+
+/// Tunnel through the host's gateway (an API bridge in gateway mode), if it has one.
+async fn gateway_dial<R: Runtime>(
+    app: &AppHandle<R>,
+    resolved: Option<&termoso_core::model::ResolvedHost>,
+) -> Option<termoso_core::gateway::GatewayDial> {
+    let r = resolved?;
+    let gateway_id = r.gateway_id?;
+    let api = crate::account::api(app).await.ok()?;
+    Some(termoso_core::gateway::GatewayDial {
+        api,
+        gateway_id,
+        vault_id: r.host.vault_id,
+        host_id: r.host.id,
+    })
 }
 
 #[cfg(test)]

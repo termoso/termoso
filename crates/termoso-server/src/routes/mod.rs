@@ -394,6 +394,9 @@ pub fn router(state: AppState) -> Router {
         .route("/live", get(crate::live::list).post(crate::live::create))
         .route("/live/{id}/stop", post(crate::live::stop))
         .route("/live/{id}/ws", get(crate::live::ws))
+        .route("/gateways", get(crate::gateway::list))
+        .route("/gateways/ws", get(crate::gateway::agent_ws))
+        .route("/gateways/{id}/connect", get(crate::gateway::client_ws))
         // admin
         .route("/admin/stats", get(admin::stats))
         .route("/admin/config", get(admin::config))

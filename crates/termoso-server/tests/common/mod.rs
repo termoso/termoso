@@ -389,6 +389,7 @@ async fn boot() -> Option<TestServer> {
                 };
                 tokio::spawn(termoso_server::ws::run_fanout(state.clone()));
                 tokio::spawn(termoso_server::live::run_fanout(state.clone()));
+                tokio::spawn(termoso_server::gateway::run_fanout(state.clone()));
                 let app = termoso_server::app(state.clone());
                 let _ = ready_tx.send(Ok((idp, llm, state)));
                 axum::serve(

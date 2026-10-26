@@ -34,6 +34,10 @@ impl ServerClient {
         Ok(Self { http, base, token })
     }
 
+    pub fn token(&self) -> &str {
+        &self.token
+    }
+
     pub fn server_url(&self) -> &Url {
         &self.base
     }

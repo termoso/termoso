@@ -197,7 +197,10 @@ impl TelnetTerminal {
         let stream = tokio::time::timeout(opts.timeout, async {
             if let Some(p) = &opts.proxy {
                 let crate::ssh::proxy::ProxyStream::Tcp(s) =
-                    crate::ssh::proxy::connect(p, &opts.host, opts.port).await?;
+                    crate::ssh::proxy::connect(p, &opts.host, opts.port).await?
+                else {
+                    unreachable!("proxy::connect never returns a gateway stream")
+                };
                 return Ok(s);
             }
             let addrs = opts.ip_version.filter(

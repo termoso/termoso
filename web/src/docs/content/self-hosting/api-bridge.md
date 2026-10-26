@@ -63,3 +63,22 @@ Full tool list and flags: `docs/API_BRIDGE.md` in the repository.
 - The server never receives host addresses, usernames, passwords or keys from the bridge — only ciphertext, like from any other device.
 
 Full API reference: [docs/API_BRIDGE.md](https://github.com/termoso/termoso/blob/main/docs/API_BRIDGE.md).
+
+## Gateway: hosts you cannot reach
+
+Some hosts have no route from a laptop or a phone — a lab behind NAT, a VPC with no bastion, an office network. Run the bridge there as a **gateway**:
+
+```sh
+termoso-bridge gateway
+```
+
+It keeps one outbound WebSocket to your server (no inbound port, no VPN). When a member who shares a vault with the bridge opens a host of that vault marked *via gateway*, the app tunnels the SSH connection through the server to the gateway, which dials the host on its own network. Everything in between is the SSH transport itself, so the server relays ciphertext.
+
+What the server knows: that *this member* connected to *this host id* in *this vault* through *this gateway* (audited as `gateway.connected`). Hosts are named by vault and entity id — the gateway resolves the address from the vault it already mirrors — so the server never learns an address or a port.
+
+- **Scope.** A gateway serves exactly the vaults sealed to the bridge, to members who can open them; team policies apply (`connect.bridge` permission, keys-only, mandatory jump host and the rest).
+- **Allow-list.** `TERMOSO_GATEWAY_ALLOW=10.0.0.0/8,db.internal` limits what the gateway dials (hosts, IPs, CIDRs). Empty means anything a vault names.
+- **Online state.** `GET /api/v1/gateways` lists the gateways you can use and whether each one has pinged in the last 90 s; an offline gateway refuses connections immediately instead of hanging.
+- **Several servers.** Frames cross API replicas over Redis like the multiplayer relay, so a gateway and a client may land on different instances.
+
+The gateway is the same binary and credentials file as the REST bridge; run both if you also want the API. Mark a host as reachable through a gateway in its SSH settings (`gateway_id` on the SSH config).

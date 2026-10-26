@@ -79,6 +79,8 @@ impl std::fmt::Debug for ProxyConfig {
 pub enum ProxyStream {
     /// Direct connection.
     Tcp(TcpStream),
+    /// Tunnelled through a gateway (see `crate::gateway`).
+    Ws(Box<crate::gateway::WsStream>),
 }
 
 impl AsyncRead for ProxyStream {
@@ -89,6 +91,7 @@ impl AsyncRead for ProxyStream {
     ) -> Poll<std::io::Result<()>> {
         match self.get_mut() {
             ProxyStream::Tcp(s) => Pin::new(s).poll_read(cx, buf),
+            ProxyStream::Ws(s) => Pin::new(s).poll_read(cx, buf),
         }
     }
 }
@@ -101,16 +104,19 @@ impl AsyncWrite for ProxyStream {
     ) -> Poll<std::io::Result<usize>> {
         match self.get_mut() {
             ProxyStream::Tcp(s) => Pin::new(s).poll_write(cx, buf),
+            ProxyStream::Ws(s) => Pin::new(s).poll_write(cx, buf),
         }
     }
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
         match self.get_mut() {
             ProxyStream::Tcp(s) => Pin::new(s).poll_flush(cx),
+            ProxyStream::Ws(s) => Pin::new(s).poll_flush(cx),
         }
     }
     fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
         match self.get_mut() {
             ProxyStream::Tcp(s) => Pin::new(s).poll_shutdown(cx),
+            ProxyStream::Ws(s) => Pin::new(s).poll_shutdown(cx),
         }
     }
 }

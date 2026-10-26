@@ -1245,6 +1245,8 @@ mod tests {
     #[test]
     fn audit_details_flatten_to_pairs() {
         let e = proto::AuditEvent {
+            hash: None,
+            prev_hash: None,
             id: 7,
             team_id: Uuid::nil(),
             actor_id: None,

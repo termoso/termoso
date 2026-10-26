@@ -103,6 +103,22 @@ impl Bridge {
         Ok(b)
     }
 
+    /// Address and port of `host_id` in `vault_id`, for the gateway.
+    pub async fn gateway_target(&self, vault_id: Uuid, host_id: Uuid) -> Result<(String, u16)> {
+        let inner = self.inner.lock().await;
+        let v = inner
+            .vaults
+            .get(&vault_id)
+            .ok_or_else(|| BridgeError::NotFound("vault".into()))?;
+        let h: termoso_proto::entities::payload::Host = v
+            .get(host_id, "host")
+            .ok_or_else(|| BridgeError::NotFound("host".into()))?;
+        let port = crate::exec::effective_ssh(v, &h)
+            .and_then(|c| c.port)
+            .unwrap_or(22);
+        Ok((h.address, port))
+    }
+
     pub fn bridge_id(&self) -> Uuid {
         self.bridge_id
     }

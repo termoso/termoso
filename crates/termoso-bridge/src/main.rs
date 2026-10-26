@@ -12,6 +12,11 @@
 //!   (default 50, burst 2×, `0` disables).
 //! - `RUST_LOG` — log filter (default `info`, written to stderr).
 //!
+//! `termoso-bridge gateway` keeps an outbound WebSocket to the server and
+//! dials hosts of the mirrored vaults for members who have no route to them
+//! (`TERMOSO_GATEWAY_ALLOW` — optional comma-separated hosts / IPs / CIDRs the
+//! gateway may dial; empty = anything the vaults name).
+//!
 //! `termoso-bridge mcp [--allow-write] [--allow-exec] [--strict-host-key]`
 //! runs the MCP stdio server instead of the REST API (same credentials file;
 //! `TERMOSO_BRIDGE_MCP_WRITE`, `TERMOSO_BRIDGE_MCP_EXEC` and
@@ -46,6 +51,9 @@ async fn main() {
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
     if std::env::args().nth(1).as_deref() == Some("mcp") {
         return run_mcp(std::env::args().skip(2)).await;
+    }
+    if std::env::args().nth(1).as_deref() == Some("gateway") {
+        return run_gateway().await;
     }
     let creds_path = PathBuf::from(
         std::env::var("TERMOSO_BRIDGE_CREDENTIALS")
@@ -153,6 +161,39 @@ fn env_flag(name: &str) -> bool {
             )
         })
         .unwrap_or(false)
+}
+
+/// `termoso-bridge gateway`: keep an outbound tunnel to the server and dial
+/// hosts of the mirrored vaults for members who cannot reach them directly.
+async fn run_gateway() -> Result<(), Box<dyn std::error::Error>> {
+    let creds_path = PathBuf::from(
+        std::env::var("TERMOSO_BRIDGE_CREDENTIALS")
+            .unwrap_or_else(|_| "/etc/termoso/bridge.json".into()),
+    );
+    let allow = termoso_bridge::gateway::Allow::parse(
+        &std::env::var("TERMOSO_GATEWAY_ALLOW").unwrap_or_default(),
+    )?;
+    let interval: u64 = std::env::var("TERMOSO_BRIDGE_SYNC_INTERVAL")
+        .ok()
+        .map(|s| s.parse())
+        .transpose()?
+        .unwrap_or(60);
+    let creds = load_credentials(&creds_path)?;
+    tracing::info!(server = %creds.server, bridge = %creds.bridge_id, "gateway connecting");
+    let bridge = Arc::new(Bridge::connect(creds).await?);
+    if interval > 0 {
+        let b = bridge.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(interval)).await;
+                if let Err(e) = b.sync().await {
+                    tracing::warn!(error = %e, "sync failed");
+                }
+            }
+        });
+    }
+    termoso_bridge::gateway::run(bridge, allow).await;
+    Ok(())
 }
 
 async fn run_mcp(args: impl Iterator<Item = String>) -> Result<(), Box<dyn std::error::Error>> {

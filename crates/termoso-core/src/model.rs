@@ -102,6 +102,9 @@ pub struct ResolvedHost {
     pub ssh_id_handle: Option<String>,
     /// Proxy, if any.
     pub proxy: Option<Entity<Proxy>>,
+    /// Gateway (API bridge) to tunnel through, if any.
+    #[serde(default)]
+    pub gateway_id: Option<Uuid>,
     /// Jump hosts in order (each already resolved one level).
     pub chain: Vec<Entity<Host>>,
     /// Telnet config when the host is a telnet target.

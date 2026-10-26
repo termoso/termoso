@@ -787,6 +787,7 @@ async fn ssh_connect(
             keepalive: keepalive(settings, &ssh_cfg),
             timeout: Duration::from_secs(ssh_cfg.timeout.unwrap_or(20).clamp(1, 600) as u64),
             proxy: proxy.clone(),
+            gateway: None,
             env: ssh_cfg.env_variables.clone(),
             agent_forwarding: ssh_cfg.agent_forwarding,
             // No local X server on a phone: the flag only travels with the

@@ -88,7 +88,7 @@ pub fn find_host<'a>(
 }
 
 /// SSH config of the host, falling back to its group chain (nearest first).
-fn effective_ssh(v: &VaultState, h: &Host) -> Option<SshConfig> {
+pub(crate) fn effective_ssh(v: &VaultState, h: &Host) -> Option<SshConfig> {
     let own = h
         .ssh_config_id
         .and_then(|c| v.get::<SshConfig>(c, "ssh_config"));

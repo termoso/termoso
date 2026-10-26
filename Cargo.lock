@@ -9091,6 +9091,7 @@ name = "termoso-bridge"
 version = "0.10.0"
 dependencies = [
  "axum",
+ "bytes",
  "chrono",
  "futures",
  "reqwest 0.12.28",
@@ -9102,6 +9103,7 @@ dependencies = [
  "termoso-proto",
  "thiserror 2.0.20",
  "tokio",
+ "tokio-tungstenite",
  "tower-http 0.7.1",
  "tracing",
  "tracing-subscriber",

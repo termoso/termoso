@@ -41,6 +41,7 @@ pub mod error;
 pub mod extsecret;
 pub mod fido2;
 pub mod forward;
+pub mod gateway;
 pub mod hostkey;
 pub mod import;
 pub mod keys;

@@ -175,6 +175,11 @@ impl ApiClient {
         self.ws_url_for(&format!("live/{id}/ws"))
     }
 
+    /// Gateway tunnel endpoint (`ws[s]://…/api/v1/gateways/{id}/connect`).
+    pub fn gateway_ws_url(&self, gateway_id: Uuid) -> Result<Url> {
+        self.ws_url_for(&format!("gateways/{gateway_id}/connect"))
+    }
+
     fn ws_url_for(&self, path: &str) -> Result<Url> {
         let mut u = self.api_url(path);
         let scheme = match u.scheme() {

@@ -21,6 +21,7 @@ pub mod enterprise;
 pub mod error;
 pub mod events;
 pub mod extract;
+pub mod gateway;
 pub mod jobs;
 pub mod live;
 pub mod mail;
