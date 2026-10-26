@@ -203,6 +203,7 @@ pub(crate) struct TunnelLaunch {
     pub settings: MobileSettings,
     pub listener: Arc<dyn TunnelListener>,
     pub presence: Slot,
+    pub account: Option<Arc<crate::account::AccountRuntime>>,
 }
 
 impl PfTunnel {
@@ -214,19 +215,23 @@ impl PfTunnel {
             settings,
             listener,
             presence,
+            account,
         } = launch;
         let state = Arc::new(Mutex::new(TunnelState::connecting(
             ConnectStage::Connecting,
             None,
         )));
-        let conn = Arc::new(Connector::new(
-            store.clone(),
-            secrets.clone(),
-            Arc::new(TunnelUi {
-                listener: listener.clone(),
-                state: state.clone(),
-            }),
-        ));
+        let conn = Arc::new(
+            Connector::new(
+                store.clone(),
+                secrets.clone(),
+                Arc::new(TunnelUi {
+                    listener: listener.clone(),
+                    state: state.clone(),
+                }),
+            )
+            .with_account(account),
+        );
         let inner = Arc::new(Inner {
             conn,
             listener,

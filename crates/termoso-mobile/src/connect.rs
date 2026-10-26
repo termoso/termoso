@@ -280,6 +280,9 @@ pub(crate) struct Connector {
     /// Set when the user dismissed a prompt; turns the resulting connect
     /// error into `Cancelled`.
     cancelled: AtomicBool,
+    /// Signed-in account, when there is one: hosts with a `gateway_id` are
+    /// dialled through their API bridge gateway with its session token.
+    account: Option<Arc<crate::account::AccountRuntime>>,
 }
 
 impl Connector {
@@ -290,7 +293,32 @@ impl Connector {
             secrets,
             prompts: PromptBroker::new(),
             cancelled: AtomicBool::new(false),
+            account: None,
         }
+    }
+
+    /// Let hosts behind a gateway be reached through the signed-in account.
+    pub fn with_account(mut self, account: Option<Arc<crate::account::AccountRuntime>>) -> Self {
+        self.account = account;
+        self
+    }
+
+    /// Where to tunnel for `resolved`: its gateway, when it has one and the
+    /// account is signed in. Without an account the plain address is dialled,
+    /// which fails the usual way for a host that is only reachable inside.
+    async fn gateway_dial(
+        &self,
+        resolved: Option<&ResolvedHost>,
+    ) -> Option<termoso_core::gateway::GatewayDial> {
+        let r = resolved?;
+        let gateway_id = r.gateway_id?;
+        let api = self.account.as_ref()?.api().await.ok()?;
+        Some(termoso_core::gateway::GatewayDial {
+            api,
+            gateway_id,
+            vault_id: r.host.vault_id,
+            host_id: r.host.id,
+        })
     }
 
     pub fn answer(&self, id: u64, answer: PromptAnswer) -> bool {
@@ -788,7 +816,7 @@ async fn ssh_connect(
             keepalive: keepalive(settings, &ssh_cfg),
             timeout: Duration::from_secs(ssh_cfg.timeout.unwrap_or(20).clamp(1, 600) as u64),
             proxy: proxy.clone(),
-            gateway: None,
+            gateway: conn.gateway_dial(resolved).await,
             env: ssh_cfg.env_variables.clone(),
             agent_forwarding: ssh_cfg.agent_forwarding,
             // No local X server on a phone: the flag only travels with the

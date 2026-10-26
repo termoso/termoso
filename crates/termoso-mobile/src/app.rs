@@ -1976,6 +1976,7 @@ impl TermosoApp {
                 settings: MobileSettings::load(&self.store)?,
                 listener,
                 presence,
+                account: Some(self.account.clone()),
             },
         ))
     }
