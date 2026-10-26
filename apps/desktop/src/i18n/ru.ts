@@ -3196,6 +3196,8 @@ export const ru: Readonly<Record<string, string>> = {
   "minute hour day month weekday, or @hourly / @daily / @weekly / @monthly":
     "минута час день месяц день_недели, либо @hourly / @daily / @weekly / @monthly",
   "{failed} of {total} failed": "{failed} из {total} с ошибкой",
+  "Per-host output is encrypted with the vault key — unlock the vault to see it.":
+    "Вывод по хостам зашифрован ключом хранилища — разблокируйте хранилище, чтобы его увидеть.",
   "{total} ok": "{total} успешно",
   "Reference: fetched from the external manager when connecting, not stored here.":
     "Ссылка: значение берётся из внешнего менеджера при подключении и здесь не хранится.",

@@ -16,7 +16,7 @@ In the team page open **Automations → New automation** (requires the `automati
 - **Timeout** per host (10 s – 1 h).
 - **E-mail alert** — never, on failure, or after every run; extra recipients plus, optionally, the team owners and admins.
 
-Pause/resume, **Run now** and editing are in the same table; **History** shows every run with per-host status, exit code, duration and the captured output (capped at 8 KiB per stream).
+Pause/resume, **Run now** and editing are in the same table; **History** shows every run with per-host status, exit code, duration and the captured output (capped at 8 KiB per stream). Those details are encrypted by the executor with the vault key, so they are readable only on a device where that vault is unlocked; the server holds them as an opaque blob.
 
 ## Who executes runs
 
@@ -33,7 +33,7 @@ Every finished or missed run is written to the team audit log (`automation.run.o
 
 ## What the server stores
 
-Automation name, schedule, time zone, timeout, alert settings, the UUIDs of the vault, snippet, hosts and group, and run results as reported by the executor (host label, target, exit code, truncated stdout/stderr, error, duration). It stores no snippet text, host addresses, usernames or credentials beyond what the executor includes in the result's `label`/`target` fields — these are the host label and `user@host:port` for readability. If that is more than your policy allows, keep automations to hosts whose addresses are not sensitive.
+Automation name, schedule, time zone, timeout, alert settings, the UUIDs of the vault, snippet, hosts and group, and per run: status, times, the executor device and a list of `{host_id, ok}` flags for counters and alerts. Host labels, `user@host:port`, exit codes, stdout/stderr and error text are sent only inside a blob encrypted with the vault key (`Vec<HostRunResult>` as JSON, AAD `automation_run/<run id>`), which the server stores without being able to read. It never sees snippet text, host addresses, usernames or credentials. Alert e-mails carry only the counts ("2 failed of 5"), not which hosts or why.
 
 ## API
 

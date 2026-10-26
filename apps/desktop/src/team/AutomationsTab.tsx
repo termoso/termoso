@@ -660,7 +660,8 @@ function RunRow({
   open: boolean;
   onToggle: () => void;
 }) {
-  const expandable = run.results.length > 0 || !!run.error;
+  const locked = !!run.sealed && run.results.length === 0;
+  const expandable = run.results.length > 0 || !!run.error || locked;
   return (
     <>
       <TableRow
@@ -709,6 +710,11 @@ function RunRow({
             <Collapse in={open} unmountOnExit>
               <Stack spacing={1.5} sx={{ p: 2 }}>
                 {run.error && <Alert severity="error">{run.error}</Alert>}
+                {locked && (
+                  <Alert severity="info">
+                    {tr("Per-host output is encrypted with the vault key — unlock the vault to see it.")}
+                  </Alert>
+                )}
                 {run.results.map((r) => (
                   <HostResult key={r.host_id} r={r} />
                 ))}

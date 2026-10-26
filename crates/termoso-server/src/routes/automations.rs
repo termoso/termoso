@@ -89,30 +89,37 @@ fn to_auto(r: AutoRow) -> Automation {
     }
 }
 
-type RunRow = (
-    Uuid,
-    Uuid,
-    Uuid,
-    String,
-    DateTime<Utc>,
-    bool,
-    Option<Uuid>,
-    Option<String>,
-    Option<DateTime<Utc>>,
-    Option<DateTime<Utc>>,
-    i32,
-    i32,
-    serde_json::Value,
-    Option<String>,
-    DateTime<Utc>,
-);
+#[derive(sqlx::FromRow)]
+struct RunRow {
+    id: Uuid,
+    automation_id: Uuid,
+    team_id: Uuid,
+    vault_id: Uuid,
+    status: String,
+    scheduled_for: DateTime<Utc>,
+    manual: bool,
+    claimed_by_device: Option<Uuid>,
+    claimed_by_name: Option<String>,
+    claimed_at: Option<DateTime<Utc>>,
+    finished_at: Option<DateTime<Utc>>,
+    hosts_total: i32,
+    hosts_failed: i32,
+    outcomes: serde_json::Value,
+    sealed: Option<String>,
+    key_version: Option<i32>,
+    error: Option<String>,
+    created_at: DateTime<Utc>,
+}
 
 macro_rules! select_run {
     ($tail:literal) => {
         concat!(
-            "SELECT r.id, r.automation_id, r.team_id, r.status, r.scheduled_for, r.manual, r.claimed_by_device,
-                d.name, r.claimed_at, r.finished_at, r.hosts_total, r.hosts_failed, r.results, r.error, r.created_at
-             FROM team_automation_runs r LEFT JOIN devices d ON d.id = r.claimed_by_device",
+            "SELECT r.id, r.automation_id, r.team_id, a.vault_id, r.status, r.scheduled_for, r.manual,
+                r.claimed_by_device, d.name AS claimed_by_name, r.claimed_at, r.finished_at, r.hosts_total, r.hosts_failed,
+                r.outcomes, r.sealed, r.key_version, r.error, r.created_at
+             FROM team_automation_runs r
+             JOIN team_automations a ON a.id = r.automation_id
+             LEFT JOIN devices d ON d.id = r.claimed_by_device",
             $tail
         )
     };
@@ -120,21 +127,25 @@ macro_rules! select_run {
 
 fn to_run(r: RunRow) -> AutomationRun {
     AutomationRun {
-        id: r.0,
-        automation_id: r.1,
-        team_id: r.2,
-        status: r.3,
-        scheduled_for: r.4,
-        manual: r.5,
-        claimed_by_device: r.6,
-        claimed_by_name: r.7,
-        claimed_at: r.8,
-        finished_at: r.9,
-        hosts_total: r.10,
-        hosts_failed: r.11,
-        results: serde_json::from_value(r.12).unwrap_or_default(),
-        error: r.13,
-        created_at: r.14,
+        id: r.id,
+        automation_id: r.automation_id,
+        team_id: r.team_id,
+        vault_id: r.vault_id,
+        status: r.status,
+        scheduled_for: r.scheduled_for,
+        manual: r.manual,
+        claimed_by_device: r.claimed_by_device,
+        claimed_by_name: r.claimed_by_name,
+        claimed_at: r.claimed_at,
+        finished_at: r.finished_at,
+        hosts_total: r.hosts_total,
+        hosts_failed: r.hosts_failed,
+        outcomes: serde_json::from_value(r.outcomes).unwrap_or_default(),
+        sealed: r.sealed,
+        key_version: r.key_version,
+        results: Vec::new(),
+        error: r.error,
+        created_at: r.created_at,
     }
 }
 
@@ -627,18 +638,11 @@ pub async fn finish(
             "Only the device that claimed the run may finish it",
         ));
     }
-    let results: Vec<HostRunResult> = req
-        .results
-        .into_iter()
-        .map(|mut r| {
-            r.stdout = cap(&r.stdout);
-            r.stderr = cap(&r.stderr);
-            r.error = r.error.map(|e| cap(&e));
-            r
-        })
-        .collect();
-    let total = results.len() as i32;
-    let failed = results.iter().filter(|r| !r.ok()).count() as i32;
+    if req.sealed.as_ref().is_some_and(|s| s.len() > SEALED_CAP) {
+        return Err(Error::bad_request("sealed results exceed the size limit"));
+    }
+    let total = req.outcomes.len() as i32;
+    let failed = req.outcomes.iter().filter(|o| !o.ok).count() as i32;
     let status = if req.error.is_some() || failed > 0 || total == 0 {
         "failed"
     } else {
@@ -648,14 +652,16 @@ pub async fn finish(
     let mut tx = state.db.begin().await?;
     sqlx::query(
         "UPDATE team_automation_runs SET status = $2, finished_at = now(), hosts_total = $3, hosts_failed = $4,
-            results = $5, error = $6
+            outcomes = $5, sealed = $6, key_version = $7, error = $8
          WHERE id = $1",
     )
     .bind(rid)
     .bind(status)
     .bind(total)
     .bind(failed)
-    .bind(serde_json::to_value(&results)?)
+    .bind(serde_json::to_value(&req.outcomes)?)
+    .bind(&req.sealed)
+    .bind(req.key_version)
     .bind(req.error.as_deref().map(cap))
     .execute(&mut *tx)
     .await?;
@@ -747,18 +753,12 @@ async fn alert(state: &AppState, a: &Automation, run: &AutomationRun) {
             "No executor (API bridge or a desktop with “run team automations” on) claimed the run within 15 minutes. Check that one is online and can open the vault.",
         );
     } else {
+        // Only counts: which hosts and why is in the sealed results, which
+        // the server cannot (and must not) read.
         msg = msg.row(
             "Hosts",
             format!("{} failed of {}", run.hosts_failed, run.hosts_total),
         );
-        for r in run.results.iter().filter(|r| !r.ok()).take(10) {
-            let why = r
-                .error
-                .clone()
-                .or_else(|| r.exit_code.map(|c| format!("exit code {c}")))
-                .unwrap_or_else(|| "did not finish".into());
-            msg = msg.row(&r.label, why);
-        }
         if let Some(e) = &run.error {
             msg = msg.paragraph(format!("Run error: {e}"));
         }

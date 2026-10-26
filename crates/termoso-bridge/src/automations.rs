@@ -6,8 +6,10 @@ use std::time::{Duration, Instant};
 
 use futures::StreamExt;
 
+use termoso_crypto::aead::{self, Aad};
+use termoso_crypto::keys::SymmetricKey;
 use termoso_proto::automation::{
-    ClaimRunsRequest, ClaimedRun, FinishRunRequest, HostRunResult, OUTPUT_CAP,
+    ClaimRunsRequest, ClaimedRun, FinishRunRequest, HostRunResult, OUTPUT_CAP, RUN_AAD,
 };
 use termoso_proto::entities::payload::{Group, Host, Snippet};
 use uuid::Uuid;
@@ -89,7 +91,7 @@ fn group_tree(v: &VaultState, group: Uuid) -> HashSet<Uuid> {
 }
 
 async fn execute(bridge: &Bridge, run: &ClaimedRun) -> FinishRunRequest {
-    let prepared: Result<(String, Vec<Job>)> = bridge
+    let prepared: Result<(String, Vec<Job>, SymmetricKey, i32)> = bridge
         .with_inner(|_, vaults| {
             let Some(v) = vaults.get(&run.vault_id) else {
                 return Err(crate::error::BridgeError::Invalid(
@@ -133,15 +135,22 @@ async fn execute(bridge: &Bridge, run: &ClaimedRun) -> FinishRunRequest {
                     },
                 })
                 .collect();
-            Ok((snippet.script, jobs))
+            Ok((
+                snippet.script,
+                jobs,
+                v.require_key()?.clone(),
+                v.key_version,
+            ))
         })
         .await
         .and_then(|r| r);
-    let (script, jobs) = match prepared {
+    let (script, jobs, key, key_version) = match prepared {
         Ok(p) => p,
         Err(e) => {
             return FinishRunRequest {
-                results: Vec::new(),
+                outcomes: Vec::new(),
+                sealed: None,
+                key_version: None,
                 error: Some(e.to_string()),
             };
         }
@@ -152,9 +161,28 @@ async fn execute(bridge: &Bridge, run: &ClaimedRun) -> FinishRunRequest {
         .buffer_unordered(PARALLEL)
         .collect()
         .await;
+    seal(&key, key_version, run.run.id, results)
+}
+
+/// Package results for the server: success flags in the clear, everything
+/// else (labels, targets, output, errors) encrypted with the vault key.
+fn seal(
+    key: &SymmetricKey,
+    key_version: i32,
+    run_id: Uuid,
+    results: Vec<HostRunResult>,
+) -> FinishRunRequest {
+    let outcomes = results.iter().map(HostRunResult::outcome).collect();
+    let sealed = serde_json::to_string(&results).ok().and_then(|pt| {
+        aead::encrypt_str(key, &Aad::label(&[RUN_AAD, &run_id.to_string()]), &pt).ok()
+    });
     FinishRunRequest {
-        results,
-        error: None,
+        outcomes,
+        error: sealed
+            .is_none()
+            .then(|| "could not seal the results".to_string()),
+        key_version: sealed.is_some().then_some(key_version),
+        sealed,
     }
 }
 

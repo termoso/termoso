@@ -39,7 +39,11 @@ CREATE TABLE team_automation_runs (
     finished_at        timestamptz,
     hosts_total        integer NOT NULL DEFAULT 0,
     hosts_failed       integer NOT NULL DEFAULT 0,
-    results            jsonb NOT NULL DEFAULT '[]'::jsonb,
+    -- [{host_id, ok}] only; label/target/output are in `sealed`, encrypted by
+    -- the executor with the vault key — the server never sees them.
+    outcomes           jsonb NOT NULL DEFAULT '[]'::jsonb,
+    sealed             text,
+    key_version        integer,
     error              text,
     created_at         timestamptz NOT NULL DEFAULT now()
 );

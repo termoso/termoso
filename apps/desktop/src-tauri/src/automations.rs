@@ -8,6 +8,8 @@ use std::time::Duration;
 
 use tauri::{AppHandle, Manager, Runtime};
 use termoso_core::model::{Group, Host, Snippet};
+use termoso_crypto::aead::{self, Aad};
+use termoso_crypto::keys::SymmetricKey;
 use termoso_proto::automation::*;
 use uuid::Uuid;
 
@@ -51,12 +53,35 @@ pub async fn run_now<R: Runtime>(
     Ok(api(app).await?.run_automation_now(team_id, id).await?)
 }
 
+/// Run history; per-host results are opened with the vault key when the
+/// vault is unlocked here, otherwise only the success flags are available.
 pub async fn runs<R: Runtime>(
     app: &AppHandle<R>,
     team_id: Uuid,
     id: Uuid,
 ) -> Result<AutomationRunList> {
-    Ok(api(app).await?.automation_runs(team_id, id).await?)
+    let mut list = api(app).await?.automation_runs(team_id, id).await?;
+    let state = app.state::<AppState>();
+    let store = state.store()?;
+    let mut key: Option<(Uuid, SymmetricKey)> = None;
+    for run in &mut list.runs {
+        let Some(sealed) = &run.sealed else { continue };
+        if key.as_ref().is_none_or(|(v, _)| *v != run.vault_id) {
+            key = store
+                .vault_key(run.vault_id)
+                .ok()
+                .map(|k| (run.vault_id, k));
+        }
+        let Some((_, k)) = &key else { continue };
+        if let Ok(pt) = aead::decrypt_str(k, &run_aad(run.id), sealed) {
+            run.results = serde_json::from_str(&pt).unwrap_or_default();
+        }
+    }
+    Ok(list)
+}
+
+fn run_aad(run_id: Uuid) -> Aad {
+    Aad::label(&[RUN_AAD, &run_id.to_string()])
 }
 
 /// Background loop; a no-op while the setting is off or nobody is signed in.
@@ -137,10 +162,15 @@ fn group_tree(groups: &[(Uuid, Option<Uuid>)], root: Uuid) -> HashSet<Uuid> {
     }
 }
 
+/// Script, (host id, label) jobs, vault key and its version.
+type Prepared = (String, Vec<(Uuid, String)>, SymmetricKey, i32);
+
 async fn execute<R: Runtime>(app: &AppHandle<R>, run: &ClaimedRun) -> FinishRunRequest {
-    let prepared: Result<(String, Vec<(Uuid, String)>)> = (|| {
+    let prepared: Result<Prepared> = (|| {
         let state = app.state::<AppState>();
         let store = state.store()?;
+        let key = store.vault_key(run.vault_id)?;
+        let key_version = store.vault(run.vault_id)?.key_version;
         let snippet = store.require::<Snippet>(run.snippet_id)?;
         let mut ids: Vec<Uuid> = run.host_ids.clone();
         let hosts = store.list::<Host>(Some(run.vault_id))?;
@@ -168,13 +198,15 @@ async fn execute<R: Runtime>(app: &AppHandle<R>, run: &ClaimedRun) -> FinishRunR
                 (id, label)
             })
             .collect();
-        Ok((snippet.data.script, jobs))
+        Ok((snippet.data.script, jobs, key, key_version))
     })();
-    let (script, jobs) = match prepared {
+    let (script, jobs, key, key_version) = match prepared {
         Ok(p) => p,
         Err(e) => {
             return FinishRunRequest {
-                results: Vec::new(),
+                outcomes: Vec::new(),
+                sealed: None,
+                key_version: None,
                 error: Some(e.to_string()),
             };
         }
@@ -225,9 +257,19 @@ async fn execute<R: Runtime>(app: &AppHandle<R>, run: &ClaimedRun) -> FinishRunR
             results.push(r);
         }
     }
+    // Success flags in the clear for counters and alerts; labels, targets,
+    // output and errors only under the vault key.
+    let outcomes = results.iter().map(HostRunResult::outcome).collect();
+    let sealed = serde_json::to_string(&results)
+        .ok()
+        .and_then(|pt| aead::encrypt_str(&key, &run_aad(run.run.id), &pt).ok());
     FinishRunRequest {
-        results,
-        error: None,
+        outcomes,
+        error: sealed
+            .is_none()
+            .then(|| "could not seal the results".to_string()),
+        key_version: sealed.is_some().then_some(key_version),
+        sealed,
     }
 }
 

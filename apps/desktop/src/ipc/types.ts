@@ -2749,10 +2749,16 @@ export interface HostRunResult {
 export type AutomationRunStatus =
   "pending" | "running" | "done" | "failed" | "missed" | "cancelled";
 
+export interface HostOutcome {
+  host_id: Uuid;
+  ok: boolean;
+}
+
 export interface AutomationRun {
   id: Uuid;
   automation_id: Uuid;
   team_id: Uuid;
+  vault_id: Uuid;
   status: AutomationRunStatus;
   scheduled_for: string;
   manual: boolean;
@@ -2762,6 +2768,11 @@ export interface AutomationRun {
   finished_at: string | null;
   hosts_total: number;
   hosts_failed: number;
+  outcomes: HostOutcome[];
+  /** Encrypted per-host results; the desktop opens them when the vault is unlocked. */
+  sealed?: string | null;
+  key_version?: number | null;
+  /** Filled in locally from `sealed`; the server never sends it. */
   results: HostRunResult[];
   error: string | null;
   created_at: string;

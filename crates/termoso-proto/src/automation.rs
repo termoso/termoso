@@ -23,6 +23,12 @@ pub const ALERT_EMAILS_MAX: usize = 20;
 /// Output kept per stream per host in a result (bytes).
 pub const OUTPUT_CAP: usize = 8 * 1024;
 
+/// Largest sealed results blob the server accepts, in bytes.
+pub const SEALED_CAP: usize = 2 * 1024 * 1024;
+
+/// AAD label for the sealed results of a run: `Aad::label(&[RUN_AAD, run_id])`.
+pub const RUN_AAD: &str = "automation_run";
+
 /// When to send e-mail alerts.
 pub const ALERT_ON: [&str; 3] = ["never", "failure", "always"];
 
@@ -198,6 +204,27 @@ impl HostRunResult {
     pub fn ok(&self) -> bool {
         self.error.is_none() && self.exit_code == Some(0)
     }
+
+    /// The part the server may see.
+    pub fn outcome(&self) -> HostOutcome {
+        HostOutcome {
+            host_id: self.host_id,
+            ok: self.ok(),
+        }
+    }
+}
+
+schema! {
+    /// What the server stores per host: the entity id and whether it
+    /// succeeded. Label, target, output and error text live only in the
+    /// sealed blob (`AutomationRun::sealed`), encrypted with the vault key.
+    #[derive(PartialEq, Eq)]
+    pub struct HostOutcome {
+        /// Host entity.
+        pub host_id: Uuid,
+        /// Ran and exited 0.
+        pub ok: bool,
+    }
 }
 
 schema! {
@@ -209,6 +236,8 @@ schema! {
         pub automation_id: Uuid,
         /// Team.
         pub team_id: Uuid,
+        /// Vault of the automation (whose key opens `sealed`).
+        pub vault_id: Uuid,
         /// `pending`, `running`, `done`, `failed`, `missed` or `cancelled`.
         pub status: String,
         /// When the schedule asked for it (or when "run now" was pressed).
@@ -231,7 +260,18 @@ schema! {
         pub hosts_total: i32,
         /// Hosts that failed (connection error or non-zero exit).
         pub hosts_failed: i32,
-        /// Per-host results (empty until finished).
+        /// Per-host success flags (empty until finished).
+        #[serde(default)]
+        pub outcomes: Vec<HostOutcome>,
+        /// `Vec<HostRunResult>` as JSON, encrypted by the executor with the
+        /// vault key (`Aad::label(&[RUN_AAD, run_id])`); opaque to the server.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub sealed: Option<String>,
+        /// Vault key version `sealed` was encrypted with.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub key_version: Option<i32>,
+        /// Per-host results. Never sent by the server: a client that holds
+        /// the vault key fills this in by opening `sealed`.
         #[serde(default)]
         pub results: Vec<HostRunResult>,
         /// Run-level error (executor could not start at all).
@@ -296,10 +336,17 @@ schema! {
 schema! {
     /// `PATCH /teams/{id}/automations/runs/{rid}`: report the outcome.
     pub struct FinishRunRequest {
-        /// Per-host results.
+        /// Per-host success flags.
         #[serde(default)]
-        pub results: Vec<HostRunResult>,
-        /// Run-level error when nothing could run.
+        pub outcomes: Vec<HostOutcome>,
+        /// Sealed `Vec<HostRunResult>` (see [`AutomationRun::sealed`]).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub sealed: Option<String>,
+        /// Vault key version used for `sealed`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub key_version: Option<i32>,
+        /// Run-level error when nothing could run; keep it generic (no
+        /// addresses), the server stores and e-mails it as is.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         pub error: Option<String>,
     }

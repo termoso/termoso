@@ -194,7 +194,9 @@ async fn crud_validation_and_executor_flow() {
         &format!("{base}/runs/{}", run.id),
         Some(owner.token()),
         Some(&FinishRunRequest {
-            results: vec![],
+            outcomes: vec![],
+            sealed: None,
+            key_version: None,
             error: None,
         }),
         StatusCode::CONFLICT,
@@ -240,40 +242,80 @@ async fn crud_validation_and_executor_flow() {
         .await;
     assert!(again.runs.is_empty(), "claimed once");
 
-    // Finish with one failure → failed, output capped.
-    let big = "x".repeat(OUTPUT_CAP * 2);
+    // Oversized sealed blob is refused.
+    s.expect_status(
+        Method::PATCH,
+        &format!("{base}/runs/{}", run.id),
+        Some(owner.token()),
+        Some(&FinishRunRequest {
+            outcomes: vec![],
+            sealed: Some("y".repeat(SEALED_CAP + 1)),
+            key_version: Some(1),
+            error: None,
+        }),
+        StatusCode::BAD_REQUEST,
+    )
+    .await;
+
+    // Finish with one failure → failed; the server keeps only {host_id, ok}
+    // and the opaque sealed blob — labels/targets/output never reach it.
+    let results = [
+        HostRunResult {
+            host_id: a.host_ids[0],
+            label: "web-1".into(),
+            target: "ubuntu@web-1:22".into(),
+            exit_code: Some(0),
+            stdout: "ok\n".into(),
+            ..Default::default()
+        },
+        HostRunResult {
+            host_id: a.host_ids[1],
+            label: "web-2".into(),
+            error: Some("connection refused".into()),
+            ..Default::default()
+        },
+    ];
+    let blob = "opaque-ciphertext".to_string();
     let done: AutomationRun = s
         .json(
             Method::PATCH,
             &format!("{base}/runs/{}", run.id),
             Some(owner.token()),
             Some(&FinishRunRequest {
-                results: vec![
-                    HostRunResult {
-                        host_id: a.host_ids[0],
-                        label: "web-1".into(),
-                        target: "ubuntu@web-1:22".into(),
-                        exit_code: Some(0),
-                        stdout: big.clone(),
-                        ..Default::default()
-                    },
-                    HostRunResult {
-                        host_id: a.host_ids[1],
-                        label: "web-2".into(),
-                        error: Some("connection refused".into()),
-                        ..Default::default()
-                    },
-                ],
+                outcomes: results.iter().map(HostRunResult::outcome).collect(),
+                sealed: Some(blob.clone()),
+                key_version: Some(1),
                 error: None,
             }),
         )
         .await;
     assert_eq!(done.status, "failed");
     assert_eq!((done.hosts_total, done.hosts_failed), (2, 1));
+    assert_eq!(done.vault_id, vault_id);
+    assert_eq!(done.outcomes.len(), 2);
+    assert!(done.outcomes[0].ok && !done.outcomes[1].ok);
+    assert_eq!(done.sealed.as_deref(), Some(blob.as_str()));
+    assert_eq!(done.key_version, Some(1));
     assert!(
-        done.results[0].stdout.len() < big.len() && done.results[0].stdout.ends_with("[truncated]")
+        done.results.is_empty(),
+        "server never returns plaintext results"
     );
     assert!(done.claimed_by_name.is_some());
+    let raw = s
+        .call::<()>(
+            Method::GET,
+            &format!("{base}/{}/runs", a.id),
+            Some(owner.token()),
+            None,
+        )
+        .await
+        .text()
+        .await
+        .expect("body");
+    assert!(
+        !raw.contains("web-1") && !raw.contains("ubuntu@"),
+        "no labels/targets on the wire"
+    );
     let runs: AutomationRunList = s
         .json::<(), _>(
             Method::GET,
