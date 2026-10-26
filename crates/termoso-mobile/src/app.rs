@@ -41,9 +41,11 @@ use crate::sftp::{Backend as FileBackend, SftpLaunch, SftpListener, SftpSession}
 use crate::snippets::{self, SnippetDraft, SnippetItem, SnippetPackageItem, SnippetRun};
 use crate::sshid::SshIdView;
 use crate::team::{
-    AccessRequestCard, AccessRequestsCard, AclRuleCard, AuditPage, InviteCard, InviteSent,
-    PendingKeyCard, PermissionCard, RotationCard, TeamCard, TeamDataCard, TeamDevicesCard,
-    TeamMemberCard, TeamPoliciesCard, TeamRole, TeamRoleCard, VaultAccessDraft, VaultMemberCard,
+    AccessRequestCard, AccessRequestsCard, AccessReviewCard, AccessReviewDetailCard,
+    AccessReviewItemCard, AclRuleCard, AuditPage, AutomationCard, AutomationRunCard,
+    BreakGlassCard, GatewayCard, InviteCard, InviteSent, PendingKeyCard, PermissionCard,
+    RotationCard, TeamCard, TeamDataCard, TeamDevicesCard, TeamMemberCard, TeamPoliciesCard,
+    TeamRole, TeamRoleCard, VaultAccessDraft, VaultMemberCard,
 };
 use crate::themes::TerminalTheme;
 
@@ -2120,6 +2122,98 @@ impl TermosoApp {
         paste: bool,
     ) -> Result<SnippetRun> {
         snippets::run(&self.store, parse_id(&id)?, &sessions, &vars, paste)
+    }
+
+    // Compliance on the go: access reviews, break-glass, automations.
+
+    pub fn team_access_reviews(&self, team_id: String) -> Result<Vec<AccessReviewCard>> {
+        RUNTIME.block_on(self.account.team_access_reviews(team_id))
+    }
+
+    pub fn team_access_review(
+        &self,
+        team_id: String,
+        review_id: String,
+    ) -> Result<AccessReviewDetailCard> {
+        RUNTIME.block_on(self.account.team_access_review(team_id, review_id))
+    }
+
+    pub fn team_decide_access_review_item(
+        &self,
+        team_id: String,
+        review_id: String,
+        item_id: String,
+        decision: String,
+        note: Option<String>,
+    ) -> Result<AccessReviewItemCard> {
+        RUNTIME.block_on(
+            self.account
+                .team_decide_access_review_item(team_id, review_id, item_id, decision, note),
+        )
+    }
+
+    pub fn team_complete_access_review(
+        &self,
+        team_id: String,
+        review_id: String,
+    ) -> Result<AccessReviewDetailCard> {
+        RUNTIME.block_on(self.account.team_complete_access_review(team_id, review_id))
+    }
+
+    pub fn team_break_glass(&self, team_id: String) -> Result<Option<BreakGlassCard>> {
+        RUNTIME.block_on(self.account.team_break_glass(team_id))
+    }
+
+    pub fn team_use_break_glass(
+        &self,
+        team_id: String,
+        secret: String,
+        reason: String,
+    ) -> Result<BreakGlassCard> {
+        RUNTIME.block_on(self.account.team_use_break_glass(team_id, secret, reason))
+    }
+
+    pub fn team_end_break_glass(&self, team_id: String) -> Result<BreakGlassCard> {
+        RUNTIME.block_on(self.account.team_end_break_glass(team_id))
+    }
+
+    pub fn team_automations(&self, team_id: String) -> Result<Vec<AutomationCard>> {
+        RUNTIME.block_on(self.account.team_automations(team_id))
+    }
+
+    pub fn team_automation_runs(
+        &self,
+        team_id: String,
+        automation_id: String,
+    ) -> Result<Vec<AutomationRunCard>> {
+        RUNTIME.block_on(self.account.team_automation_runs(team_id, automation_id))
+    }
+
+    pub fn team_run_automation_now(
+        &self,
+        team_id: String,
+        automation_id: String,
+    ) -> Result<AutomationRunCard> {
+        RUNTIME.block_on(self.account.team_run_automation_now(team_id, automation_id))
+    }
+
+    pub fn gateways(&self) -> Result<Vec<GatewayCard>> {
+        RUNTIME.block_on(self.account.gateways())
+    }
+
+    /// Wake-on-LAN: broadcast a magic packet for `mac` (`aa:bb:cc:dd:ee:ff`)
+    /// on the local network; `broadcast` overrides 255.255.255.255.
+    pub fn wake_host(&self, mac: String, broadcast: Option<String>) -> Result<u32> {
+        let target = match broadcast {
+            Some(b) => Some(
+                b.trim()
+                    .parse()
+                    .map_err(|_| MobileError::invalid("broadcast must be an IP address"))?,
+            ),
+            None => None,
+        };
+        let n = RUNTIME.block_on(termoso_core::wol::wake(&mac, target))?;
+        Ok(n as u32)
     }
 }
 

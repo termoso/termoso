@@ -98,6 +98,8 @@ fun TeamScreen(
     onAccess: () -> Unit = {},
     onRecordings: () -> Unit = {},
     onData: () -> Unit = {},
+    onCompliance: () -> Unit = {},
+    onAutomations: () -> Unit = {},
 ) {
     val vm: TeamViewModel = viewModel(key = "team-$teamId") { TeamViewModel(shell.repo, account, teamId) }
     val state by vm.state.collectAsStateWithLifecycle()
@@ -318,6 +320,22 @@ fun TeamScreen(
                         leading = { IconTile(Icons.Filled.Lock) },
                         modifier = Modifier.clickable(onClick = onAccess),
                     )
+                    RowDivider()
+                    ChevronRow(
+                        title = stringResource(R.string.compliance),
+                        subtitle = stringResource(R.string.compliance_hint),
+                        leading = { IconTile(Icons.Filled.Lock) },
+                        modifier = Modifier.clickable(onClick = onCompliance),
+                    )
+                    if (team.can("automations.view")) {
+                        RowDivider()
+                        ChevronRow(
+                            title = stringResource(R.string.automations),
+                            subtitle = stringResource(R.string.automations_hint),
+                            leading = { IconTile(Icons.Filled.History) },
+                            modifier = Modifier.clickable(onClick = onAutomations),
+                        )
+                    }
                     RowDivider()
                     ChevronRow(
                         title = stringResource(R.string.team_recordings),

@@ -90,6 +90,8 @@ import com.termoso.android.ui.team.TeamRolesScreen
 import com.termoso.android.ui.team.TeamDevicesScreen
 import com.termoso.android.data.can
 import com.termoso.android.ui.team.TeamAccessScreen
+import com.termoso.android.ui.team.TeamAutomationsScreen
+import com.termoso.android.ui.team.TeamComplianceScreen
 import com.termoso.android.ui.team.TeamDataScreen
 import com.termoso.android.ui.team.TeamScreen
 import com.termoso.android.ui.team.TeamVaultScreen
@@ -141,6 +143,8 @@ object Routes {
     const val TEAM_ACCESS = "team/{id}/access"
     const val TEAM_LOGS = "team/{id}/logs"
     const val TEAM_DATA = "team/{id}/data"
+    const val TEAM_COMPLIANCE = "team/{id}/compliance"
+    const val TEAM_AUTOMATIONS = "team/{id}/automations"
     const val TEAM_VAULT = "teamVault/{id}"
     const val SIGN_IN = "signIn/{mode}"
     const val SFTP = "sftp/{id}"
@@ -170,6 +174,8 @@ object Routes {
     fun teamAccess(id: String) = "team/$id/access"
     fun teamLogs(id: String) = "team/$id/logs"
     fun teamData(id: String) = "team/$id/data"
+    fun teamCompliance(id: String) = "team/$id/compliance"
+    fun teamAutomations(id: String) = "team/$id/automations"
     fun teamVault(id: String) = "teamVault/$id"
     fun sftp(id: String) = "sftp/$id"
     fun pfNew(kind: PfKind, vault: String?, host: String?) =
@@ -535,6 +541,8 @@ fun MainShell(
                     onAccess = { nav.navigate(Routes.teamAccess(id)) },
                     onRecordings = { nav.navigate(Routes.teamLogs(id)) },
                     onData = { nav.navigate(Routes.teamData(id)) },
+                    onCompliance = { nav.navigate(Routes.teamCompliance(id)) },
+                    onAutomations = { nav.navigate(Routes.teamAutomations(id)) },
                     onOpenAccount = { nav.navigate(Routes.ACCOUNT) },
                 )
             }
@@ -562,6 +570,16 @@ fun MainShell(
             composable(Routes.TEAM_ACCESS, arguments = listOf(idArg)) { entry ->
                 val id = entry.arguments?.getString("id") ?: return@composable
                 TeamAccessScreen(shell = shell, account = account, teamId = id, onBack = { nav.popBackStack() })
+            }
+            composable(Routes.TEAM_COMPLIANCE, arguments = listOf(idArg)) { entry ->
+                val id = entry.arguments?.getString("id") ?: return@composable
+                val t = shell.repo.perms.teams.collectAsState().value.firstOrNull { it.id == id }
+                TeamComplianceScreen(shell = shell, account = account, teamId = id, canDecide = t?.can("members.remove") == true, onBack = { nav.popBackStack() })
+            }
+            composable(Routes.TEAM_AUTOMATIONS, arguments = listOf(idArg)) { entry ->
+                val id = entry.arguments?.getString("id") ?: return@composable
+                val t = shell.repo.perms.teams.collectAsState().value.firstOrNull { it.id == id }
+                TeamAutomationsScreen(shell = shell, teamId = id, canRun = t?.can("automations.run") == true, onBack = { nav.popBackStack() })
             }
             composable(Routes.TEAM_VAULT, arguments = listOf(idArg)) { entry ->
                 val id = entry.arguments?.getString("id") ?: return@composable

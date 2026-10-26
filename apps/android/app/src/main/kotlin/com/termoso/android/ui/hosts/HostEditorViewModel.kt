@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.termoso.android.data.userMessage
 import com.termoso.android.data.VaultRepository
 import com.termoso.core.EnvVar
+import com.termoso.core.GatewayCard
 import com.termoso.core.GroupItem
 import com.termoso.core.HostChainDraft
 import com.termoso.core.HostChainItem
@@ -94,6 +95,10 @@ data class HostEditorState(
     val snippets: List<SnippetItem> = emptyList(),
     val proxies: List<ProxyItem> = emptyList(),
     val chains: List<HostChainItem> = emptyList(),
+    /** Team gateways the signed-in account can use; empty when offline or personal. */
+    val gateways: List<GatewayCard> = emptyList(),
+    /** One-line feedback under the connection block (Wake-on-LAN result). */
+    val notice: String? = null,
     /** Hosts of the draft's vault, candidates for a jump chain. */
     val hosts: List<HostItem> = emptyList(),
     val inherited: InheritedInfo? = null,
@@ -180,6 +185,17 @@ class HostEditorViewModel(
         viewModelScope.launch {
             runCatching { repo.read { Triple(proxies(vaultId), hostChains(vaultId), hosts(vaultId)) } }
                 .onSuccess { (p, c, h) -> _state.update { it.copy(proxies = p, chains = c, hosts = h) } }
+            runCatching { repo.read { gateways() } }
+                .onSuccess { g -> _state.update { it.copy(gateways = g.filter { gw -> vaultId in gw.vaultIds }) } }
+        }
+    }
+
+    /** Wake-on-LAN: broadcast a magic packet for the draft's MAC on the local network. */
+    fun wake(mac: String, sent: String) {
+        viewModelScope.launch {
+            runCatching { repo.read { wakeHost(mac, null) } }
+                .onSuccess { _state.update { it.copy(notice = sent) } }
+                .onFailure { e -> _state.update { it.copy(notice = e.userMessage()) } }
         }
     }
 
