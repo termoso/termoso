@@ -1027,6 +1027,106 @@ pub async fn reject_device<R: Runtime>(
         .team_reject_device(team_id, device_id)
         .await?)
 }
+// ───────────── compliance: access reviews, break-glass, audit chain ─────────────
+
+pub async fn access_reviews<R: Runtime>(
+    app: &AppHandle<R>,
+    team_id: Uuid,
+) -> Result<proto::AccessReviewList> {
+    Ok(api(app).await?.access_reviews(team_id).await?)
+}
+
+pub async fn access_review<R: Runtime>(
+    app: &AppHandle<R>,
+    team_id: Uuid,
+    review_id: Uuid,
+) -> Result<proto::AccessReviewDetail> {
+    Ok(api(app).await?.access_review(team_id, review_id).await?)
+}
+
+pub async fn open_access_review<R: Runtime>(
+    app: &AppHandle<R>,
+    team_id: Uuid,
+) -> Result<proto::AccessReviewDetail> {
+    Ok(api(app).await?.open_access_review(team_id).await?)
+}
+
+pub async fn decide_access_review_item<R: Runtime>(
+    app: &AppHandle<R>,
+    team_id: Uuid,
+    review_id: Uuid,
+    item_id: Uuid,
+    req: proto::DecideAccessReviewItemRequest,
+) -> Result<proto::AccessReviewItem> {
+    Ok(api(app)
+        .await?
+        .decide_access_review_item(team_id, review_id, item_id, &req)
+        .await?)
+}
+
+pub async fn complete_access_review<R: Runtime>(
+    app: &AppHandle<R>,
+    team_id: Uuid,
+    review_id: Uuid,
+    req: proto::CompleteAccessReviewRequest,
+) -> Result<proto::AccessReviewDetail> {
+    Ok(api(app)
+        .await?
+        .complete_access_review(team_id, review_id, &req)
+        .await?)
+}
+
+pub async fn cancel_access_review<R: Runtime>(
+    app: &AppHandle<R>,
+    team_id: Uuid,
+    review_id: Uuid,
+) -> Result<proto::AccessReview> {
+    Ok(api(app)
+        .await?
+        .cancel_access_review(team_id, review_id)
+        .await?)
+}
+
+pub async fn break_glass<R: Runtime>(
+    app: &AppHandle<R>,
+    team_id: Uuid,
+) -> Result<Option<proto::BreakGlass>> {
+    Ok(api(app).await?.break_glass(team_id).await?)
+}
+
+pub async fn configure_break_glass<R: Runtime>(
+    app: &AppHandle<R>,
+    team_id: Uuid,
+    req: proto::ConfigureBreakGlassRequest,
+) -> Result<proto::BreakGlass> {
+    Ok(api(app).await?.configure_break_glass(team_id, &req).await?)
+}
+
+pub async fn delete_break_glass<R: Runtime>(app: &AppHandle<R>, team_id: Uuid) -> Result<()> {
+    Ok(api(app).await?.delete_break_glass(team_id).await?)
+}
+
+pub async fn use_break_glass<R: Runtime>(
+    app: &AppHandle<R>,
+    team_id: Uuid,
+    req: proto::UseBreakGlassRequest,
+) -> Result<proto::BreakGlass> {
+    Ok(api(app).await?.use_break_glass(team_id, &req).await?)
+}
+
+pub async fn end_break_glass<R: Runtime>(
+    app: &AppHandle<R>,
+    team_id: Uuid,
+) -> Result<proto::BreakGlass> {
+    Ok(api(app).await?.end_break_glass(team_id).await?)
+}
+
+pub async fn verify_audit<R: Runtime>(
+    app: &AppHandle<R>,
+    team_id: Uuid,
+) -> Result<proto::AuditVerification> {
+    Ok(api(app).await?.verify_audit(team_id).await?)
+}
 
 #[cfg(test)]
 mod tests {

@@ -147,6 +147,12 @@ import type {
   CreateAutomationRequest,
   UpdateAutomationRequest,
   GatewayInfo,
+  AccessReview,
+  AccessReviewDetail,
+  AccessReviewItem,
+  AccessReviewList,
+  AuditVerification,
+  BreakGlass,
 } from "./types";
 import type {
   AccessRequest,
@@ -885,6 +891,43 @@ export const teamCaCertificates = (teamId: Uuid) =>
   invoke<IssuedCertificateList>("team_ca_certificates", { teamId });
 export const teamCaRevoke = (teamId: Uuid, certificateId: Uuid) =>
   invoke<IssuedCertificate>("team_ca_revoke", { teamId, certificateId });
+export const teamAccessReviews = (teamId: Uuid) =>
+  invoke<AccessReviewList>("team_access_reviews", { teamId });
+export const teamAccessReview = (teamId: Uuid, reviewId: Uuid) =>
+  invoke<AccessReviewDetail>("team_access_review", { teamId, reviewId });
+export const teamAccessReviewOpen = (teamId: Uuid) =>
+  invoke<AccessReviewDetail>("team_access_review_open", { teamId });
+export const teamAccessReviewDecide = (
+  teamId: Uuid,
+  reviewId: Uuid,
+  itemId: Uuid,
+  decision: "keep" | "remove",
+  note: string | null,
+) =>
+  invoke<AccessReviewItem>("team_access_review_decide", {
+    teamId,
+    reviewId,
+    itemId,
+    req: { decision, note },
+  });
+export const teamAccessReviewComplete = (teamId: Uuid, reviewId: Uuid, undecided: "keep" | null) =>
+  invoke<AccessReviewDetail>("team_access_review_complete", { teamId, reviewId, req: { undecided } });
+export const teamAccessReviewCancel = (teamId: Uuid, reviewId: Uuid) =>
+  invoke<AccessReview>("team_access_review_cancel", { teamId, reviewId });
+export const teamBreakGlass = (teamId: Uuid) =>
+  invoke<BreakGlass | null>("team_break_glass", { teamId });
+export const teamBreakGlassConfigure = (teamId: Uuid, userId: Uuid, durationHours: number) =>
+  invoke<BreakGlass>("team_break_glass_configure", {
+    teamId,
+    req: { user_id: userId, duration_hours: durationHours },
+  });
+export const teamBreakGlassDelete = (teamId: Uuid) =>
+  invoke<null>("team_break_glass_delete", { teamId });
+export const teamBreakGlassUse = (teamId: Uuid, secret: string, reason: string) =>
+  invoke<BreakGlass>("team_break_glass_use", { teamId, req: { secret, reason } });
+export const teamBreakGlassEnd = (teamId: Uuid) => invoke<BreakGlass>("team_break_glass_end", { teamId });
+export const teamAuditVerify = (teamId: Uuid) =>
+  invoke<AuditVerification>("team_audit_verify", { teamId });
 export const teamCaLocal = (teamId: Uuid) =>
   invoke<LocalTeamCertificate | null>("team_ca_local", { teamId });
 export const teamAutomations = (teamId: Uuid) =>

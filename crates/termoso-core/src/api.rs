@@ -51,12 +51,14 @@ use termoso_proto::sync::{
     PullResponse, PushRequest, PushResponse,
 };
 use termoso_proto::team::{
-    AuditEventList, CreateInviteRequest, CreateRoleRequest, CreateTeamRequest,
-    CreateWebhookRequest, CreatedInvite, InviteList, PendingVaultKeys, PermissionCatalog,
+    AccessReview, AccessReviewDetail, AccessReviewItem, AccessReviewList, AuditEventList,
+    AuditVerification, BreakGlass, CompleteAccessReviewRequest, ConfigureBreakGlassRequest,
+    CreateInviteRequest, CreateRoleRequest, CreateTeamRequest, CreateWebhookRequest, CreatedInvite,
+    DecideAccessReviewItemRequest, InviteList, PendingVaultKeys, PermissionCatalog,
     RoleMappingList, SetDefaultRoleRequest, Team, TeamList, TeamMemberList, TeamPoliciesResponse,
     TeamPresence, TeamRoleDef, TeamRoleList, UpdateRoleRequest, UpdateTeamMemberRequest,
-    UpdateTeamPoliciesRequest, UpdateTeamRequest, UpdateWebhookRequest, Webhook,
-    WebhookDeliveryList, WebhookList,
+    UpdateTeamPoliciesRequest, UpdateTeamRequest, UpdateWebhookRequest, UseBreakGlassRequest,
+    Webhook, WebhookDeliveryList, WebhookList,
 };
 use termoso_proto::vault::{
     CreateVaultRequest, ResealMyKeyRequest, RotateVaultKeyRequest, RotateVaultKeyResponse,
@@ -944,6 +946,113 @@ impl ApiClient {
             &(),
         )
         .await
+    }
+
+    /// `GET /teams/{id}/access-reviews`.
+    pub async fn access_reviews(&self, team_id: Uuid) -> Result<AccessReviewList> {
+        self.get(&format!("teams/{team_id}/access-reviews")).await
+    }
+
+    /// `GET /teams/{id}/access-reviews/{rid}`.
+    pub async fn access_review(
+        &self,
+        team_id: Uuid,
+        review_id: Uuid,
+    ) -> Result<AccessReviewDetail> {
+        self.get(&format!("teams/{team_id}/access-reviews/{review_id}"))
+            .await
+    }
+
+    /// `POST /teams/{id}/access-reviews` — open a review now.
+    pub async fn open_access_review(&self, team_id: Uuid) -> Result<AccessReviewDetail> {
+        self.post(&format!("teams/{team_id}/access-reviews"), &())
+            .await
+    }
+
+    /// `POST /teams/{id}/access-reviews/{rid}/items/{iid}`.
+    pub async fn decide_access_review_item(
+        &self,
+        team_id: Uuid,
+        review_id: Uuid,
+        item_id: Uuid,
+        req: &DecideAccessReviewItemRequest,
+    ) -> Result<AccessReviewItem> {
+        self.post(
+            &format!("teams/{team_id}/access-reviews/{review_id}/items/{item_id}"),
+            req,
+        )
+        .await
+    }
+
+    /// `POST /teams/{id}/access-reviews/{rid}/complete`.
+    pub async fn complete_access_review(
+        &self,
+        team_id: Uuid,
+        review_id: Uuid,
+        req: &CompleteAccessReviewRequest,
+    ) -> Result<AccessReviewDetail> {
+        self.post(
+            &format!("teams/{team_id}/access-reviews/{review_id}/complete"),
+            req,
+        )
+        .await
+    }
+
+    /// `POST /teams/{id}/access-reviews/{rid}/cancel`.
+    pub async fn cancel_access_review(
+        &self,
+        team_id: Uuid,
+        review_id: Uuid,
+    ) -> Result<AccessReview> {
+        self.post(
+            &format!("teams/{team_id}/access-reviews/{review_id}/cancel"),
+            &(),
+        )
+        .await
+    }
+
+    /// `GET /teams/{id}/break-glass`; `None` when not configured.
+    pub async fn break_glass(&self, team_id: Uuid) -> Result<Option<BreakGlass>> {
+        match self.get(&format!("teams/{team_id}/break-glass")).await {
+            Ok(b) => Ok(Some(b)),
+            Err(e) if e.status() == Some(404) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// `PUT /teams/{id}/break-glass` — the response carries the one-time secret.
+    pub async fn configure_break_glass(
+        &self,
+        team_id: Uuid,
+        req: &ConfigureBreakGlassRequest,
+    ) -> Result<BreakGlass> {
+        self.put(&format!("teams/{team_id}/break-glass"), req).await
+    }
+
+    /// `DELETE /teams/{id}/break-glass`.
+    pub async fn delete_break_glass(&self, team_id: Uuid) -> Result<()> {
+        self.delete(&format!("teams/{team_id}/break-glass")).await
+    }
+
+    /// `POST /teams/{id}/break-glass/use`.
+    pub async fn use_break_glass(
+        &self,
+        team_id: Uuid,
+        req: &UseBreakGlassRequest,
+    ) -> Result<BreakGlass> {
+        self.post(&format!("teams/{team_id}/break-glass/use"), req)
+            .await
+    }
+
+    /// `POST /teams/{id}/break-glass/end`.
+    pub async fn end_break_glass(&self, team_id: Uuid) -> Result<BreakGlass> {
+        self.post(&format!("teams/{team_id}/break-glass/end"), &())
+            .await
+    }
+
+    /// `GET /teams/{id}/audit/verify`.
+    pub async fn verify_audit(&self, team_id: Uuid) -> Result<AuditVerification> {
+        self.get(&format!("teams/{team_id}/audit/verify")).await
     }
 
     /// `GET /teams/{id}/policies`.

@@ -2081,3 +2081,105 @@ pub async fn gateways_list<R: tauri::Runtime>(
 ) -> Result<Vec<termoso_proto::bridge::GatewayInfo>> {
     Ok(crate::account::api(&app).await?.gateways().await?.gateways)
 }
+
+#[tauri::command]
+pub async fn team_access_reviews<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+) -> Result<termoso_proto::team::AccessReviewList> {
+    team::access_reviews(&app, team_id).await
+}
+
+#[tauri::command]
+pub async fn team_access_review<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+    review_id: Uuid,
+) -> Result<termoso_proto::team::AccessReviewDetail> {
+    team::access_review(&app, team_id, review_id).await
+}
+
+#[tauri::command]
+pub async fn team_access_review_open<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+) -> Result<termoso_proto::team::AccessReviewDetail> {
+    team::open_access_review(&app, team_id).await
+}
+
+#[tauri::command]
+pub async fn team_access_review_decide<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+    review_id: Uuid,
+    item_id: Uuid,
+    req: termoso_proto::team::DecideAccessReviewItemRequest,
+) -> Result<termoso_proto::team::AccessReviewItem> {
+    team::decide_access_review_item(&app, team_id, review_id, item_id, req).await
+}
+
+#[tauri::command]
+pub async fn team_access_review_complete<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+    review_id: Uuid,
+    req: termoso_proto::team::CompleteAccessReviewRequest,
+) -> Result<termoso_proto::team::AccessReviewDetail> {
+    team::complete_access_review(&app, team_id, review_id, req).await
+}
+
+#[tauri::command]
+pub async fn team_access_review_cancel<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+    review_id: Uuid,
+) -> Result<termoso_proto::team::AccessReview> {
+    team::cancel_access_review(&app, team_id, review_id).await
+}
+
+#[tauri::command]
+pub async fn team_break_glass<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+) -> Result<Option<termoso_proto::team::BreakGlass>> {
+    team::break_glass(&app, team_id).await
+}
+
+#[tauri::command]
+pub async fn team_break_glass_configure<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+    req: termoso_proto::team::ConfigureBreakGlassRequest,
+) -> Result<termoso_proto::team::BreakGlass> {
+    team::configure_break_glass(&app, team_id, req).await
+}
+
+#[tauri::command]
+pub async fn team_break_glass_delete<R: Runtime>(app: AppHandle<R>, team_id: Uuid) -> Result<()> {
+    team::delete_break_glass(&app, team_id).await
+}
+
+#[tauri::command]
+pub async fn team_break_glass_use<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+    req: termoso_proto::team::UseBreakGlassRequest,
+) -> Result<termoso_proto::team::BreakGlass> {
+    team::use_break_glass(&app, team_id, req).await
+}
+
+#[tauri::command]
+pub async fn team_break_glass_end<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+) -> Result<termoso_proto::team::BreakGlass> {
+    team::end_break_glass(&app, team_id).await
+}
+
+#[tauri::command]
+pub async fn team_audit_verify<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+) -> Result<termoso_proto::team::AuditVerification> {
+    team::verify_audit(&app, team_id).await
+}

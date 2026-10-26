@@ -1703,3 +1703,31 @@ schema! {
         pub reason: String,
     }
 }
+
+schema! {
+    /// `GET /teams/{id}/audit/verify` — result of walking the audit hash chain.
+    pub struct AuditVerification {
+        /// Every entry re-hashes, links to its predecessor and the latest signed checkpoint verifies.
+        pub ok: bool,
+        /// Entries checked.
+        pub events: i64,
+        /// Oldest surviving entry.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub first_id: Option<i64>,
+        /// Newest entry.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub last_id: Option<i64>,
+        /// Hex hash of the newest entry.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub head_hash: Option<String>,
+        /// First entry that fails, if any.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub broken_at: Option<i64>,
+        /// Why it fails: `hash`, `link`, `anchor` or `unhashed`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub reason: Option<String>,
+        /// Whether the latest signed checkpoint matches, when there is one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub checkpoint_ok: Option<bool>,
+    }
+}

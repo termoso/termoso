@@ -1565,6 +1565,71 @@ export interface GatewayInfo {
   vault_ids: Uuid[];
 }
 
+export interface AccessReviewItem {
+  id: Uuid;
+  kind: string;
+  user_id: Uuid;
+  email?: string | null;
+  display_name?: string | null;
+  vault_id?: Uuid | null;
+  vault_name?: string | null;
+  role: string;
+  last_seen_at?: string | null;
+  decision?: "keep" | "remove" | null;
+  decided_by?: Uuid | null;
+  decided_at?: string | null;
+  note?: string | null;
+}
+
+export interface AccessReview {
+  id: Uuid;
+  team_id: Uuid;
+  status: string;
+  opened_by?: Uuid | null;
+  opened_at: string;
+  due_at: string;
+  closed_by?: Uuid | null;
+  closed_at?: string | null;
+  items: number;
+  decided: number;
+  kept: number;
+  removed: number;
+}
+
+export interface AccessReviewList {
+  reviews: AccessReview[];
+}
+
+export interface AccessReviewDetail {
+  review: AccessReview;
+  items: AccessReviewItem[];
+}
+
+export interface BreakGlass {
+  user_id: Uuid;
+  email?: string | null;
+  duration_hours: number;
+  created_by?: Uuid | null;
+  created_at: string;
+  status: string;
+  used_at?: string | null;
+  expires_at?: string | null;
+  attempts: number;
+  /** Only in the response to configuring: the one-time secret. */
+  secret?: string | null;
+}
+
+export interface AuditVerification {
+  ok: boolean;
+  events: number;
+  first_id?: number | null;
+  last_id?: number | null;
+  head_hash?: string | null;
+  broken_at?: number | null;
+  reason?: string | null;
+  checkpoint_ok?: boolean | null;
+}
+
 export interface CsvExportReport {
   hosts: number;
   /** True when the file contains plaintext passwords. */
