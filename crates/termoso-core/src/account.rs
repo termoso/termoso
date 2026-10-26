@@ -524,6 +524,7 @@ pub async fn sign_out(api: &ApiClient, store: &Store) -> Result<()> {
 pub fn sign_out_local(api: &ApiClient, store: &Store) -> Result<()> {
     api.set_token(None);
     crate::sshid::forget(store)?;
+    crate::ca::forget_certificates(store)?;
     store.clear_account()
 }
 

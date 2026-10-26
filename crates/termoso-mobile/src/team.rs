@@ -462,6 +462,9 @@ impl AccountRuntime {
     async fn refresh_vaults(self: &Arc<Self>) -> Result<()> {
         let api = self.api().await?;
         core::refresh_vaults(&api, self.store()).await?;
+        if let Err(e) = termoso_core::ca::refresh_all(&api, self.store()).await {
+            tracing::debug!("team CA refresh: {e}");
+        }
         self.notify_changed(SyncChange::Vaults);
         self.sync_in_background();
         Ok(())

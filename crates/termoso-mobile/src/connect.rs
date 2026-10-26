@@ -720,6 +720,13 @@ async fn ssh_connect(
                 });
             }
         }
+        // Team CA certificate first (hosts in a team vault; cached by the
+        // account sync, see `termoso_core::ca`).
+        if let Some(m) =
+            resolved.and_then(|r| termoso_core::ca::auth_method(store, r.host.vault_id))
+        {
+            auth.push(m);
+        }
         if let Some(i) = identity.as_ref().filter(|i| i.data.ssh_id) {
             auth.extend(crate::sshid::auth_methods(
                 store,

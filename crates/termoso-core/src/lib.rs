@@ -35,6 +35,7 @@ pub mod agent;
 pub mod agent_server;
 pub mod api;
 pub mod autocomplete;
+pub mod ca;
 pub mod cloud;
 pub mod error;
 pub mod fido2;

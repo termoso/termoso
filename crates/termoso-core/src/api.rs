@@ -28,6 +28,10 @@ use termoso_proto::auth::{
     SsoStartResponse, WebauthnChallengeRequest, WebauthnCredentialInfo,
     WebauthnRegisterFinishRequest,
 };
+use termoso_proto::ca::{
+    IssueCertificateRequest, IssueCertificateResponse, IssuedCertificate, IssuedCertificateList,
+    RotateTeamCaRequest, TeamCa, UpdateTeamCaRequest,
+};
 use termoso_proto::error::ApiError;
 use termoso_proto::live::{CreateLiveSessionRequest, LiveSession, LiveSessionList};
 use termoso_proto::logs::{
@@ -806,6 +810,59 @@ impl ApiClient {
     ) -> Result<RoleMappingList> {
         self.put(&format!("teams/{team_id}/role-mappings"), req)
             .await
+    }
+
+    // ───────────────────────────── team SSH CA ─────────────────────────────
+
+    /// `GET /teams/{id}/ca` — `None` when the team has no CA yet.
+    pub async fn team_ca(&self, team_id: Uuid) -> Result<Option<TeamCa>> {
+        match self.get(&format!("teams/{team_id}/ca")).await {
+            Ok(ca) => Ok(Some(ca)),
+            Err(e) if e.status() == Some(404) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// `PUT /teams/{id}/ca` — create the CA or change its settings.
+    pub async fn update_team_ca(&self, team_id: Uuid, req: &UpdateTeamCaRequest) -> Result<TeamCa> {
+        self.put(&format!("teams/{team_id}/ca"), req).await
+    }
+
+    /// `DELETE /teams/{id}/ca`.
+    pub async fn delete_team_ca(&self, team_id: Uuid) -> Result<()> {
+        self.delete(&format!("teams/{team_id}/ca")).await
+    }
+
+    /// `POST /teams/{id}/ca/rotate`.
+    pub async fn rotate_team_ca(&self, team_id: Uuid, req: &RotateTeamCaRequest) -> Result<TeamCa> {
+        self.post(&format!("teams/{team_id}/ca/rotate"), req).await
+    }
+
+    /// `POST /teams/{id}/ca/issue` — certify this device's public key.
+    pub async fn issue_team_certificate(
+        &self,
+        team_id: Uuid,
+        req: &IssueCertificateRequest,
+    ) -> Result<IssueCertificateResponse> {
+        self.post(&format!("teams/{team_id}/ca/issue"), req).await
+    }
+
+    /// `GET /teams/{id}/ca/certificates`.
+    pub async fn team_certificates(&self, team_id: Uuid) -> Result<IssuedCertificateList> {
+        self.get(&format!("teams/{team_id}/ca/certificates")).await
+    }
+
+    /// `POST /teams/{id}/ca/certificates/{cid}/revoke`.
+    pub async fn revoke_team_certificate(
+        &self,
+        team_id: Uuid,
+        certificate_id: Uuid,
+    ) -> Result<IssuedCertificate> {
+        self.post(
+            &format!("teams/{team_id}/ca/certificates/{certificate_id}/revoke"),
+            &(),
+        )
+        .await
     }
 
     /// `GET /teams/{id}/policies`.

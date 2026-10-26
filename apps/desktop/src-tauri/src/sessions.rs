@@ -1539,6 +1539,13 @@ async fn ssh_connect<R: Runtime>(
     let mut attempts = 0;
     loop {
         let mut auth: Vec<AuthMethod> = Vec::new();
+        // Team CA certificate first (hosts in a team vault; cached by the
+        // account sync, see `termoso_core::ca`).
+        if let Some(m) = resolved
+            .and_then(|r| termoso_core::ca::auth_method(&*state.store().ok()?, r.host.vault_id))
+        {
+            auth.push(m);
+        }
         if identity.as_ref().is_some_and(|i| i.data.ssh_id) {
             let preferred = identity.as_ref().and_then(|i| i.data.ssh_id_key_type);
             auth.extend(sshid::auth_methods(
