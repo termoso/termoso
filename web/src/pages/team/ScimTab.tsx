@@ -30,6 +30,7 @@ import { errorMessage } from "@/api/client";
 import { teamsApi, vaultsApi } from "@/api/endpoints";
 import { queryKeys } from "@/api/hooks";
 import type { CreatedScimToken, ScimGroupInfo, ScimGroupVault, Team } from "@/api/types";
+import { Paged } from "@/components/Pager";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { CopyField } from "@/components/CopyField";
 import { EmptyState } from "@/components/EmptyState";
@@ -260,67 +261,71 @@ function GroupsSection({ team, manage }: { team: Team; manage: boolean }) {
           description={tr("Groups appear once the identity provider pushes them.")}
         />
       ) : (
-        <TableContainer>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>{tr("Group")}</TableCell>
-                <TableCell>{tr("Members")}</TableCell>
-                <TableCell>{tr("Vaults")}</TableCell>
-                {manage && <TableCell align="right" />}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {q.data.groups.map((g) => (
-                <TableRow key={g.id} hover>
-                  <TableCell>
-                    <Typography variant="body2">{g.display_name}</Typography>
-                    {g.external_id && (
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ fontFamily: "monospace" }}
-                      >
-                        {g.external_id}
-                      </Typography>
-                    )}
-                  </TableCell>
-                  <TableCell>{g.member_count}</TableCell>
-                  <TableCell>
-                    <Stack direction="row" spacing={0.5} sx={{ flexWrap: "wrap", gap: 0.5 }}>
-                      {g.vaults.length === 0 && (
-                        <Typography variant="caption" color="text.secondary">
-                          {tr("none")}
-                        </Typography>
+        <Paged items={q.data.groups}>
+          {(page) => (
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>{tr("Group")}</TableCell>
+                    <TableCell>{tr("Members")}</TableCell>
+                    <TableCell>{tr("Vaults")}</TableCell>
+                    {manage && <TableCell align="right" />}
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {page.map((g) => (
+                    <TableRow key={g.id} hover>
+                      <TableCell>
+                        <Typography variant="body2">{g.display_name}</Typography>
+                        {g.external_id && (
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ fontFamily: "monospace" }}
+                          >
+                            {g.external_id}
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>{g.member_count}</TableCell>
+                      <TableCell>
+                        <Stack direction="row" spacing={0.5} sx={{ flexWrap: "wrap", gap: 0.5 }}>
+                          {g.vaults.length === 0 && (
+                            <Typography variant="caption" color="text.secondary">
+                              {tr("none")}
+                            </Typography>
+                          )}
+                          {g.vaults.map((v) => (
+                            <Chip
+                              key={v.vault_id}
+                              size="small"
+                              variant="outlined"
+                              label={`${vaultName(v.vault_id)} · ${v.role}`}
+                            />
+                          ))}
+                        </Stack>
+                      </TableCell>
+                      {manage && (
+                        <TableCell align="right">
+                          <Button
+                            size="small"
+                            onClick={() => {
+                              setEditing(g);
+                              setDraft(g.vaults);
+                            }}
+                          >
+                            {tr("Vault access")}
+                          </Button>
+                        </TableCell>
                       )}
-                      {g.vaults.map((v) => (
-                        <Chip
-                          key={v.vault_id}
-                          size="small"
-                          variant="outlined"
-                          label={`${vaultName(v.vault_id)} · ${v.role}`}
-                        />
-                      ))}
-                    </Stack>
-                  </TableCell>
-                  {manage && (
-                    <TableCell align="right">
-                      <Button
-                        size="small"
-                        onClick={() => {
-                          setEditing(g);
-                          setDraft(g.vaults);
-                        }}
-                      >
-                        {tr("Vault access")}
-                      </Button>
-                    </TableCell>
-                  )}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </Paged>
       )}
       <Dialog open={editing !== null} onClose={() => setEditing(null)} maxWidth="sm" fullWidth>
         <DialogTitle>

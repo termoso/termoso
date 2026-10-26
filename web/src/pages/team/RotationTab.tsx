@@ -25,6 +25,7 @@ import { errorMessage } from "@/api/client";
 import { teamsApi, vaultsApi } from "@/api/endpoints";
 import { queryKeys } from "@/api/hooks";
 import type { RotationDue, RotationJob, Team } from "@/api/types";
+import { Paged } from "@/components/Pager";
 import { EmptyState } from "@/components/EmptyState";
 import { Loading } from "@/components/Loading";
 import { Section } from "@/components/Section";
@@ -134,69 +135,80 @@ export function RotationTab({ team }: { team: Team }) {
             title={tr("Nothing is due")}
           />
         ) : (
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell padding="checkbox">
-                    <Checkbox
-                      size="small"
-                      checked={allSelected}
-                      indeterminate={selected.size > 0 && !allSelected}
-                      onChange={() =>
-                        setSelected(
-                          allSelected ? new Set() : new Set(selectable.map((d) => d.entity_id)),
-                        )
-                      }
-                    />
-                  </TableCell>
-                  <TableCell>{tr("Kind")}</TableCell>
-                  <TableCell>{tr("Vault")}</TableCell>
-                  <TableCell align="right">{tr("Age")}</TableCell>
-                  <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>
-                    {tr("Last rotated")}
-                  </TableCell>
-                  <TableCell>{tr("Status")}</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {dueSorted.map((d) => (
-                  <TableRow key={d.entity_id} hover>
-                    <TableCell padding="checkbox">
-                      <Checkbox
-                        size="small"
-                        disabled={!!d.job_id}
-                        checked={selected.has(d.entity_id)}
-                        onChange={() => toggle(d)}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2">{(KIND[d.kind] ?? (() => d.kind))()}</Typography>
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ fontFamily: "monospace" }}
-                      >
-                        {d.entity_id.slice(0, 8)}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>{vaultName(d.vault_id)}</TableCell>
-                    <TableCell align="right">{tr("{v1} days", { v1: d.age_days })}</TableCell>
-                    <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>
-                      {d.secret_rotated_at ? formatDate(d.secret_rotated_at) : tr("Never")}
-                    </TableCell>
-                    <TableCell>
-                      {d.job_id ? (
-                        <Chip size="small" color="warning" label={tr("Job queued")} />
-                      ) : (
-                        <Chip size="small" color="error" variant="outlined" label={tr("Overdue")} />
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <Paged items={dueSorted}>
+            {(page) => (
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          size="small"
+                          checked={allSelected}
+                          indeterminate={selected.size > 0 && !allSelected}
+                          onChange={() =>
+                            setSelected(
+                              allSelected ? new Set() : new Set(selectable.map((d) => d.entity_id)),
+                            )
+                          }
+                        />
+                      </TableCell>
+                      <TableCell>{tr("Kind")}</TableCell>
+                      <TableCell>{tr("Vault")}</TableCell>
+                      <TableCell align="right">{tr("Age")}</TableCell>
+                      <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>
+                        {tr("Last rotated")}
+                      </TableCell>
+                      <TableCell>{tr("Status")}</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {page.map((d) => (
+                      <TableRow key={d.entity_id} hover>
+                        <TableCell padding="checkbox">
+                          <Checkbox
+                            size="small"
+                            disabled={!!d.job_id}
+                            checked={selected.has(d.entity_id)}
+                            onChange={() => toggle(d)}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {(KIND[d.kind] ?? (() => d.kind))()}
+                          </Typography>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ fontFamily: "monospace" }}
+                          >
+                            {d.entity_id.slice(0, 8)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>{vaultName(d.vault_id)}</TableCell>
+                        <TableCell align="right">{tr("{v1} days", { v1: d.age_days })}</TableCell>
+                        <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>
+                          {d.secret_rotated_at ? formatDate(d.secret_rotated_at) : tr("Never")}
+                        </TableCell>
+                        <TableCell>
+                          {d.job_id ? (
+                            <Chip size="small" color="warning" label={tr("Job queued")} />
+                          ) : (
+                            <Chip
+                              size="small"
+                              color="error"
+                              variant="outlined"
+                              label={tr("Overdue")}
+                            />
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </Paged>
         )}
       </Section>
       <Section
@@ -208,75 +220,79 @@ export function RotationTab({ team }: { team: Team }) {
         {o.jobs.length === 0 ? (
           <EmptyState title={tr("No jobs yet")} />
         ) : (
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>{tr("Entity")}</TableCell>
-                  <TableCell>{tr("Vault")}</TableCell>
-                  <TableCell>{tr("Status")}</TableCell>
-                  <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>
-                    {tr("Requested")}
-                  </TableCell>
-                  <TableCell align="right" />
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {o.jobs.map((j) => {
-                  const st = JOB[j.status];
-                  return (
-                    <TableRow key={j.id} hover>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {(KIND[j.entity_kind] ?? (() => j.entity_kind))()}
-                        </Typography>
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          sx={{ fontFamily: "monospace" }}
-                        >
-                          {j.entity_id.slice(0, 8)}
-                          {j.note ? ` · ${j.note}` : ""}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>{vaultName(j.vault_id)}</TableCell>
-                      <TableCell>
-                        <Chip
-                          size="small"
-                          color={st.color}
-                          variant={st.color === "default" ? "outlined" : "filled"}
-                          label={st.label()}
-                        />
-                        {j.error && (
-                          <Typography variant="caption" color="error" sx={{ display: "block" }}>
-                            {j.error}
-                          </Typography>
-                        )}
-                      </TableCell>
+          <Paged items={o.jobs}>
+            {(page) => (
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>{tr("Entity")}</TableCell>
+                      <TableCell>{tr("Vault")}</TableCell>
+                      <TableCell>{tr("Status")}</TableCell>
                       <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>
-                        <Typography variant="body2">{j.requested_by_email}</Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {formatRelative(j.created_at)}
-                        </Typography>
+                        {tr("Requested")}
                       </TableCell>
-                      <TableCell align="right">
-                        {(j.status === "pending" || j.status === "running") && (
-                          <Button
-                            size="small"
-                            color="error"
-                            disabled={cancel.isPending}
-                            onClick={() => cancel.mutate(j)}
-                          >
-                            {tr("Cancel")}
-                          </Button>
-                        )}
-                      </TableCell>
+                      <TableCell align="right" />
                     </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                  </TableHead>
+                  <TableBody>
+                    {page.map((j) => {
+                      const st = JOB[j.status];
+                      return (
+                        <TableRow key={j.id} hover>
+                          <TableCell>
+                            <Typography variant="body2">
+                              {(KIND[j.entity_kind] ?? (() => j.entity_kind))()}
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{ fontFamily: "monospace" }}
+                            >
+                              {j.entity_id.slice(0, 8)}
+                              {j.note ? ` · ${j.note}` : ""}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>{vaultName(j.vault_id)}</TableCell>
+                          <TableCell>
+                            <Chip
+                              size="small"
+                              color={st.color}
+                              variant={st.color === "default" ? "outlined" : "filled"}
+                              label={st.label()}
+                            />
+                            {j.error && (
+                              <Typography variant="caption" color="error" sx={{ display: "block" }}>
+                                {j.error}
+                              </Typography>
+                            )}
+                          </TableCell>
+                          <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>
+                            <Typography variant="body2">{j.requested_by_email}</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {formatRelative(j.created_at)}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align="right">
+                            {(j.status === "pending" || j.status === "running") && (
+                              <Button
+                                size="small"
+                                color="error"
+                                disabled={cancel.isPending}
+                                onClick={() => cancel.mutate(j)}
+                              >
+                                {tr("Cancel")}
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </Paged>
         )}
       </Section>
       <Dialog open={queueing} onClose={() => setQueueing(false)} maxWidth="xs" fullWidth>

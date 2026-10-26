@@ -69,6 +69,7 @@ import type {
 } from "@/api/types";
 import { useAuthState } from "@/auth/store";
 import { UnlockCancelled, withStepUp } from "@/auth/unlock";
+import { Paged } from "@/components/Pager";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { CopyField } from "@/components/CopyField";
 import { EmptyState } from "@/components/EmptyState";
@@ -402,134 +403,138 @@ function MembersSection({ team }: { team: Team }) {
           <Alert severity="error">{errorMessage(members.error)}</Alert>
         </Box>
       ) : (
-        <TableContainer>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>{tr("Member")}</TableCell>
-                <TableCell>{tr("Role")}</TableCell>
-                <TableCell>{tr("Joined")}</TableCell>
-                {admin && <TableCell align="right" />}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {members.data.members.map((m) => {
-                const canEdit = admin && m.user_id !== me && m.role !== "owner";
-                return (
-                  <TableRow key={m.user_id} hover>
-                    <TableCell>
-                      <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                        <UserCell
-                          userId={m.user_id}
-                          email={m.email}
-                          displayName={m.display_name}
-                          avatar={m.avatar}
-                          you={m.user_id === me}
-                        />
-                        <MfaBadge m={m} required={team.require_mfa === true} />
-                        {m.managed && (
-                          <Tooltip
-                            title={tr(
-                              "Account was created through this team's invitation; the owner can delete it",
-                            )}
-                          >
-                            <Chip label={tr("Team account")} size="small" variant="outlined" />
-                          </Tooltip>
-                        )}
-                      </Stack>
-                    </TableCell>
-                    <TableCell>
-                      <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                        {canEdit && roleDefs ? (
-                          <Select
-                            size="small"
-                            value={m.role_ref?.id ?? ""}
-                            onChange={(e) => {
-                              const def = roleDefs.find((r) => r.id === e.target.value);
-                              if (!def) return;
-                              if (def.slug === "owner") setTransfer(m);
-                              else
-                                setRoleId.mutate({
-                                  userId: m.user_id,
-                                  role: def.slug === "admin" ? "admin" : "member",
-                                  roleId: def.id,
-                                });
-                            }}
-                            sx={{ minWidth: 150 }}
-                          >
-                            {roleDefs
-                              .filter((r) => r.slug !== "owner" || team.my_role === "owner")
-                              .map((r) => (
-                                <MenuItem key={r.id} value={r.id}>
-                                  {r.slug === "owner" ? tr("Owner (transfer)") : r.name}
-                                </MenuItem>
-                              ))}
-                          </Select>
-                        ) : canEdit ? (
-                          <Select
-                            size="small"
-                            value={m.role}
-                            onChange={(e) => {
-                              const role = e.target.value;
-                              if (role === "owner") setTransfer(m);
-                              else setRole.mutate({ userId: m.user_id, role });
-                            }}
-                            sx={{ minWidth: 130 }}
-                          >
-                            <MenuItem value="member">{tr("Member")}</MenuItem>
-                            <MenuItem value="admin">{tr("Admin")}</MenuItem>
-                            {team.my_role === "owner" && (
-                              <MenuItem value="owner">{tr("Owner (transfer)")}</MenuItem>
-                            )}
-                          </Select>
-                        ) : m.role_ref &&
-                          !["owner", "admin", "member"].includes(m.role_ref.slug) ? (
-                          <Chip
-                            size="small"
-                            label={m.role_ref.name}
-                            sx={{ color: "text.secondary" }}
-                          />
-                        ) : (
-                          <RoleChip role={m.role} />
-                        )}
-                        {m.role_source && m.role_source !== "manual" && (
-                          <Tooltip
-                            title={tr("Assigned from {v1} groups", {
-                              v1: m.role_source === "scim" ? "SCIM" : "identity provider",
-                            })}
-                          >
-                            <Chip
-                              size="small"
-                              variant="outlined"
-                              label={m.role_source === "scim" ? "SCIM" : tr("IdP")}
-                              sx={{ height: 20 }}
-                            />
-                          </Tooltip>
-                        )}
-                      </Stack>
-                    </TableCell>
-                    <TableCell>{formatDate(m.joined_at)}</TableCell>
-                    {admin && (
-                      <TableCell align="right">
-                        {canEdit && (
-                          <Tooltip title={tr("Remove from team")}>
-                            <IconButton
-                              size="small"
-                              onClick={() => setRemoving(m)}
-                              aria-label={tr("Remove member")}
-                            >
-                              <PersonRemoveRoundedIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        )}
-                      </TableCell>
-                    )}
+        <Paged items={members.data.members}>
+          {(page) => (
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>{tr("Member")}</TableCell>
+                    <TableCell>{tr("Role")}</TableCell>
+                    <TableCell>{tr("Joined")}</TableCell>
+                    {admin && <TableCell align="right" />}
                   </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </TableContainer>
+                </TableHead>
+                <TableBody>
+                  {page.map((m) => {
+                    const canEdit = admin && m.user_id !== me && m.role !== "owner";
+                    return (
+                      <TableRow key={m.user_id} hover>
+                        <TableCell>
+                          <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                            <UserCell
+                              userId={m.user_id}
+                              email={m.email}
+                              displayName={m.display_name}
+                              avatar={m.avatar}
+                              you={m.user_id === me}
+                            />
+                            <MfaBadge m={m} required={team.require_mfa === true} />
+                            {m.managed && (
+                              <Tooltip
+                                title={tr(
+                                  "Account was created through this team's invitation; the owner can delete it",
+                                )}
+                              >
+                                <Chip label={tr("Team account")} size="small" variant="outlined" />
+                              </Tooltip>
+                            )}
+                          </Stack>
+                        </TableCell>
+                        <TableCell>
+                          <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                            {canEdit && roleDefs ? (
+                              <Select
+                                size="small"
+                                value={m.role_ref?.id ?? ""}
+                                onChange={(e) => {
+                                  const def = roleDefs.find((r) => r.id === e.target.value);
+                                  if (!def) return;
+                                  if (def.slug === "owner") setTransfer(m);
+                                  else
+                                    setRoleId.mutate({
+                                      userId: m.user_id,
+                                      role: def.slug === "admin" ? "admin" : "member",
+                                      roleId: def.id,
+                                    });
+                                }}
+                                sx={{ minWidth: 150 }}
+                              >
+                                {roleDefs
+                                  .filter((r) => r.slug !== "owner" || team.my_role === "owner")
+                                  .map((r) => (
+                                    <MenuItem key={r.id} value={r.id}>
+                                      {r.slug === "owner" ? tr("Owner (transfer)") : r.name}
+                                    </MenuItem>
+                                  ))}
+                              </Select>
+                            ) : canEdit ? (
+                              <Select
+                                size="small"
+                                value={m.role}
+                                onChange={(e) => {
+                                  const role = e.target.value;
+                                  if (role === "owner") setTransfer(m);
+                                  else setRole.mutate({ userId: m.user_id, role });
+                                }}
+                                sx={{ minWidth: 130 }}
+                              >
+                                <MenuItem value="member">{tr("Member")}</MenuItem>
+                                <MenuItem value="admin">{tr("Admin")}</MenuItem>
+                                {team.my_role === "owner" && (
+                                  <MenuItem value="owner">{tr("Owner (transfer)")}</MenuItem>
+                                )}
+                              </Select>
+                            ) : m.role_ref &&
+                              !["owner", "admin", "member"].includes(m.role_ref.slug) ? (
+                              <Chip
+                                size="small"
+                                label={m.role_ref.name}
+                                sx={{ color: "text.secondary" }}
+                              />
+                            ) : (
+                              <RoleChip role={m.role} />
+                            )}
+                            {m.role_source && m.role_source !== "manual" && (
+                              <Tooltip
+                                title={tr("Assigned from {v1} groups", {
+                                  v1: m.role_source === "scim" ? "SCIM" : "identity provider",
+                                })}
+                              >
+                                <Chip
+                                  size="small"
+                                  variant="outlined"
+                                  label={m.role_source === "scim" ? "SCIM" : tr("IdP")}
+                                  sx={{ height: 20 }}
+                                />
+                              </Tooltip>
+                            )}
+                          </Stack>
+                        </TableCell>
+                        <TableCell>{formatDate(m.joined_at)}</TableCell>
+                        {admin && (
+                          <TableCell align="right">
+                            {canEdit && (
+                              <Tooltip title={tr("Remove from team")}>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => setRemoving(m)}
+                                  aria-label={tr("Remove member")}
+                                >
+                                  <PersonRemoveRoundedIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            )}
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </Paged>
       )}
       <RemoveMemberDialog
         key={removing?.user_id ?? ""}
@@ -730,38 +735,42 @@ function InvitesSection({ team }: { team: Team }) {
       ) : invites.data.invites.length === 0 ? (
         <EmptyState title={tr("No pending invitations")} />
       ) : (
-        <List disablePadding>
-          {invites.data.invites.map((i) => (
-            <ListItem
-              key={i.id}
-              divider
-              secondaryAction={
-                <Tooltip title={tr("Revoke invitation")}>
-                  <IconButton
-                    edge="end"
-                    onClick={() => setRevoking(i.id)}
-                    aria-label={tr("Revoke invitation")}
-                  >
-                    <DeleteOutlineRoundedIcon />
-                  </IconButton>
-                </Tooltip>
-              }
-            >
-              <ListItemText
-                primary={
-                  <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                    <span>{i.email}</span>
-                    <RoleChip role={i.role} />
-                  </Stack>
-                }
-                secondary={tr("Sent {v1} · expires {v2}", {
-                  v1: formatRelative(i.created_at),
-                  v2: formatDate(i.expires_at),
-                })}
-              />
-            </ListItem>
-          ))}
-        </List>
+        <Paged items={invites.data.invites}>
+          {(page) => (
+            <List disablePadding>
+              {page.map((i) => (
+                <ListItem
+                  key={i.id}
+                  divider
+                  secondaryAction={
+                    <Tooltip title={tr("Revoke invitation")}>
+                      <IconButton
+                        edge="end"
+                        onClick={() => setRevoking(i.id)}
+                        aria-label={tr("Revoke invitation")}
+                      >
+                        <DeleteOutlineRoundedIcon />
+                      </IconButton>
+                    </Tooltip>
+                  }
+                >
+                  <ListItemText
+                    primary={
+                      <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                        <span>{i.email}</span>
+                        <RoleChip role={i.role} />
+                      </Stack>
+                    }
+                    secondary={tr("Sent {v1} · expires {v2}", {
+                      v1: formatRelative(i.created_at),
+                      v2: formatDate(i.expires_at),
+                    })}
+                  />
+                </ListItem>
+              ))}
+            </List>
+          )}
+        </Paged>
       )}
 
       <Dialog
@@ -1074,41 +1083,45 @@ function PendingKeysSection({ team }: { team: Team }) {
       }
       disablePadding
     >
-      <List disablePadding>
-        {items.map((p) => {
-          const m = memberOf(p.user_id);
-          const canGrant = grantable.includes(p);
-          return (
-            <ListItem
-              key={`${p.vault_id}:${p.user_id}`}
-              divider
-              secondaryAction={
-                <Button
-                  size="small"
-                  variant="outlined"
-                  disabled={grant.isPending || !canGrant}
-                  onClick={() => grant.mutate([p])}
+      <Paged items={items}>
+        {(page) => (
+          <List disablePadding>
+            {page.map((p) => {
+              const m = memberOf(p.user_id);
+              const canGrant = grantable.includes(p);
+              return (
+                <ListItem
+                  key={`${p.vault_id}:${p.user_id}`}
+                  divider
+                  secondaryAction={
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      disabled={grant.isPending || !canGrant}
+                      onClick={() => grant.mutate([p])}
+                    >
+                      {tr("Grant")}
+                    </Button>
+                  }
                 >
-                  {tr("Grant")}
-                </Button>
-              }
-            >
-              <ListItemText
-                primary={m ? (m.display_name ?? m.email) : p.user_id}
-                secondary={
-                  <>
-                    <Link component={RouterLink} to={`/vaults/${p.vault_id}`}>
-                      {vaultName(p.vault_id)}
-                    </Link>{" "}
-                    as {p.role}
-                    {!canGrant && " · you do not hold this vault's key"}
-                  </>
-                }
-              />
-            </ListItem>
-          );
-        })}
-      </List>
+                  <ListItemText
+                    primary={m ? (m.display_name ?? m.email) : p.user_id}
+                    secondary={
+                      <>
+                        <Link component={RouterLink} to={`/vaults/${p.vault_id}`}>
+                          {vaultName(p.vault_id)}
+                        </Link>{" "}
+                        as {p.role}
+                        {!canGrant && " · you do not hold this vault's key"}
+                      </>
+                    }
+                  />
+                </ListItem>
+              );
+            })}
+          </List>
+        )}
+      </Paged>
     </Section>
   );
 }
@@ -1178,35 +1191,39 @@ function TeamVaultsSection({ team }: { team: Team }) {
           description={admin ? tr("Create a vault to start sharing hosts and keys.") : undefined}
         />
       ) : (
-        <List disablePadding>
-          {teamVaults.map((v) => (
-            <ListItem
-              key={v.id}
-              divider
-              component={RouterLink}
-              to={`/vaults/${v.id}`}
-              sx={{ color: "inherit", textDecoration: "none" }}
-            >
-              <ListItemText
-                primary={
-                  <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                    <span>{v.name}</span>
-                    <RoleChip role={v.my_role} />
-                    {!v.sealed_key && (
-                      <Typography variant="caption" color="warning.main">
-                        {tr("key pending")}
-                      </Typography>
-                    )}
-                  </Stack>
-                }
-                secondary={tr("Key version {key_version} · created {v1}", {
-                  key_version: v.key_version,
-                  v1: formatDate(v.created_at),
-                })}
-              />
-            </ListItem>
-          ))}
-        </List>
+        <Paged items={teamVaults}>
+          {(page) => (
+            <List disablePadding>
+              {page.map((v) => (
+                <ListItem
+                  key={v.id}
+                  divider
+                  component={RouterLink}
+                  to={`/vaults/${v.id}`}
+                  sx={{ color: "inherit", textDecoration: "none" }}
+                >
+                  <ListItemText
+                    primary={
+                      <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                        <span>{v.name}</span>
+                        <RoleChip role={v.my_role} />
+                        {!v.sealed_key && (
+                          <Typography variant="caption" color="warning.main">
+                            {tr("key pending")}
+                          </Typography>
+                        )}
+                      </Stack>
+                    }
+                    secondary={tr("Key version {key_version} · created {v1}", {
+                      key_version: v.key_version,
+                      v1: formatDate(v.created_at),
+                    })}
+                  />
+                </ListItem>
+              ))}
+            </List>
+          )}
+        </Paged>
       )}
 
       <Dialog

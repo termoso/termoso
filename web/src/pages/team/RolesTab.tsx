@@ -35,6 +35,7 @@ import { errorMessage } from "@/api/client";
 import { teamsApi } from "@/api/endpoints";
 import { queryKeys } from "@/api/hooks";
 import type { PermissionInfo, RoleMapping, Team, TeamRoleDef } from "@/api/types";
+import { Paged } from "@/components/Pager";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EmptyState } from "@/components/EmptyState";
 import { Loading } from "@/components/Loading";
@@ -488,64 +489,71 @@ function MappingsSection({ team, roles }: { team: Team; roles: TeamRoleDef[] }) 
         />
       ) : (
         <>
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>{tr("IdP group")}</TableCell>
-                  <TableCell>{tr("Role")}</TableCell>
-                  <TableCell sx={{ width: 110 }}>{tr("Priority")}</TableCell>
-                  <TableCell align="right" />
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {rows.map((m, i) => (
-                  <TableRow key={i}>
-                    <TableCell>
-                      <TextField
-                        size="small"
-                        value={m.group_name}
-                        placeholder={tr("e.g. engineering")}
-                        onChange={(e) => update(i, { group_name: e.target.value })}
-                        fullWidth
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Select
-                        size="small"
-                        value={m.role_id}
-                        onChange={(e) => update(i, { role_id: e.target.value })}
-                        sx={{ minWidth: 160 }}
-                      >
-                        {assignable.map((r) => (
-                          <MenuItem key={r.id} value={r.id}>
-                            {tr(r.name)}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </TableCell>
-                    <TableCell>
-                      <TextField
-                        size="small"
-                        type="number"
-                        value={m.priority}
-                        onChange={(e) => update(i, { priority: Number(e.target.value) })}
-                      />
-                    </TableCell>
-                    <TableCell align="right">
-                      <IconButton
-                        size="small"
-                        onClick={() => setDraft(rows.filter((_, j) => j !== i))}
-                        aria-label={tr("Remove mapping")}
-                      >
-                        <DeleteOutlineRoundedIcon fontSize="small" />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <Paged items={rows}>
+            {(page, start) => (
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>{tr("IdP group")}</TableCell>
+                      <TableCell>{tr("Role")}</TableCell>
+                      <TableCell sx={{ width: 110 }}>{tr("Priority")}</TableCell>
+                      <TableCell align="right" />
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {page.map((m, k) => {
+                      const i = start + k;
+                      return (
+                        <TableRow key={i}>
+                          <TableCell>
+                            <TextField
+                              size="small"
+                              value={m.group_name}
+                              placeholder={tr("e.g. engineering")}
+                              onChange={(e) => update(i, { group_name: e.target.value })}
+                              fullWidth
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Select
+                              size="small"
+                              value={m.role_id}
+                              onChange={(e) => update(i, { role_id: e.target.value })}
+                              sx={{ minWidth: 160 }}
+                            >
+                              {assignable.map((r) => (
+                                <MenuItem key={r.id} value={r.id}>
+                                  {tr(r.name)}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </TableCell>
+                          <TableCell>
+                            <TextField
+                              size="small"
+                              type="number"
+                              value={m.priority}
+                              onChange={(e) => update(i, { priority: Number(e.target.value) })}
+                            />
+                          </TableCell>
+                          <TableCell align="right">
+                            <IconButton
+                              size="small"
+                              onClick={() => setDraft(rows.filter((_, j) => j !== i))}
+                              aria-label={tr("Remove mapping")}
+                            >
+                              <DeleteOutlineRoundedIcon fontSize="small" />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </Paged>
           {draft && (
             <Box sx={{ p: 2, display: "flex", gap: 1, justifyContent: "flex-end" }}>
               <Button onClick={() => setDraft(null)}>{tr("Discard")}</Button>

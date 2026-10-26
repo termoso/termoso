@@ -19,6 +19,7 @@ import { errorMessage } from "@/api/client";
 import { teamsApi } from "@/api/endpoints";
 import { queryKeys } from "@/api/hooks";
 import type { Team, TeamDevice } from "@/api/types";
+import { Paged } from "@/components/Pager";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EmptyState } from "@/components/EmptyState";
 import { Loading } from "@/components/Loading";
@@ -65,64 +66,68 @@ export function DevicesTab({ team }: { team: Team }) {
       <Chip size="small" color="error" variant="outlined" label={tr("Rejected")} />
     );
   const rows = (list: TeamDevice[], actions: boolean) => (
-    <TableContainer>
-      <Table size="small">
-        <TableHead>
-          <TableRow>
-            <TableCell>{tr("Member")}</TableCell>
-            <TableCell>{tr("Device")}</TableCell>
-            <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>
-              {tr("Last IP")}
-            </TableCell>
-            <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>
-              {tr("Last seen")}
-            </TableCell>
-            <TableCell>{tr("Status")}</TableCell>
-            {actions && <TableCell align="right" />}
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {list.map((d) => (
-            <TableRow key={d.device_id} hover>
-              <TableCell>{d.user_email}</TableCell>
-              <TableCell>
-                <Typography variant="body2">{d.name}</Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {d.platform}
-                  {d.app_version ? ` · ${d.app_version}` : ""}
-                </Typography>
-              </TableCell>
-              <TableCell
-                sx={{ display: { xs: "none", md: "table-cell" }, fontFamily: "monospace" }}
-              >
-                {d.last_ip ?? "—"}
-              </TableCell>
-              <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>
-                {formatRelative(d.last_seen_at)}
-              </TableCell>
-              <TableCell>{statusChip(d)}</TableCell>
-              {actions && (
-                <TableCell align="right">
-                  <Stack direction="row" spacing={1} sx={{ justifyContent: "flex-end" }}>
-                    <Button
-                      size="small"
-                      variant="contained"
-                      disabled={approve.isPending}
-                      onClick={() => approve.mutate(d)}
-                    >
-                      {tr("Approve")}
-                    </Button>
-                    <Button size="small" color="error" onClick={() => setRejecting(d)}>
-                      {tr("Reject")}
-                    </Button>
-                  </Stack>
+    <Paged items={list}>
+      {(page) => (
+        <TableContainer>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>{tr("Member")}</TableCell>
+                <TableCell>{tr("Device")}</TableCell>
+                <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>
+                  {tr("Last IP")}
                 </TableCell>
-              )}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </TableContainer>
+                <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>
+                  {tr("Last seen")}
+                </TableCell>
+                <TableCell>{tr("Status")}</TableCell>
+                {actions && <TableCell align="right" />}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {page.map((d) => (
+                <TableRow key={d.device_id} hover>
+                  <TableCell>{d.user_email}</TableCell>
+                  <TableCell>
+                    <Typography variant="body2">{d.name}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {d.platform}
+                      {d.app_version ? ` · ${d.app_version}` : ""}
+                    </Typography>
+                  </TableCell>
+                  <TableCell
+                    sx={{ display: { xs: "none", md: "table-cell" }, fontFamily: "monospace" }}
+                  >
+                    {d.last_ip ?? "—"}
+                  </TableCell>
+                  <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>
+                    {formatRelative(d.last_seen_at)}
+                  </TableCell>
+                  <TableCell>{statusChip(d)}</TableCell>
+                  {actions && (
+                    <TableCell align="right">
+                      <Stack direction="row" spacing={1} sx={{ justifyContent: "flex-end" }}>
+                        <Button
+                          size="small"
+                          variant="contained"
+                          disabled={approve.isPending}
+                          onClick={() => approve.mutate(d)}
+                        >
+                          {tr("Approve")}
+                        </Button>
+                        <Button size="small" color="error" onClick={() => setRejecting(d)}>
+                          {tr("Reject")}
+                        </Button>
+                      </Stack>
+                    </TableCell>
+                  )}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+    </Paged>
   );
   return (
     <Stack spacing={2}>

@@ -25,6 +25,7 @@ import { errorMessage } from "@/api/client";
 import { teamsApi, vaultsApi } from "@/api/endpoints";
 import { queryKeys, useAccount } from "@/api/hooks";
 import type { AccessRequest, AccessRole, Team } from "@/api/types";
+import { Paged } from "@/components/Pager";
 import { EmptyState } from "@/components/EmptyState";
 import { Loading } from "@/components/Loading";
 import { Section } from "@/components/Section";
@@ -83,91 +84,97 @@ export function AccessTab({ team }: { team: Team }) {
   const open = list.filter((r) => r.status === "pending" || r.status === "approved");
   const closed = list.filter((r) => !(r.status === "pending" || r.status === "approved"));
   const table = (rows: AccessRequest[]) => (
-    <TableContainer>
-      <Table size="small">
-        <TableHead>
-          <TableRow>
-            <TableCell>{tr("Member")}</TableCell>
-            <TableCell>{tr("Vault")}</TableCell>
-            <TableCell>{tr("Access")}</TableCell>
-            <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>{tr("Reason")}</TableCell>
-            <TableCell>{tr("Status")}</TableCell>
-            <TableCell align="right" />
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {rows.map((r) => {
-            const st = STATUS[r.status];
-            const mine = r.user_id === me;
-            return (
-              <TableRow key={r.id} hover>
-                <TableCell>{mine ? tr("You") : r.user_email}</TableCell>
-                <TableCell>{r.vault_name}</TableCell>
-                <TableCell>
-                  <Typography variant="body2">
-                    {r.role === "editor" ? tr("Editor") : tr("Viewer")} ·{" "}
-                    {tr("{v1} h", { v1: r.hours })}
-                  </Typography>
-                  {r.expires_at && r.status === "approved" && (
-                    <Typography variant="caption" color="text.secondary">
-                      {tr("until {v1}", { v1: formatDateTime(r.expires_at) })}
-                    </Typography>
-                  )}
+    <Paged items={rows}>
+      {(page) => (
+        <TableContainer>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>{tr("Member")}</TableCell>
+                <TableCell>{tr("Vault")}</TableCell>
+                <TableCell>{tr("Access")}</TableCell>
+                <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>
+                  {tr("Reason")}
                 </TableCell>
-                <TableCell sx={{ display: { xs: "none", md: "table-cell" }, maxWidth: 280 }}>
-                  <Typography variant="body2" noWrap title={r.reason}>
-                    {r.reason}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {formatRelative(r.created_at)}
-                  </Typography>
-                </TableCell>
-                <TableCell>
-                  <Chip
-                    size="small"
-                    color={st.color}
-                    variant={st.color === "default" ? "outlined" : "filled"}
-                    label={st.label()}
-                  />
-                </TableCell>
-                <TableCell align="right">
-                  <Stack direction="row" spacing={1} sx={{ justifyContent: "flex-end" }}>
-                    {r.status === "pending" && q.data.can_approve && (
-                      <>
-                        <Button size="small" variant="contained" onClick={() => setDeciding(r)}>
-                          {tr("Approve")}
-                        </Button>
-                        <Button
-                          size="small"
-                          color="error"
-                          onClick={() => act.mutate({ r, op: "deny" })}
-                        >
-                          {tr("Deny")}
-                        </Button>
-                      </>
-                    )}
-                    {r.status === "pending" && mine && (
-                      <Button size="small" onClick={() => act.mutate({ r, op: "cancel" })}>
-                        {tr("Withdraw")}
-                      </Button>
-                    )}
-                    {r.status === "approved" && q.data.can_approve && (
-                      <Button
-                        size="small"
-                        color="error"
-                        onClick={() => act.mutate({ r, op: "revoke" })}
-                      >
-                        {tr("Revoke")}
-                      </Button>
-                    )}
-                  </Stack>
-                </TableCell>
+                <TableCell>{tr("Status")}</TableCell>
+                <TableCell align="right" />
               </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-    </TableContainer>
+            </TableHead>
+            <TableBody>
+              {page.map((r) => {
+                const st = STATUS[r.status];
+                const mine = r.user_id === me;
+                return (
+                  <TableRow key={r.id} hover>
+                    <TableCell>{mine ? tr("You") : r.user_email}</TableCell>
+                    <TableCell>{r.vault_name}</TableCell>
+                    <TableCell>
+                      <Typography variant="body2">
+                        {r.role === "editor" ? tr("Editor") : tr("Viewer")} ·{" "}
+                        {tr("{v1} h", { v1: r.hours })}
+                      </Typography>
+                      {r.expires_at && r.status === "approved" && (
+                        <Typography variant="caption" color="text.secondary">
+                          {tr("until {v1}", { v1: formatDateTime(r.expires_at) })}
+                        </Typography>
+                      )}
+                    </TableCell>
+                    <TableCell sx={{ display: { xs: "none", md: "table-cell" }, maxWidth: 280 }}>
+                      <Typography variant="body2" noWrap title={r.reason}>
+                        {r.reason}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {formatRelative(r.created_at)}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        size="small"
+                        color={st.color}
+                        variant={st.color === "default" ? "outlined" : "filled"}
+                        label={st.label()}
+                      />
+                    </TableCell>
+                    <TableCell align="right">
+                      <Stack direction="row" spacing={1} sx={{ justifyContent: "flex-end" }}>
+                        {r.status === "pending" && q.data.can_approve && (
+                          <>
+                            <Button size="small" variant="contained" onClick={() => setDeciding(r)}>
+                              {tr("Approve")}
+                            </Button>
+                            <Button
+                              size="small"
+                              color="error"
+                              onClick={() => act.mutate({ r, op: "deny" })}
+                            >
+                              {tr("Deny")}
+                            </Button>
+                          </>
+                        )}
+                        {r.status === "pending" && mine && (
+                          <Button size="small" onClick={() => act.mutate({ r, op: "cancel" })}>
+                            {tr("Withdraw")}
+                          </Button>
+                        )}
+                        {r.status === "approved" && q.data.can_approve && (
+                          <Button
+                            size="small"
+                            color="error"
+                            onClick={() => act.mutate({ r, op: "revoke" })}
+                          >
+                            {tr("Revoke")}
+                          </Button>
+                        )}
+                      </Stack>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
+    </Paged>
   );
   return (
     <Stack spacing={2}>

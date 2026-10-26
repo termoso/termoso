@@ -29,6 +29,7 @@ import { errorMessage } from "@/api/client";
 import { adminApi } from "@/api/endpoints";
 import { queryKeys } from "@/api/hooks";
 import type { AdminTeamMember, AdminUser } from "@/api/types";
+import { Paged } from "@/components/Pager";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Loading } from "@/components/Loading";
 import { PageHeader } from "@/components/PageHeader";
@@ -123,52 +124,56 @@ export function AdminTeamPage() {
             </Button>
           }
         >
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>{tr("E-mail")}</TableCell>
-                  <TableCell>{tr("Role")}</TableCell>
-                  <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>
-                    {tr("Source")}
-                  </TableCell>
-                  <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>
-                    {tr("Last seen")}
-                  </TableCell>
-                  <TableCell align="right" />
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {members.map((m) => (
-                  <TableRow key={m.user_id} hover>
-                    <TableCell>{m.email}</TableCell>
-                    <TableCell>
-                      <Chip size="small" variant="outlined" label={tr(m.role)} />
-                    </TableCell>
-                    <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>
-                      {m.role_source}
-                    </TableCell>
-                    <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>
-                      {m.last_seen_at ? formatRelative(m.last_seen_at) : "—"}
-                    </TableCell>
-                    <TableCell align="right">
-                      {m.level !== "owner" && (
-                        <Tooltip title={tr("Remove from team")}>
-                          <IconButton
-                            size="small"
-                            aria-label={tr("Remove from team")}
-                            onClick={() => setRemoving(m)}
-                          >
-                            <PersonRemoveOutlinedIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <Paged items={members}>
+            {(page) => (
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>{tr("E-mail")}</TableCell>
+                      <TableCell>{tr("Role")}</TableCell>
+                      <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>
+                        {tr("Source")}
+                      </TableCell>
+                      <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>
+                        {tr("Last seen")}
+                      </TableCell>
+                      <TableCell align="right" />
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {page.map((m) => (
+                      <TableRow key={m.user_id} hover>
+                        <TableCell>{m.email}</TableCell>
+                        <TableCell>
+                          <Chip size="small" variant="outlined" label={tr(m.role)} />
+                        </TableCell>
+                        <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>
+                          {m.role_source}
+                        </TableCell>
+                        <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>
+                          {m.last_seen_at ? formatRelative(m.last_seen_at) : "—"}
+                        </TableCell>
+                        <TableCell align="right">
+                          {m.level !== "owner" && (
+                            <Tooltip title={tr("Remove from team")}>
+                              <IconButton
+                                size="small"
+                                aria-label={tr("Remove from team")}
+                                onClick={() => setRemoving(m)}
+                              >
+                                <PersonRemoveOutlinedIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </Paged>
         </Section>
         <Section
           title={tr("Policies")}
@@ -214,21 +219,25 @@ export function AdminTeamPage() {
         </Section>
         {audit.length > 0 && (
           <Section title={tr("Recent activity")} disablePadding>
-            <TableContainer>
-              <Table size="small">
-                <TableBody>
-                  {audit.map((e) => (
-                    <TableRow key={e.id} hover>
-                      <TableCell sx={{ whiteSpace: "nowrap" }}>
-                        {formatDateTime(e.created_at)}
-                      </TableCell>
-                      <TableCell sx={{ fontFamily: "monospace" }}>{e.action}</TableCell>
-                      <TableCell>{e.actor_email ?? "—"}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+            <Paged items={audit}>
+              {(page) => (
+                <TableContainer>
+                  <Table size="small">
+                    <TableBody>
+                      {page.map((e) => (
+                        <TableRow key={e.id} hover>
+                          <TableCell sx={{ whiteSpace: "nowrap" }}>
+                            {formatDateTime(e.created_at)}
+                          </TableCell>
+                          <TableCell sx={{ fontFamily: "monospace" }}>{e.action}</TableCell>
+                          <TableCell>{e.actor_email ?? "—"}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </Paged>
           </Section>
         )}
       </Stack>
