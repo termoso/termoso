@@ -22,6 +22,7 @@ static PROVIDER: LazyLock<ServiceProvider> = LazyLock::new(|| {
         SpConfig {
             entity_id: SP.into(),
             acs_url: ACS.into(),
+            slo_url: "https://sp.example/saml/slo".into(),
             key: Some(sp_key()),
             cert_der: Some(sp_cert_der()),
             sign_requests: true,
