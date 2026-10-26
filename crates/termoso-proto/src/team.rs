@@ -352,6 +352,13 @@ schema! {
         pub details: serde_json::Value,
         /// When.
         pub created_at: DateTime<Utc>,
+        /// Hex SHA-256 over this entry's canonical fields and `prev_hash`
+        /// (tamper-evident chain; see `GET /teams/{id}/audit/verify`).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub hash: Option<String>,
+        /// Hex hash of the team's previous entry (`None` for the first one).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub prev_hash: Option<String>,
     }
 }
 

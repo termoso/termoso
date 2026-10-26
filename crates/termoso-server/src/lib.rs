@@ -8,6 +8,7 @@
 pub mod acl;
 pub mod ai;
 pub mod audit;
+pub mod audit_chain;
 pub mod authz;
 pub mod avatar;
 pub mod backup;

@@ -194,6 +194,11 @@ pub fn router(state: AppState) -> Router {
         .route("/teams/{id}/presence", get(teams::get_presence))
         .route("/teams/{id}/audit", get(crate::audit::list))
         .route("/teams/{id}/audit/export", get(crate::audit::export))
+        .route("/teams/{id}/audit/verify", get(crate::audit_chain::verify))
+        .route(
+            "/teams/{id}/audit/checkpoint",
+            post(crate::audit_chain::checkpoint),
+        )
         .route(
             "/teams/{id}/webhooks",
             get(crate::webhooks::list).post(crate::webhooks::create),
@@ -402,6 +407,7 @@ pub fn router(state: AppState) -> Router {
         .route("/captcha", get(captcha::page))
         .nest("/scim/v2", crate::scim::router())
         .route("/ca/{team_id}", get(ca::trusted_keys))
+        .route("/audit/key", get(crate::audit_chain::public_key))
         .route("/sshid/{handle}", get(sshid::public_default))
         .route("/sshid/{handle}/{type}", get(sshid::public_typed))
         .nest(

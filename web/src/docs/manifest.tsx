@@ -132,6 +132,7 @@ const layout: { title: string; pages: Entry[] }[] = [
       ["teams/terminal-sharing", <ConnectedTvOutlinedIcon />],
       ["teams/policies", <PolicyOutlinedIcon />],
       ["teams/ssh-ca", <VerifiedUserOutlinedIcon />],
+      ["teams/audit", <HistoryOutlinedIcon />],
       ["teams/automations", <ScheduleOutlinedIcon />],
     ],
   },

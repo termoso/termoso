@@ -149,7 +149,14 @@ async fn purge(state: &AppState, team_id: Uuid, days: u32) -> ApiResult<()> {
         return Ok(());
     }
     sqlx::query(
-        "DELETE FROM team_audit_events WHERE team_id = $1 AND created_at < now() - make_interval(days => $2)",
+        "WITH doomed AS (
+             SELECT id, team_id, hash FROM team_audit_events
+             WHERE team_id = $1 AND created_at < now() - make_interval(days => $2)),
+         anchor AS (
+             INSERT INTO audit_checkpoints (team_id, kind, last_id, hash)
+             SELECT team_id, 'retention', id, hash FROM doomed WHERE hash IS NOT NULL
+             ORDER BY id DESC LIMIT 1)
+         DELETE FROM team_audit_events WHERE id IN (SELECT id FROM doomed)",
     )
     .bind(team_id)
     .bind(days as i32)
@@ -186,6 +193,8 @@ type Row = (
     Option<String>,
     serde_json::Value,
     DateTime<Utc>,
+    Option<String>,
+    Option<String>,
 );
 
 /// Team admins see everything; members see the log too (the whole point is
@@ -218,7 +227,8 @@ pub async fn list(
     }
     let rows: Vec<Row> = sqlx::query_as(
         "SELECT e.id, e.team_id, e.actor_id, a.email, a.display_name, a.avatar_tag, e.device_id, e.action,
-                e.vault_id, e.target_user, t.email, e.details, e.created_at
+                e.vault_id, e.target_user, t.email, e.details, e.created_at,
+                encode(e.hash, 'hex'), encode(e.prev_hash, 'hex')
          FROM team_audit_events e
          LEFT JOIN users a ON a.id = e.actor_id
          LEFT JOIN users t ON t.id = e.target_user
@@ -259,6 +269,8 @@ pub async fn list(
                 target_email,
                 details,
                 created_at,
+                hash,
+                prev_hash,
             )| AuditEvent {
                 id,
                 team_id,
@@ -273,6 +285,8 @@ pub async fn list(
                 target_email,
                 details,
                 created_at,
+                hash,
+                prev_hash,
             },
         )
         .collect();
@@ -305,7 +319,7 @@ pub struct ExportQuery {
 
 const EXPORT_PAGE: i64 = 1000;
 const EXPORT_MAX_ROWS: usize = 1_000_000;
-const CSV_HEADER: &str = "\u{feff}id,created_at,team_id,action,actor_id,actor_email,actor_name,device_id,vault_id,target_user,target_email,details\n";
+const CSV_HEADER: &str = "\u{feff}id,created_at,team_id,action,actor_id,actor_email,actor_name,device_id,vault_id,target_user,target_email,details,hash,prev_hash\n";
 
 fn csv_field(v: &str) -> String {
     if v.contains([',', '"', '\n', '\r']) {
@@ -319,7 +333,7 @@ fn csv_line(e: &AuditEvent) -> String {
     let o = |v: &Option<String>| csv_field(v.as_deref().unwrap_or(""));
     let u = |v: &Option<Uuid>| v.map(|x| x.to_string()).unwrap_or_default();
     format!(
-        "{},{},{},{},{},{},{},{},{},{},{},{}\n",
+        "{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n",
         e.id,
         e.created_at.to_rfc3339(),
         e.team_id,
@@ -332,6 +346,8 @@ fn csv_line(e: &AuditEvent) -> String {
         u(&e.target_user),
         o(&e.target_email),
         csv_field(&e.details.to_string()),
+        o(&e.hash),
+        o(&e.prev_hash),
     )
 }
 
@@ -401,7 +417,8 @@ pub async fn export(
             }
             let page: Vec<Row> = match sqlx::query_as(
                 "SELECT e.id, e.team_id, e.actor_id, a.email, a.display_name, a.avatar_tag, e.device_id, e.action,
-                        e.vault_id, e.target_user, t.email, e.details, e.created_at
+                        e.vault_id, e.target_user, t.email, e.details, e.created_at,
+                encode(e.hash, 'hex'), encode(e.prev_hash, 'hex')
                  FROM team_audit_events e
                  LEFT JOIN users a ON a.id = e.actor_id
                  LEFT JOIN users t ON t.id = e.target_user
@@ -453,6 +470,8 @@ pub async fn export(
                 target_email,
                 details,
                 created_at,
+                hash,
+                prev_hash,
             ) in page
             {
                 let ev = AuditEvent {
@@ -469,6 +488,8 @@ pub async fn export(
                     target_email,
                     details,
                     created_at,
+                    hash,
+                    prev_hash,
                 };
                 if jsonl {
                     out.push_str(&serde_json::to_string(&ev).unwrap_or_default());
@@ -515,11 +536,16 @@ pub async fn retention_pass(db: &PgPool) -> anyhow::Result<u64> {
     let mut total = 0u64;
     loop {
         let n = sqlx::query(
-            "DELETE FROM team_audit_events WHERE id IN (
-                 SELECT e.id FROM team_audit_events e
+            "WITH doomed AS (
+                 SELECT e.id, e.team_id, e.hash FROM team_audit_events e
                  JOIN team_policies p ON p.team_id = e.team_id
                  WHERE e.created_at < now() - make_interval(days => p.audit_retention_days)
-                 LIMIT 10000)",
+                 ORDER BY e.id LIMIT 10000),
+             anchor AS (
+                 INSERT INTO audit_checkpoints (team_id, kind, last_id, hash)
+                 SELECT DISTINCT ON (team_id) team_id, 'retention', id, hash FROM doomed
+                 WHERE hash IS NOT NULL ORDER BY team_id, id DESC)
+             DELETE FROM team_audit_events WHERE id IN (SELECT id FROM doomed)",
         )
         .execute(db)
         .await?
