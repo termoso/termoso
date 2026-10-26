@@ -321,6 +321,8 @@ pub fn apply_scoped(
                     startup_snippet_id: None,
                     host_chain_id: None,
                     proxy_id: None,
+                    gateway_id: None,
+                    mac_address: None,
                     telnet: None,
                     webdav: None,
                     env_variables: vec![],

@@ -146,6 +146,7 @@ import type {
   AutomationRunList,
   CreateAutomationRequest,
   UpdateAutomationRequest,
+  GatewayInfo,
 } from "./types";
 import type {
   AccessRequest,
@@ -614,6 +615,8 @@ export const hostsExportAs = (
   format: "ssh_config" | "ansible",
   path: string,
 ) => invoke<CsvExportReport>("hosts_export_as", { vaultId, format, path });
+export const gatewaysList = () => invoke<GatewayInfo[]>("gateways_list");
+
 export const wakeHost = (mac: string, broadcast: string | null) =>
   invoke<number>("wake_host", { mac, broadcast });
 export const backupExport = (vaultIds: Uuid[], password: string, path: string) =>

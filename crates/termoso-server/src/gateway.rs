@@ -219,23 +219,7 @@ async fn close_with(socket: &mut WebSocket, code: &str, message: &str) -> anyhow
 
 // ───────────────────────── listing ─────────────────────────
 
-#[derive(Debug, Serialize, utoipa::ToSchema)]
-pub struct GatewayInfo {
-    /// The bridge.
-    pub id: Uuid,
-    pub name: String,
-    /// Pinged within the last 90 s.
-    pub online: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub seen_at: Option<DateTime<Utc>>,
-    /// Vaults the gateway holds that the caller can open too.
-    pub vault_ids: Vec<Uuid>,
-}
-
-#[derive(Debug, Serialize, utoipa::ToSchema)]
-pub struct GatewayList {
-    pub gateways: Vec<GatewayInfo>,
-}
+pub use termoso_proto::bridge::{GatewayInfo, GatewayList};
 
 /// `GET /gateways` — bridges that share a vault with the caller and have ever
 /// run as a gateway, with their online state.

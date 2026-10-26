@@ -328,6 +328,7 @@ pub fn run() {
             commands_tools::hosts_export_csv,
             commands_tools::hosts_export_as,
             commands_tools::wake_host,
+            commands_tools::gateways_list,
             commands_tools::backup_export,
             commands_tools::backup_inspect,
             commands_tools::backup_discard,

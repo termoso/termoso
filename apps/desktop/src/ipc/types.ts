@@ -456,6 +456,10 @@ export interface HostForm {
   startupSnippetId: Uuid | null;
   hostChainId: Uuid | null;
   proxyId: Uuid | null;
+  /** Gateway (API bridge in `termoso-bridge gateway` mode) to tunnel through; null = direct. */
+  gatewayId: Uuid | null;
+  /** MAC address for Wake-on-LAN; null = unknown. */
+  macAddress: string | null;
   /** Telnet section, when the host is also (or only) reachable over Telnet. */
   telnet: TelnetForm | null;
   /** WebDAV section: a file share browsed from Files, next to or instead of SSH. */
@@ -701,6 +705,8 @@ export function emptyHostForm(vaultId: Uuid, groupId: Uuid | null): HostForm {
     startupSnippetId: null,
     hostChainId: null,
     proxyId: null,
+    gatewayId: null,
+    macAddress: null,
     telnet: null,
     webdav: null,
     envVariables: [],
@@ -1534,6 +1540,15 @@ export interface QuietProgress {
 }
 
 // ───────────────────────────── export / backup ─────────────────────────────
+
+/** A bridge in `gateway` mode the account can tunnel through (`GET /gateways`). */
+export interface GatewayInfo {
+  id: Uuid;
+  name: string;
+  online: boolean;
+  seen_at?: string | null;
+  vault_ids: Uuid[];
+}
 
 export interface CsvExportReport {
   hosts: number;

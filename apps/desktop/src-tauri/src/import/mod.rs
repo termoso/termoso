@@ -689,6 +689,8 @@ pub fn apply(
             startup_snippet_id: None,
             host_chain_id: None,
             proxy_id,
+            gateway_id: None,
+            mac_address: None,
             telnet: telnet.then(|| TelnetForm {
                 port: h.port,
                 username: h.username.clone(),
@@ -1081,6 +1083,8 @@ fn build_chain(
                     startup_snippet_id: None,
                     host_chain_id: None,
                     proxy_id: None,
+                    gateway_id: None,
+                    mac_address: None,
                     telnet: None,
                     webdav: None,
                     env_variables: Vec::new(),

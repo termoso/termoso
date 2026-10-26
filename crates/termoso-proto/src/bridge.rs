@@ -136,3 +136,29 @@ schema! {
         pub token: String,
     }
 }
+
+schema! {
+    /// A bridge running in `gateway` mode that the caller can tunnel through
+    /// (`GET /gateways`).
+    pub struct GatewayInfo {
+        /// The bridge.
+        pub id: Uuid,
+        /// Bridge name as shown in the cabinet.
+        pub name: String,
+        /// Pinged within the last 90 s.
+        pub online: bool,
+        /// Last gateway ping.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub seen_at: Option<chrono::DateTime<chrono::Utc>>,
+        /// Vaults the gateway holds that the caller can open too.
+        pub vault_ids: Vec<Uuid>,
+    }
+}
+
+schema! {
+    /// `GET /gateways`.
+    pub struct GatewayList {
+        /// Gateways sharing a vault with the caller.
+        pub gateways: Vec<GatewayInfo>,
+    }
+}

@@ -175,6 +175,11 @@ impl ApiClient {
         self.ws_url_for(&format!("live/{id}/ws"))
     }
 
+    /// `GET /gateways`: bridges in gateway mode the account can tunnel through.
+    pub async fn gateways(&self) -> Result<termoso_proto::bridge::GatewayList> {
+        self.get("gateways").await
+    }
+
     /// Gateway tunnel endpoint (`ws[s]://…/api/v1/gateways/{id}/connect`).
     pub fn gateway_ws_url(&self, gateway_id: Uuid) -> Result<Url> {
         self.ws_url_for(&format!("gateways/{gateway_id}/connect"))

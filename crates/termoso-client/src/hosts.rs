@@ -116,6 +116,12 @@ pub struct HostForm {
     pub startup_snippet_id: Option<Uuid>,
     pub host_chain_id: Option<Uuid>,
     pub proxy_id: Option<Uuid>,
+    /// Gateway (an API bridge in `gateway` mode) to tunnel through; `None` = direct.
+    #[serde(default)]
+    pub gateway_id: Option<Uuid>,
+    /// MAC address for Wake-on-LAN.
+    #[serde(default)]
+    pub mac_address: Option<String>,
     /// Telnet section, when the host is also (or only) reachable over Telnet.
     #[serde(default)]
     pub telnet: Option<TelnetForm>,
@@ -854,6 +860,7 @@ pub fn form(store: &Store, id: Uuid) -> Result<HostForm> {
         tag_ids: host.data.tag_ids,
         notes: host.data.notes,
         os_name: host.data.os_name,
+        mac_address: host.data.mac_address,
         icon: host.data.icon,
         ip_version: ip_version_of(&host.data.ip_version),
         agent_forwarding: ssh.as_ref().is_some_and(|s| s.agent_forwarding),
@@ -861,6 +868,7 @@ pub fn form(store: &Store, id: Uuid) -> Result<HostForm> {
         startup_snippet_id: host.data.startup_snippet_id,
         host_chain_id: ssh.as_ref().and_then(|s| s.host_chain_id),
         proxy_id: ssh.as_ref().and_then(|s| s.proxy_id),
+        gateway_id: ssh.as_ref().and_then(|s| s.gateway_id),
         telnet,
         webdav,
         env_variables: ssh
@@ -989,6 +997,7 @@ pub fn save(store: &Store, f: &HostForm) -> Result<HostCard> {
         ssh.forward_x11 = f.forward_x11;
         ssh.host_chain_id = f.host_chain_id;
         ssh.proxy_id = f.proxy_id;
+        ssh.gateway_id = f.gateway_id;
         ssh.env_variables = clean_env(&f.env_variables);
         ssh.keep_alive_interval = f.keep_alive_interval.filter(|s| *s > 0);
         ssh.timeout = f.timeout.filter(|s| *s > 0);
@@ -1140,6 +1149,12 @@ pub fn save(store: &Store, f: &HostForm) -> Result<HostCard> {
     if existing.is_none() {
         host.os_name = f.os_name.clone().filter(|s| !s.is_empty());
     }
+    host.mac_address = f
+        .mac_address
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
     host.icon = clean_icon(&f.icon);
     host.backspace = clean_scheme(&f.backspace);
     host.ip_version = match f.ip_version.as_str() {
@@ -2090,6 +2105,8 @@ mod tests {
             startup_snippet_id: None,
             host_chain_id: None,
             proxy_id: None,
+            gateway_id: None,
+            mac_address: None,
             telnet: None,
             webdav: None,
             env_variables: vec![],

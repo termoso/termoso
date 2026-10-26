@@ -2073,3 +2073,11 @@ pub async fn team_automation_runs<R: Runtime>(
 pub async fn team_automations_execute<R: Runtime>(app: AppHandle<R>) -> Result<usize> {
     crate::automations::pass(&app).await
 }
+
+/// Gateways (API bridges in `gateway` mode) this account can tunnel through.
+#[tauri::command]
+pub async fn gateways_list<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+) -> Result<Vec<termoso_proto::bridge::GatewayInfo>> {
+    Ok(crate::account::api(&app).await?.gateways().await?.gateways)
+}
