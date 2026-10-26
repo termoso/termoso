@@ -45,6 +45,7 @@ import { FontPicker, FontPreview } from "./FontPicker";
 import { KeyboardPage } from "./KeyboardPage";
 import { SecurityPage } from "./SecurityPage";
 import { SftpPage } from "./SftpPage";
+import { TriggersCard } from "./TriggersCard";
 import { TeamPage } from "@/team/TeamPage";
 import { VaultsPage } from "@/team/VaultsPage";
 import { IS_MAC } from "@/lib/platform";
@@ -737,6 +738,7 @@ function Terminal({ s, update }: SectionProps) {
         <LocalShellRow value={s.localShell} onChange={(v) => update({ localShell: v })} />
       </SectionCard>
 
+      <TriggersCard s={s} update={update} />
       <SectionCard title={tr("Behaviour")}>
         <SettingRow
           label={tr("Audible bell")}

@@ -265,6 +265,24 @@ impl AppState {
     }
 }
 
+/// A regex watched on terminal output (SecureCRT/iTerm-style trigger).
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Trigger {
+    pub id: uuid::Uuid,
+    pub name: String,
+    /// JavaScript regular expression source, tested against the ANSI-stripped output.
+    pub pattern: String,
+    pub enabled: bool,
+    /// Desktop notification with the matching line.
+    pub notify: bool,
+    /// Highlight the matching row in the terminal.
+    pub highlight: bool,
+    /// Text typed into the session on a match (`\n` for Enter), if any.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reply: Option<String>,
+}
+
 /// UI preferences. Stored in the (encrypted-at-rest) local database, never
 /// leaves the device.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -299,6 +317,9 @@ pub struct Settings {
     /// Install the OSC 133 prompt markers into bash / zsh / fish after
     /// connecting: powers command history, autocomplete and prompt navigation.
     pub shell_integration: bool,
+    /// Output triggers: a regex watched on every terminal, with what to do on a match.
+    #[serde(default)]
+    pub triggers: Vec<Trigger>,
     /// What to do with the command a workspace pane was running when it was
     /// saved: `type` puts it on the prompt for the user to confirm, `run`
     /// executes it, `never` restores only the working directory.
@@ -424,6 +445,7 @@ impl Default for Settings {
             confirm_paste_multiline: true,
             autocomplete: true,
             shell_integration: true,
+            triggers: Vec::new(),
             restore_commands: "type".into(),
             terminal_bell: false,
             bright_bold: false,

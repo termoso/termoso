@@ -65,6 +65,19 @@ export const TERM_TYPES = [
 export type TermType = (typeof TERM_TYPES)[number];
 export type SyncConflict = "newest_wins" | "local_wins" | "server_wins";
 
+/** A regex watched on terminal output with what to do on a match. */
+export interface Trigger {
+  id: Uuid;
+  name: string;
+  /** JavaScript regex source, tested against ANSI-stripped output. */
+  pattern: string;
+  enabled: boolean;
+  notify: boolean;
+  highlight: boolean;
+  /** Typed into the session on a match (`\n` = Enter). */
+  reply?: string | null;
+}
+
 export interface Settings {
   theme: ThemeMode;
   /** UI language; `system` follows the OS locale. */
@@ -88,6 +101,8 @@ export interface Settings {
   autocomplete: boolean;
   /** Install OSC 133 prompt markers into bash / zsh / fish after connecting. */
   shellIntegration: boolean;
+  /** Output triggers: regexes watched on every terminal. */
+  triggers: Trigger[];
   /** Command a workspace pane was running when saved: put on the prompt, run, or dropped. */
   restoreCommands: RestoreCommands;
   terminalBell: boolean;
