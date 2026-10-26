@@ -287,6 +287,7 @@ export const ru: Readonly<Record<string, string>> = {
   "No security keys": "Ключей безопасности нет",
   "No team vaults yet": "Хранилищ команды пока нет",
   "No teams match": "Команд не найдено",
+  "Start typing a team name": "Начните вводить название команды",
   "No users match": "Пользователей не найдено",
   "No vaults": "Хранилищ нет",
   "No webhooks": "Вебхуков нет",

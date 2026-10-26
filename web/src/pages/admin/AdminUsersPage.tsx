@@ -68,7 +68,8 @@ export function AdminUsersPage() {
   // Server-side search: instances with hundreds of teams never load them all.
   const teamList = useQuery({
     queryKey: ["admin", "teams", "pick", teamQ],
-    queryFn: () => adminApi.teams({ q: teamQ || undefined, offset: 0, limit: 50 }),
+    queryFn: () => adminApi.teams({ q: teamQ, offset: 0, limit: 10 }),
+    enabled: teamQ.length > 0,
     placeholderData: (prev) => prev,
   });
   const offset = page * limit;
@@ -110,7 +111,7 @@ export function AdminUsersPage() {
       <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mb: 2 }}>
         <Autocomplete
           size="small"
-          options={teamList.data?.items ?? []}
+          options={teamQ ? (teamList.data?.items ?? []) : []}
           value={teamPick}
           onChange={(_e, v) => {
             setTeamPick(v);
@@ -122,7 +123,7 @@ export function AdminUsersPage() {
           isOptionEqualToValue={(a, b) => a.id === b.id}
           filterOptions={(x) => x}
           loading={teamList.isFetching}
-          noOptionsText={tr("No teams match")}
+          noOptionsText={teamInput.trim() ? tr("No teams match") : tr("Start typing a team name")}
           renderInput={(params) => (
             <TextField {...params} label={tr("Team")} placeholder={tr("All teams")} />
           )}
