@@ -41,6 +41,9 @@ import { useSnackbar } from "@/components/Snackbar";
 import { UserCell } from "@/components/UserCell";
 import { formatDateTime, formatRelative } from "@/components/format";
 
+/** Team chips shown inline per user; the rest collapse into a "+N more" tooltip. */
+const TEAM_CHIPS = 3;
+
 function useDebounced(value: string, ms = 300): string {
   const [v, setV] = useState(value);
   useEffect(() => {
@@ -208,16 +211,36 @@ export function AdminUsersPage() {
                           )}
                         </Stack>
                       </TableCell>
-                      <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>
+                      <TableCell sx={{ display: { xs: "none", md: "table-cell" }, maxWidth: 360 }}>
                         <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: "wrap" }}>
-                          {(u.teams ?? []).map((t) => (
+                          {(u.teams ?? []).slice(0, TEAM_CHIPS).map((t) => (
                             <Chip
                               key={t.id}
                               size="small"
                               variant="outlined"
                               label={`${t.name} · ${tr(t.role)}`}
+                              sx={{ maxWidth: 160 }}
                             />
                           ))}
+                          {(u.teams ?? []).length > TEAM_CHIPS && (
+                            <Tooltip
+                              title={
+                                <Stack component="span" spacing={0.25}>
+                                  {(u.teams ?? []).slice(TEAM_CHIPS).map((t) => (
+                                    <span key={t.id}>{`${t.name} · ${tr(t.role)}`}</span>
+                                  ))}
+                                </Stack>
+                              }
+                            >
+                              <Chip
+                                size="small"
+                                variant="outlined"
+                                label={tr("+{n} more", {
+                                  n: String((u.teams ?? []).length - TEAM_CHIPS),
+                                })}
+                              />
+                            </Tooltip>
+                          )}
                           {u.source && u.source !== "password" && (
                             <Chip
                               size="small"

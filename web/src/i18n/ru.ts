@@ -243,6 +243,7 @@ export const ru: Readonly<Record<string, string>> = {
   "Leave vault?": "Покинуть хранилище?",
   Light: "Светлая",
   "Load more": "Загрузить ещё",
+  "+{n} more": "ещё {n}",
   "Load older": "Показать старые",
   "Log quota per user (MiB)": "Квота логов на пользователя (МиБ)",
   "Make default role": "Сделать ролью по умолчанию",
