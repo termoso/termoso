@@ -21,7 +21,7 @@ pub struct Schedule {
 pub fn parse_timezone(s: &str) -> Option<FixedOffset> {
     let s = s.trim();
     if s.is_empty() || s.eq_ignore_ascii_case("utc") || s == "Z" {
-        return Some(FixedOffset::east_opt(0)?);
+        return FixedOffset::east_opt(0);
     }
     let (sign, rest) = match s.as_bytes()[0] {
         b'+' => (1, &s[1..]),
