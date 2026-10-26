@@ -119,7 +119,12 @@ export function TriggersCard({
           />
         </Box>
       ))}
-      <Button size="small" startIcon={<AddRoundedIcon />} onClick={add} sx={{ alignSelf: "flex-start" }}>
+      <Button
+        size="small"
+        startIcon={<AddRoundedIcon />}
+        onClick={add}
+        sx={{ alignSelf: "flex-start" }}
+      >
         {tr("Add trigger")}
       </Button>
     </SectionCard>

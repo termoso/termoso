@@ -74,9 +74,7 @@ export function ExportCsvDialog({
     const path = await saveFile({
       title: tr("Export hosts"),
       defaultPath:
-        format === "ssh_config"
-          ? `termoso-${slug}-ssh_config`
-          : `termoso-${slug}-hosts.${fmt.ext}`,
+        format === "ssh_config" ? `termoso-${slug}-ssh_config` : `termoso-${slug}-hosts.${fmt.ext}`,
       filters: fmt.ext ? [{ name: fmt.filter, extensions: [fmt.ext] }] : [],
     });
     if (!path) return;
@@ -143,33 +141,35 @@ export function ExportCsvDialog({
             )}
         </Typography>
         {format === "csv" && (
-        <Box
-          sx={{
-            display: "grid",
-            gridTemplateColumns: "auto 1fr",
-            columnGap: 2,
-            rowGap: 0.25,
-            px: 1.5,
-            py: 1,
-            borderRadius: 2,
-            bgcolor: "surface.high",
-          }}
-        >
-          {COLUMNS.map(([name, hint]) => (
-            <Box key={name} sx={{ display: "contents" }}>
-              <Mono sx={{ fontSize: 12 }}>{name}</Mono>
-              <Typography variant="caption" color="text.secondary">
-                {tr(hint)}
-              </Typography>
-            </Box>
-          ))}
-        </Box>
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: "auto 1fr",
+              columnGap: 2,
+              rowGap: 0.25,
+              px: 1.5,
+              py: 1,
+              borderRadius: 2,
+              bgcolor: "surface.high",
+            }}
+          >
+            {COLUMNS.map(([name, hint]) => (
+              <Box key={name} sx={{ display: "contents" }}>
+                <Mono sx={{ fontSize: 12 }}>{name}</Mono>
+                <Typography variant="caption" color="text.secondary">
+                  {tr(hint)}
+                </Typography>
+              </Box>
+            ))}
+          </Box>
         )}
         {format === "csv" && (
           <SettingRow
             label={tr("Include passwords")}
             hint={tr("Writes host passwords as plaintext into the file.")}
-            control={<Switch checked={passwords} onChange={(e) => setPasswords(e.target.checked)} />}
+            control={
+              <Switch checked={passwords} onChange={(e) => setPasswords(e.target.checked)} />
+            }
             last
           />
         )}

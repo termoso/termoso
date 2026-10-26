@@ -712,7 +712,9 @@ function RunRow({
                 {run.error && <Alert severity="error">{run.error}</Alert>}
                 {locked && (
                   <Alert severity="info">
-                    {tr("Per-host output is encrypted with the vault key — unlock the vault to see it.")}
+                    {tr(
+                      "Per-host output is encrypted with the vault key — unlock the vault to see it.",
+                    )}
                   </Alert>
                 )}
                 {run.results.map((r) => (

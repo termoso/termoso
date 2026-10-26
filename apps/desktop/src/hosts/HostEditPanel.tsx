@@ -199,7 +199,9 @@ function HostEditor({
     if (!mac) return;
     try {
       const n = await ipc.wakeHost(mac, null);
-      snackbar.notify(trn(n, "Sent {count} Wake-on-LAN packet", "Sent {count} Wake-on-LAN packets"));
+      snackbar.notify(
+        trn(n, "Sent {count} Wake-on-LAN packet", "Sent {count} Wake-on-LAN packets"),
+      );
     } catch (e) {
       snackbar.error(errorMessage(e));
     }
@@ -736,7 +738,9 @@ function HostEditor({
                     <TextField
                       select
                       value={form.gatewayId ?? ""}
-                      onChange={(e) => set("gatewayId", e.target.value === "" ? null : e.target.value)}
+                      onChange={(e) =>
+                        set("gatewayId", e.target.value === "" ? null : e.target.value)
+                      }
                       helperText={tr(
                         "Tunnel through an API bridge running `termoso-bridge gateway` next to the host — for hosts without a public address.",
                       )}

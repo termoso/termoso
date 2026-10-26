@@ -50,7 +50,12 @@ function AuditSection({ teamId }: { teamId: Uuid }) {
         "Every audit entry carries a hash chained to the previous one and the server signs the head hourly. Verification walks the whole chain and reports the first broken link.",
       )}
       actions={
-        <Button variant="outlined" size="small" onClick={() => verify.mutate()} disabled={verify.isPending}>
+        <Button
+          variant="outlined"
+          size="small"
+          onClick={() => verify.mutate()}
+          disabled={verify.isPending}
+        >
           {verify.isPending ? tr("Verifying…") : tr("Verify now")}
         </Button>
       }
@@ -58,7 +63,11 @@ function AuditSection({ teamId }: { teamId: Uuid }) {
       {v && (
         <Alert severity={v.ok ? "success" : "error"} variant="outlined">
           {v.ok
-            ? trn(v.events, "{count} entry checked, chain intact.", "{count} entries checked, chain intact.")
+            ? trn(
+                v.events,
+                "{count} entry checked, chain intact.",
+                "{count} entries checked, chain intact.",
+              )
             : tr("Chain broken at entry #{id} ({reason}).", {
                 id: String(v.broken_at ?? "?"),
                 reason: v.reason ?? "?",
@@ -101,7 +110,12 @@ function ReviewsSection({ teamId }: { teamId: Uuid }) {
         "A snapshot of every member and vault access for an admin to confirm or remove. Completing the review applies the removals through the usual paths and is recorded in the audit log.",
       )}
       actions={
-        <Button variant="outlined" size="small" onClick={() => open.mutate()} disabled={open.isPending || hasOpen}>
+        <Button
+          variant="outlined"
+          size="small"
+          onClick={() => open.mutate()}
+          disabled={open.isPending || hasOpen}
+        >
           {tr("Start review")}
         </Button>
       }
@@ -169,7 +183,15 @@ function ReviewRow({ review: r, onOpen }: { review: AccessReview; onOpen: () => 
   );
 }
 
-function ReviewDialog({ teamId, reviewId, onClose }: { teamId: Uuid; reviewId: Uuid; onClose: () => void }) {
+function ReviewDialog({
+  teamId,
+  reviewId,
+  onClose,
+}: {
+  teamId: Uuid;
+  reviewId: Uuid;
+  onClose: () => void;
+}) {
   const qc = useQueryClient();
   const snackbar = useSnackbar();
   const key = ["team", teamId, "access-review", reviewId];
@@ -209,7 +231,12 @@ function ReviewDialog({ teamId, reviewId, onClose }: { teamId: Uuid; reviewId: U
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography variant="body2" noWrap>
                   {i.display_name ?? i.email ?? i.user_id}
-                  <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                  <Typography
+                    component="span"
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ ml: 1 }}
+                  >
                     {i.kind === "member"
                       ? tr("team · {role}", { role: i.role })
                       : tr("{vault} · {role}", { vault: i.vault_name ?? "?", role: i.role })}
@@ -253,7 +280,11 @@ function ReviewDialog({ teamId, reviewId, onClose }: { teamId: Uuid; reviewId: U
         <Box sx={{ flex: 1 }} />
         <Button onClick={onClose}>{tr("Close")}</Button>
         {isOpen && (
-          <Button variant="contained" onClick={() => setConfirm(true)} disabled={complete.isPending}>
+          <Button
+            variant="contained"
+            onClick={() => setConfirm(true)}
+            disabled={complete.isPending}
+          >
             {tr("Complete")}
           </Button>
         )}
@@ -334,13 +365,24 @@ function BreakGlassSection({ teamId }: { teamId: Uuid }) {
       ) : b ? (
         <Stack spacing={1}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-            <Chip size="small" label={b.status} color={b.status === "active" ? "warning" : "default"} />
+            <Chip
+              size="small"
+              label={b.status}
+              color={b.status === "active" ? "warning" : "default"}
+            />
             <Typography variant="body2" sx={{ flex: 1 }}>
               {b.email ?? b.user_id} · {trn(b.duration_hours, "{count} hour", "{count} hours")}
-              {b.status === "active" && b.expires_at && ` · ${tr("until {date}", { date: when(b.expires_at) })}`}
+              {b.status === "active" &&
+                b.expires_at &&
+                ` · ${tr("until {date}", { date: when(b.expires_at) })}`}
             </Typography>
             {b.status === "active" ? (
-              <Button size="small" color="warning" onClick={() => end.mutate()} disabled={end.isPending}>
+              <Button
+                size="small"
+                color="warning"
+                onClick={() => end.mutate()}
+                disabled={end.isPending}
+              >
                 {tr("End now")}
               </Button>
             ) : (
@@ -348,7 +390,12 @@ function BreakGlassSection({ teamId }: { teamId: Uuid }) {
                 {tr("Use")}
               </Button>
             )}
-            <Button size="small" color="error" onClick={() => remove.mutate()} disabled={remove.isPending}>
+            <Button
+              size="small"
+              color="error"
+              onClick={() => remove.mutate()}
+              disabled={remove.isPending}
+            >
               {tr("Remove")}
             </Button>
           </Box>
@@ -377,7 +424,12 @@ function BreakGlassSection({ teamId }: { teamId: Uuid }) {
             onChange={(e) => setHours(Math.max(1, Math.min(72, Number(e.target.value) || 1)))}
             sx={{ width: 100 }}
           />
-          <Button variant="contained" size="small" disabled={!userId || configure.isPending} onClick={() => configure.mutate()}>
+          <Button
+            variant="contained"
+            size="small"
+            disabled={!userId || configure.isPending}
+            onClick={() => configure.mutate()}
+          >
             {tr("Arm")}
           </Button>
         </Box>
@@ -386,7 +438,9 @@ function BreakGlassSection({ teamId }: { teamId: Uuid }) {
         <DialogTitle>{tr("Break-glass secret")}</DialogTitle>
         <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
           <Alert severity="warning" variant="outlined">
-            {tr("Shown once. Store it offline (a sealed envelope, a safe) — the server keeps only a hash.")}
+            {tr(
+              "Shown once. Store it offline (a sealed envelope, a safe) — the server keeps only a hash.",
+            )}
           </Alert>
           <Mono sx={{ fontSize: 14, wordBreak: "break-all", userSelect: "all" }}>{secret}</Mono>
         </DialogContent>

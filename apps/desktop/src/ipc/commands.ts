@@ -911,7 +911,11 @@ export const teamAccessReviewDecide = (
     req: { decision, note },
   });
 export const teamAccessReviewComplete = (teamId: Uuid, reviewId: Uuid, undecided: "keep" | null) =>
-  invoke<AccessReviewDetail>("team_access_review_complete", { teamId, reviewId, req: { undecided } });
+  invoke<AccessReviewDetail>("team_access_review_complete", {
+    teamId,
+    reviewId,
+    req: { undecided },
+  });
 export const teamAccessReviewCancel = (teamId: Uuid, reviewId: Uuid) =>
   invoke<AccessReview>("team_access_review_cancel", { teamId, reviewId });
 export const teamBreakGlass = (teamId: Uuid) =>
@@ -925,7 +929,8 @@ export const teamBreakGlassDelete = (teamId: Uuid) =>
   invoke<null>("team_break_glass_delete", { teamId });
 export const teamBreakGlassUse = (teamId: Uuid, secret: string, reason: string) =>
   invoke<BreakGlass>("team_break_glass_use", { teamId, req: { secret, reason } });
-export const teamBreakGlassEnd = (teamId: Uuid) => invoke<BreakGlass>("team_break_glass_end", { teamId });
+export const teamBreakGlassEnd = (teamId: Uuid) =>
+  invoke<BreakGlass>("team_break_glass_end", { teamId });
 export const teamAuditVerify = (teamId: Uuid) =>
   invoke<AuditVerification>("team_audit_verify", { teamId });
 export const teamCaLocal = (teamId: Uuid) =>
