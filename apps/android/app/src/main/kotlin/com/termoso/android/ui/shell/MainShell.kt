@@ -202,6 +202,7 @@ fun MainShell(
     onLock: () -> Unit,
 ) {
     val shell: ShellViewModel = viewModel { ShellViewModel(repo, sessions, sftp, forwards, presence, ai) }
+    val workspaces = sessions.workspaces
     LaunchedEffect(shell) { account.personalVaultsHidden.collect { shell.hidePersonalVaults.value = it } }
     val nav = rememberNavController()
     val scope = rememberCoroutineScope()

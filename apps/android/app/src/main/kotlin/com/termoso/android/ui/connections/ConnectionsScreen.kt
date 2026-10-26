@@ -3,6 +3,9 @@ package com.termoso.android.ui.connections
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import kotlinx.coroutines.flow.MutableStateFlow
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -226,6 +229,57 @@ fun ConnectionsScreen(
                     }
                 },
             )
+
+            val workspaces = shell.sessions.workspaces
+            val previous by (workspaces?.previous ?: MutableStateFlow(null)).collectAsStateWithLifecycle()
+            val templates by (workspaces?.templates ?: MutableStateFlow(emptyList())).collectAsStateWithLifecycle()
+            if (previous != null && sessions.isEmpty()) {
+                SectionLabel(stringResource(R.string.previous_session))
+                SectionCard {
+                    ChevronRow(
+                        title = pluralStringResource(R.plurals.restore_n_tabs, previous!!.targets.size, previous!!.targets.size),
+                        subtitle = stringResource(R.string.previous_session_subtitle),
+                        leading = { IconTile(Icons.Filled.History) },
+                        modifier = Modifier.clickable {
+                            val targets = previous!!.targets
+                            workspaces?.dismissPrevious()
+                            scope.launch { if (shell.openWorkspace(targets) > 0) onOpenTerminal() }
+                        },
+                    )
+                    RowDivider()
+                    ChevronRow(
+                        title = stringResource(R.string.dismiss),
+                        leading = { IconTile(Icons.Filled.Close) },
+                        modifier = Modifier.clickable { workspaces?.dismissPrevious() },
+                    )
+                }
+            }
+            if (templates.isNotEmpty()) {
+                SectionLabel(stringResource(R.string.workspaces))
+                SectionCard {
+                    templates.forEachIndexed { i, ws ->
+                        if (i > 0) RowDivider()
+                        var menu by remember(ws.id) { mutableStateOf(false) }
+                        Box {
+                            ChevronRow(
+                                title = ws.name,
+                                subtitle = pluralStringResource(R.plurals.n_tabs, ws.targets.size, ws.targets.size),
+                                leading = { IconTile(Icons.Filled.Dashboard) },
+                                modifier = Modifier.combinedClickable(
+                                    onClick = { scope.launch { if (shell.openWorkspace(ws.targets) > 0) onOpenTerminal() } },
+                                    onLongClick = { menu = true },
+                                ),
+                            )
+                            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                                MenuItem(Icons.Filled.Delete, stringResource(R.string.delete), destructive = true) {
+                                    menu = false
+                                    workspaces?.delete(ws.id)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
 
             if (sessions.isNotEmpty() || sftp.isNotEmpty()) {
                 SectionLabel(if (open == 1) stringResource(R.string.active_session) else stringResource(R.string.active_sessions, open))

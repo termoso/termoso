@@ -1653,4 +1653,17 @@
     <string name="import_hosts">Import hosts</string>
     <string name="import_hosts_hint">Paste an ssh_config or user@host:port lines, scan a QR code, or pick a file: ssh_config, PuTTY .reg export, MobaXterm bookmarks, SecureCRT settings, ZOC host directory, CSV. The format is detected automatically.</string>
     <string name="import_detected_format">Detected: %1$s</string>
+    <string name="workspaces">Workspaces</string>
+    <string name="save_as_workspace">Save tabs as workspace</string>
+    <string name="workspace_saved">Workspace “%1$s” saved</string>
+    <string name="workspace_nothing_to_save">Nothing to save: no reopenable tabs</string>
+    <string name="previous_session_subtitle">Tabs open when the app last ran</string>
+    <plurals name="restore_n_tabs">
+        <item quantity="one">Restore %1$d tab</item>
+        <item quantity="other">Restore %1$d tabs</item>
+    </plurals>
+    <plurals name="n_tabs">
+        <item quantity="one">%1$d tab</item>
+        <item quantity="other">%1$d tabs</item>
+    </plurals>
 </resources>

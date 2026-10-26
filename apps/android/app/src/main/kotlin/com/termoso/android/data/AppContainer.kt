@@ -55,6 +55,7 @@ class AppContainer(context: Context) {
     val linux = LinuxManager(appContext)
     val masterKeys = MasterKeyStore(context)
     val appPin = AppPin(context)
+    val workspaces = Workspaces(appContext)
 
     /** FIDO2 tokens on USB/NFC; process-wide, started on first use by the UI. */
     val fido2 = Fido2Manager(appContext)
@@ -274,7 +275,7 @@ class AppContainer(context: Context) {
             }
             VaultRepository(app)
         }.also {
-            val sessions = SessionManager(appContext, it, localHome, linux)
+            val sessions = SessionManager(appContext, it, localHome, linux, workspaces)
             val sftp = SftpManager(appContext, it, localHome, linux)
             val forwards = ForwardManager(it)
             reportPosture(appContext, it.app)

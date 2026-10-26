@@ -1687,4 +1687,21 @@
     <string name="import_hosts">Импорт хостов</string>
     <string name="import_hosts_hint">Вставьте ssh_config или строки user@host:port, отсканируйте QR или выберите файл: ssh_config, экспорт реестра PuTTY (.reg), закладки MobaXterm, настройки SecureCRT, каталог хостов ZOC, CSV. Формат определяется автоматически.</string>
     <string name="import_detected_format">Распознано: %1$s</string>
+    <string name="workspaces">Рабочие пространства</string>
+    <string name="save_as_workspace">Сохранить вкладки как пространство</string>
+    <string name="workspace_saved">Пространство «%1$s» сохранено</string>
+    <string name="workspace_nothing_to_save">Нечего сохранять: нет вкладок, которые можно открыть заново</string>
+    <string name="previous_session_subtitle">Вкладки, открытые при прошлом запуске</string>
+    <plurals name="restore_n_tabs">
+        <item quantity="one">Восстановить %1$d вкладку</item>
+        <item quantity="few">Восстановить %1$d вкладки</item>
+        <item quantity="many">Восстановить %1$d вкладок</item>
+        <item quantity="other">Восстановить %1$d вкладок</item>
+    </plurals>
+    <plurals name="n_tabs">
+        <item quantity="one">%1$d вкладка</item>
+        <item quantity="few">%1$d вкладки</item>
+        <item quantity="many">%1$d вкладок</item>
+        <item quantity="other">%1$d вкладок</item>
+    </plurals>
 </resources>

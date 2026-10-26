@@ -251,6 +251,8 @@ class SessionManager(
     private val localHome: File,
     /** The optional Linux userland the default local shell runs in. */
     val linux: LinuxManager,
+    /** Saved workspaces; told about every change so the last session can be restored. */
+    val workspaces: Workspaces? = null,
 ) {
     private val _sessions = MutableStateFlow<List<TerminalSession>>(emptyList())
     val sessions: StateFlow<List<TerminalSession>> = _sessions.asStateFlow()
@@ -529,7 +531,23 @@ class SessionManager(
     private fun register(session: TerminalSession): TerminalSession {
         _sessions.update { it + session }
         _activeId.value = session.id
+        workspaces?.record(_sessions.value)
         return session
+    }
+
+    /** Open every target of a workspace (or the previous session); failures are reported, not fatal. */
+    suspend fun openWorkspace(targets: List<WorkspaceTarget>, onError: (Throwable) -> Unit): Int {
+        var opened = 0
+        for (t in targets) {
+            runCatching {
+                when (t) {
+                    is WorkspaceTarget.Host -> connectHost(t.hostId, t.vaultId, t.transport)
+                    is WorkspaceTarget.Quick -> connectQuick(t.target)
+                    is WorkspaceTarget.Local -> connectLocal(t.shell, t.title)
+                }
+            }.onSuccess { opened++ }.onFailure(onError)
+        }
+        return opened
     }
 
     /** Disconnect and drop the tab. */
@@ -537,6 +555,7 @@ class SessionManager(
         val session = find(id) ?: return
         _sessions.update { list -> list.filterNot { it.id == id } }
         if (_activeId.value == id) _activeId.value = _sessions.value.lastOrNull()?.id
+        workspaces?.record(_sessions.value)
         withContext(Dispatchers.IO) { runCatching { session.rust.disconnect() } }
     }
 
@@ -547,6 +566,7 @@ class SessionManager(
         if (closing.isEmpty()) return
         _sessions.update { list -> list.filterNot { it.id in wanted } }
         if (_activeId.value in wanted) _activeId.value = _sessions.value.lastOrNull()?.id
+        workspaces?.record(_sessions.value)
         withContext(Dispatchers.IO) { closing.forEach { runCatching { it.rust.disconnect() } } }
     }
 
@@ -557,6 +577,7 @@ class SessionManager(
         val list = _sessions.value
         _sessions.value = emptyList()
         _activeId.value = null
+        workspaces?.record(emptyList())
         withContext(Dispatchers.IO) { list.forEach { runCatching { it.rust.disconnect() } } }
     }
 }

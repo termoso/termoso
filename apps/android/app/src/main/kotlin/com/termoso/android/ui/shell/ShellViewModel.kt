@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.termoso.android.R
 import com.termoso.android.data.AiManager
 import com.termoso.android.data.SessionManager
+import com.termoso.android.data.Workspace
+import com.termoso.android.data.WorkspaceTarget
 import com.termoso.android.data.ForwardManager
 import com.termoso.android.data.PresenceManager
 import com.termoso.android.data.SftpConnection
@@ -127,6 +129,17 @@ class ShellViewModel(
         runCatching { sessions.duplicate(id) }
             .onFailure { notify(it.userMessage()) }
             .getOrNull()
+
+    /** Reopen every tab of a saved workspace or the previous session; returns how many opened. */
+    suspend fun openWorkspace(targets: List<WorkspaceTarget>): Int =
+        sessions.openWorkspace(targets) { notify(it.userMessage()) }
+
+    /** Save the open tabs under [name]; null when nothing is worth saving. */
+    fun saveWorkspace(name: String): Workspace? {
+        val ws = sessions.workspaces?.save(name, sessions.sessions.value)
+        if (ws == null) notify(str(R.string.workspace_nothing_to_save)) else notify(str(R.string.workspace_saved, ws.name))
+        return ws
+    }
 
     /** A shell on this device. */
     suspend fun connectLocal(): TerminalSession? =
