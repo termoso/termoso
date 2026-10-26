@@ -3016,6 +3016,8 @@ export const ru: Readonly<Record<string, string>> = {
   "{n} finished": "{n} завершено",
   "{n} paused": "{n} на паузе",
   "{n} queued": "{n} в очереди",
+  "{count} existing hosts were completed with missing details.":
+    "{count} существующий хост дополнен недостающими данными.|{count} существующих хоста дополнены недостающими данными.|{count} существующих хостов дополнены недостающими данными.",
   "{what} already existed and were reused.":
     "{what} уже существовали и были использованы повторно.",
   "{who} removed from {team}": "{who} удалён из {team}",

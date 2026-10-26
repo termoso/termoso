@@ -89,6 +89,15 @@ const count = (p: ImportPreview, s: Section) => p[s].length;
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
+function updatedSummary(r: ImportApplyReport) {
+  if (r.updatedHosts === 0) return null;
+  return trn(
+    r.updatedHosts,
+    "{count} existing host was completed with missing details.",
+    "{count} existing hosts were completed with missing details.",
+  );
+}
+
 function skippedSummary(r: ImportApplyReport) {
   const parts = [
     r.skippedHosts > 0 && plural(r.skippedHosts, "host"),
@@ -550,6 +559,11 @@ function Body({
                   vault: step.vaultName,
                 })}
               </Typography>
+              {updatedSummary(r) && (
+                <Typography variant="body2" color="text.secondary">
+                  {updatedSummary(r)}
+                </Typography>
+              )}
               <Typography variant="body2" color="text.secondary">
                 {skippedSummary(r)}
               </Typography>
