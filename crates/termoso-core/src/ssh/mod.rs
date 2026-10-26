@@ -124,6 +124,8 @@ pub struct ConnectOptions {
     pub timeout: Duration,
     /// Optional proxy for the TCP leg.
     pub proxy: Option<proxy::ProxyConfig>,
+    /// Tunnel through a gateway instead of dialling (takes precedence over `proxy`).
+    pub gateway: Option<crate::gateway::GatewayDial>,
     /// Environment to request on every shell (`SetEnv`).
     pub env: Vec<(String, String)>,
     /// Request agent forwarding on shells.
@@ -210,6 +212,7 @@ impl ConnectOptions {
             keepalive: Some(Duration::from_secs(30)),
             timeout: Duration::from_secs(20),
             proxy: None,
+            gateway: None,
             env: Vec::new(),
             agent_forwarding: false,
             x11: None,
@@ -335,6 +338,14 @@ impl SshClient {
             )));
         }
         let stream = tokio::time::timeout(opts.timeout, async {
+            if let Some(g) = &opts.gateway {
+                opts.report(ConnectPhase::Connecting {
+                    via: format!("gateway {}", g.gateway_id),
+                });
+                return crate::gateway::dial(g)
+                    .await
+                    .map(|s| proxy::ProxyStream::Ws(Box::new(s)));
+            }
             match &opts.proxy {
                 Some(p) => {
                     opts.report(ConnectPhase::Connecting {

@@ -36,7 +36,7 @@ use tower_http::trace::TraceLayer;
 
 use crate::bridge::Bridge;
 use crate::error::{BridgeError, Result};
-use crate::model::{GroupRequest, HostRequest};
+use crate::model::{GroupRequest, HostRequest, IdentityRequest, KeyRequest, SnippetRequest};
 
 const MAX_BODY: usize = 256 * 1024;
 
@@ -131,6 +131,30 @@ pub fn router(bridge: Arc<Bridge>, cfg: RestConfig) -> Router {
             .put(put_group)
             .delete(delete_group),
     );
+    v1 = both(v1, "/v1/snippets", get(list_snippets));
+    v1 = both(
+        v1,
+        "/v1/snippet/{external_id}",
+        get(get_snippet)
+            .post(put_snippet)
+            .put(put_snippet)
+            .delete(delete_snippet),
+    );
+    v1 = both(v1, "/v1/identities", get(list_identities));
+    v1 = both(
+        v1,
+        "/v1/identity/{external_id}",
+        get(get_identity)
+            .post(put_identity)
+            .put(put_identity)
+            .delete(delete_identity),
+    );
+    v1 = both(v1, "/v1/keys", get(list_keys));
+    v1 = both(
+        v1,
+        "/v1/key/{external_id}",
+        get(get_key).post(put_key).put(put_key).delete(delete_key),
+    );
     // Outermost first: unauthenticated hammering burns the budget too.
     let v1 = v1
         .layer(middleware::from_fn_with_state(app.clone(), require_key))
@@ -189,6 +213,143 @@ fn presented(headers: &HeaderMap, key: &str) -> bool {
         .into_iter()
         .flatten()
         .any(|p| p.as_bytes().ct_eq(key.as_bytes()).into())
+}
+
+async fn list_snippets(State(app): State<App>, Query(q): Query<VaultQuery>) -> Result<Response> {
+    Ok(Json(app.bridge.list_snippets(q.vault.as_deref()).await?).into_response())
+}
+
+async fn get_snippet(
+    State(app): State<App>,
+    Path(external_id): Path<String>,
+    Query(q): Query<VaultQuery>,
+) -> Result<Response> {
+    match app
+        .bridge
+        .get_snippet(&external_id, q.vault.as_deref())
+        .await?
+    {
+        Some(x) => Ok(Json(x).into_response()),
+        None => Err(BridgeError::NotFound(format!(
+            "snippet '{external_id}' not found"
+        ))),
+    }
+}
+
+async fn put_snippet(
+    State(app): State<App>,
+    Path(external_id): Path<String>,
+    Body(req): Body<SnippetRequest>,
+) -> Result<Response> {
+    Ok(Json(app.bridge.upsert_snippet(&external_id, req).await?).into_response())
+}
+
+async fn delete_snippet(
+    State(app): State<App>,
+    Path(external_id): Path<String>,
+    Query(q): Query<VaultQuery>,
+) -> Result<Response> {
+    if app
+        .bridge
+        .delete_snippet(&external_id, q.vault.as_deref())
+        .await?
+    {
+        Ok(StatusCode::NO_CONTENT.into_response())
+    } else {
+        Err(BridgeError::NotFound(format!(
+            "snippet '{external_id}' not found"
+        )))
+    }
+}
+
+async fn list_identities(State(app): State<App>, Query(q): Query<VaultQuery>) -> Result<Response> {
+    Ok(Json(app.bridge.list_identities(q.vault.as_deref()).await?).into_response())
+}
+
+async fn get_identity(
+    State(app): State<App>,
+    Path(external_id): Path<String>,
+    Query(q): Query<VaultQuery>,
+) -> Result<Response> {
+    match app
+        .bridge
+        .get_identity(&external_id, q.vault.as_deref())
+        .await?
+    {
+        Some(x) => Ok(Json(x).into_response()),
+        None => Err(BridgeError::NotFound(format!(
+            "identity '{external_id}' not found"
+        ))),
+    }
+}
+
+async fn put_identity(
+    State(app): State<App>,
+    Path(external_id): Path<String>,
+    Body(req): Body<IdentityRequest>,
+) -> Result<Response> {
+    Ok(Json(app.bridge.upsert_identity(&external_id, req).await?).into_response())
+}
+
+async fn delete_identity(
+    State(app): State<App>,
+    Path(external_id): Path<String>,
+    Query(q): Query<VaultQuery>,
+) -> Result<Response> {
+    if app
+        .bridge
+        .delete_identity(&external_id, q.vault.as_deref())
+        .await?
+    {
+        Ok(StatusCode::NO_CONTENT.into_response())
+    } else {
+        Err(BridgeError::NotFound(format!(
+            "identity '{external_id}' not found"
+        )))
+    }
+}
+
+async fn list_keys(State(app): State<App>, Query(q): Query<VaultQuery>) -> Result<Response> {
+    Ok(Json(app.bridge.list_keys(q.vault.as_deref()).await?).into_response())
+}
+
+async fn get_key(
+    State(app): State<App>,
+    Path(external_id): Path<String>,
+    Query(q): Query<VaultQuery>,
+) -> Result<Response> {
+    match app.bridge.get_key(&external_id, q.vault.as_deref()).await? {
+        Some(x) => Ok(Json(x).into_response()),
+        None => Err(BridgeError::NotFound(format!(
+            "key '{external_id}' not found"
+        ))),
+    }
+}
+
+async fn put_key(
+    State(app): State<App>,
+    Path(external_id): Path<String>,
+    Body(req): Body<KeyRequest>,
+) -> Result<Response> {
+    Ok(Json(app.bridge.upsert_key(&external_id, req).await?).into_response())
+}
+
+async fn delete_key(
+    State(app): State<App>,
+    Path(external_id): Path<String>,
+    Query(q): Query<VaultQuery>,
+) -> Result<Response> {
+    if app
+        .bridge
+        .delete_key(&external_id, q.vault.as_deref())
+        .await?
+    {
+        Ok(StatusCode::NO_CONTENT.into_response())
+    } else {
+        Err(BridgeError::NotFound(format!(
+            "key '{external_id}' not found"
+        )))
+    }
 }
 
 #[derive(Deserialize, Default)]

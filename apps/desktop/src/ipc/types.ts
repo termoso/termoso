@@ -65,6 +65,19 @@ export const TERM_TYPES = [
 export type TermType = (typeof TERM_TYPES)[number];
 export type SyncConflict = "newest_wins" | "local_wins" | "server_wins";
 
+/** A regex watched on terminal output with what to do on a match. */
+export interface Trigger {
+  id: Uuid;
+  name: string;
+  /** JavaScript regex source, tested against ANSI-stripped output. */
+  pattern: string;
+  enabled: boolean;
+  notify: boolean;
+  highlight: boolean;
+  /** Typed into the session on a match (`\n` = Enter). */
+  reply?: string | null;
+}
+
 export interface Settings {
   theme: ThemeMode;
   /** UI language; `system` follows the OS locale. */
@@ -88,6 +101,8 @@ export interface Settings {
   autocomplete: boolean;
   /** Install OSC 133 prompt markers into bash / zsh / fish after connecting. */
   shellIntegration: boolean;
+  /** Output triggers: regexes watched on every terminal. */
+  triggers: Trigger[];
   /** Command a workspace pane was running when saved: put on the prompt, run, or dropped. */
   restoreCommands: RestoreCommands;
   terminalBell: boolean;
@@ -108,6 +123,8 @@ export interface Settings {
   serveSshAgent: boolean;
   /** Confirm every signature the agent makes. */
   agentConfirm: boolean;
+  /** Claim and execute team automations on this computer. */
+  runAutomations: boolean;
   recordSessions: boolean;
   logRetentionDays: number;
   /** Relock a password-protected vault after this many idle minutes; 0 = never. */
@@ -229,7 +246,27 @@ export interface TeamPolicies {
   password_max_age_days: number;
   ip_allowlist: string[];
   device_admin_approval: boolean;
+  /** `keys_only` = no password / keyboard-interactive auth for team hosts (client-enforced). */
+  auth: "any" | "keys_only";
+  /** Team hosts must be reached through a jump host (client-enforced). */
+  jump_host_required: boolean;
+  /** `deny` = no local export/backup of team vault data (client-enforced). */
+  export: "allow" | "deny";
+  /** Remote ports members may forward from team hosts (`22`, `8000-8999`); empty = any. */
+  forward_ports: string[];
+  /** Sign-in requires the device to prove disk encryption / a screen lock / a hardware-backed key. */
+  posture_disk_encryption: boolean;
+  posture_screen_lock: boolean;
+  posture_secure_key: boolean;
   updated_at: string;
+}
+
+/** What a client reported about its own device; `null` facts could not be determined. */
+export interface Posture {
+  os_version: string;
+  disk_encryption?: boolean | null;
+  screen_lock?: boolean | null;
+  secure_key_storage?: boolean | null;
 }
 
 /** One open connection of a device to a team-vault host (routing metadata only). */
@@ -434,6 +471,10 @@ export interface HostForm {
   startupSnippetId: Uuid | null;
   hostChainId: Uuid | null;
   proxyId: Uuid | null;
+  /** Gateway (API bridge in `termoso-bridge gateway` mode) to tunnel through; null = direct. */
+  gatewayId: Uuid | null;
+  /** MAC address for Wake-on-LAN; null = unknown. */
+  macAddress: string | null;
   /** Telnet section, when the host is also (or only) reachable over Telnet. */
   telnet: TelnetForm | null;
   /** WebDAV section: a file share browsed from Files, next to or instead of SSH. */
@@ -679,6 +720,8 @@ export function emptyHostForm(vaultId: Uuid, groupId: Uuid | null): HostForm {
     startupSnippetId: null,
     hostChainId: null,
     proxyId: null,
+    gatewayId: null,
+    macAddress: null,
     telnet: null,
     webdav: null,
     envVariables: [],
@@ -1513,6 +1556,80 @@ export interface QuietProgress {
 
 // ───────────────────────────── export / backup ─────────────────────────────
 
+/** A bridge in `gateway` mode the account can tunnel through (`GET /gateways`). */
+export interface GatewayInfo {
+  id: Uuid;
+  name: string;
+  online: boolean;
+  seen_at?: string | null;
+  vault_ids: Uuid[];
+}
+
+export interface AccessReviewItem {
+  id: Uuid;
+  kind: string;
+  user_id: Uuid;
+  email?: string | null;
+  display_name?: string | null;
+  vault_id?: Uuid | null;
+  vault_name?: string | null;
+  role: string;
+  last_seen_at?: string | null;
+  decision?: "keep" | "remove" | null;
+  decided_by?: Uuid | null;
+  decided_at?: string | null;
+  note?: string | null;
+}
+
+export interface AccessReview {
+  id: Uuid;
+  team_id: Uuid;
+  status: string;
+  opened_by?: Uuid | null;
+  opened_at: string;
+  due_at: string;
+  closed_by?: Uuid | null;
+  closed_at?: string | null;
+  items: number;
+  decided: number;
+  kept: number;
+  removed: number;
+}
+
+export interface AccessReviewList {
+  reviews: AccessReview[];
+}
+
+export interface AccessReviewDetail {
+  review: AccessReview;
+  items: AccessReviewItem[];
+}
+
+export interface BreakGlass {
+  user_id: Uuid;
+  email?: string | null;
+  duration_hours: number;
+  created_by?: Uuid | null;
+  created_at: string;
+  status: string;
+  used_at?: string | null;
+  expires_at?: string | null;
+  attempts: number;
+  /** Only in the response to configuring: the one-time secret. */
+  secret?: string | null;
+}
+
+export interface AuditVerification {
+  ok: boolean;
+  events: number;
+  first_id?: number | null;
+  last_id?: number | null;
+  head_hash?: string | null;
+  broken_at?: number | null;
+  reason?: string | null;
+  checkpoint_ok?: boolean | null;
+}
+
 export interface CsvExportReport {
   hosts: number;
   /** True when the file contains plaintext passwords. */
@@ -1729,6 +1846,8 @@ export interface Device {
   last_seen_at: string;
   last_ip?: string | null;
   current: boolean;
+  posture?: Posture | null;
+  posture_at?: string | null;
 }
 
 export interface SsoProvider {
@@ -2037,7 +2156,7 @@ export interface Listing {
 }
 
 export type SftpTarget =
-  | { kind: "host"; host_id: Uuid; vault_id?: Uuid | null }
+  | { kind: "host"; host_id: Uuid; vault_id?: Uuid | null; sudo_password?: string | null }
   | { kind: "session"; session_id: Uuid }
   | { kind: "webdav"; host_id: Uuid; vault_id?: Uuid | null };
 
@@ -2354,6 +2473,77 @@ export interface TeamDeviceList {
   devices: TeamDevice[];
 }
 
+// ───────────────────────────── team SSH CA ─────────────────────────────
+
+export interface TeamCa {
+  team_id: Uuid;
+  key_type: string;
+  public_key: string;
+  fingerprint: string;
+  principals: string[];
+  ttl_hours: number;
+  extensions: string[];
+  enabled: boolean;
+  retired_public_key?: string | null;
+  retired_until?: string | null;
+  trusted_keys_url: string;
+  active_certificates: number;
+  created_at: string;
+  rotated_at?: string | null;
+  updated_at: string;
+}
+
+export interface UpdateTeamCaRequest {
+  principals?: string[] | null;
+  ttl_hours?: number | null;
+  extensions?: string[] | null;
+  enabled?: boolean | null;
+}
+
+export interface IssuedCertificate {
+  id: Uuid;
+  team_id: Uuid;
+  user_id: Uuid;
+  user_email: string;
+  device_id?: Uuid | null;
+  device_name?: string | null;
+  serial: number;
+  key_type: SshIdKeyType;
+  key_fingerprint: string;
+  key_id: string;
+  principals: string[];
+  valid_after: string;
+  valid_before: string;
+  revoked_at?: string | null;
+  active: boolean;
+  current_device: boolean;
+  created_at: string;
+}
+
+export interface IssuedCertificateList {
+  certificates: IssuedCertificate[];
+}
+
+/** This device's cached certificate for a team (termoso_core::ca::CachedCert). */
+export interface LocalTeamCertificate {
+  team_id: Uuid;
+  certificate?: string | null;
+  ca_public_key?: string | null;
+  principals?: string[] | null;
+  valid_after?: string | null;
+  valid_before?: string | null;
+  checked_at: string;
+  refusal?: "no_ca" | "disabled" | "forbidden" | "error" | null;
+}
+
+export const CA_EXTENSIONS = [
+  "permit-pty",
+  "permit-port-forwarding",
+  "permit-agent-forwarding",
+  "permit-X11-forwarding",
+  "permit-user-rc",
+] as const;
+
 export interface RotationDue {
   entity_id: Uuid;
   vault_id: Uuid;
@@ -2478,4 +2668,116 @@ export interface AgentServerStatus {
   exportHint: string | null;
   keys: AgentServedKey[];
   skipped: AgentSkippedKey[];
+}
+
+// ---- team automations ----------------------------------------------------
+
+export const AUTOMATION_ALERT_ON = ["never", "failure", "always"] as const;
+export type AutomationAlertOn = (typeof AUTOMATION_ALERT_ON)[number];
+export const AUTOMATION_TIMEOUT_MIN = 10;
+export const AUTOMATION_TIMEOUT_MAX = 3600;
+export const AUTOMATION_HOSTS_MAX = 200;
+
+export interface Automation {
+  id: Uuid;
+  team_id: Uuid;
+  vault_id: Uuid;
+  snippet_id: Uuid;
+  name: string;
+  host_ids: Uuid[];
+  group_id: Uuid | null;
+  schedule: string;
+  timezone: string;
+  enabled: boolean;
+  timeout_secs: number;
+  alert_on: AutomationAlertOn;
+  alert_emails: string[];
+  alert_admins: boolean;
+  last_run_at: string | null;
+  last_status: string | null;
+  next_run_at: string | null;
+  created_by: Uuid | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateAutomationRequest {
+  vault_id: Uuid;
+  snippet_id: Uuid;
+  name: string;
+  host_ids: Uuid[];
+  group_id?: Uuid | null;
+  schedule: string;
+  timezone?: string | null;
+  enabled?: boolean | null;
+  timeout_secs?: number | null;
+  alert_on?: AutomationAlertOn | null;
+  alert_emails: string[];
+  alert_admins?: boolean | null;
+}
+
+export interface UpdateAutomationRequest {
+  snippet_id?: Uuid | null;
+  name?: string | null;
+  host_ids?: Uuid[] | null;
+  /** `null` leaves the group alone; `[null]`-style clearing is not needed: pass `group_id: null` inside an object to clear. */
+  group_id?: Uuid | null;
+  schedule?: string | null;
+  timezone?: string | null;
+  enabled?: boolean | null;
+  timeout_secs?: number | null;
+  alert_on?: AutomationAlertOn | null;
+  alert_emails?: string[] | null;
+  alert_admins?: boolean | null;
+}
+
+export interface AutomationList {
+  automations: Automation[];
+}
+
+export interface HostRunResult {
+  host_id: Uuid;
+  label: string;
+  target: string;
+  exit_code: number | null;
+  stdout: string;
+  stderr: string;
+  error: string | null;
+  ms: number;
+}
+
+export type AutomationRunStatus =
+  "pending" | "running" | "done" | "failed" | "missed" | "cancelled";
+
+export interface HostOutcome {
+  host_id: Uuid;
+  ok: boolean;
+}
+
+export interface AutomationRun {
+  id: Uuid;
+  automation_id: Uuid;
+  team_id: Uuid;
+  vault_id: Uuid;
+  status: AutomationRunStatus;
+  scheduled_for: string;
+  manual: boolean;
+  claimed_by_device: Uuid | null;
+  claimed_by_name: string | null;
+  claimed_at: string | null;
+  finished_at: string | null;
+  hosts_total: number;
+  hosts_failed: number;
+  outcomes: HostOutcome[];
+  /** Encrypted per-host results; the desktop opens them when the vault is unlocked. */
+  sealed?: string | null;
+  key_version?: number | null;
+  /** Filled in locally from `sealed`; the server never sends it. */
+  results: HostRunResult[];
+  error: string | null;
+  created_at: string;
+}
+
+export interface AutomationRunList {
+  runs: AutomationRun[];
 }

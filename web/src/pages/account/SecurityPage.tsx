@@ -24,12 +24,13 @@ import {
   Tooltip,
   Typography,
   TableContainer,
+  TablePagination,
   Divider,
 } from "@mui/material";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import KeyRoundedIcon from "@mui/icons-material/KeyRounded";
 import { QRCodeSVG } from "qrcode.react";
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   startRegistration,
   type PublicKeyCredentialCreationOptionsJSON,
@@ -513,13 +514,25 @@ function WebauthnSection({ credentials }: { credentials: WebauthnCredentialInfo[
 }
 
 function SecurityEventsSection() {
-  const events = useInfiniteQuery({
-    queryKey: queryKeys.securityEvents,
-    queryFn: ({ pageParam }) => accountApi.securityEvents(pageParam),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: (last) => (last.has_more ? last.events.at(-1)?.created_at : undefined),
+  const [limit, setLimit] = useState(10);
+  // Cursor per page: `cursors[i]` is the `before` of page i (page 0 has none).
+  const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
+  const [page, setPage] = useState(0);
+  const before = cursors[page];
+  const events = useQuery({
+    queryKey: [...queryKeys.securityEvents, before ?? "", limit],
+    queryFn: () => accountApi.securityEvents(before, limit),
+    placeholderData: (prev) => prev,
   });
-  const rows = events.data?.pages.flatMap((p) => p.events) ?? [];
+  const rows = events.data?.events ?? [];
+  const goTo = (next: number) => {
+    if (next > page) {
+      const last = rows.at(-1)?.created_at;
+      if (!last) return;
+      setCursors((c) => (c.length > next ? c : [...c, last]));
+    }
+    setPage(next);
+  };
   return (
     <Section
       title={tr("Recent activity")}
@@ -568,16 +581,27 @@ function SecurityEventsSection() {
           </Table>
         </TableContainer>
       )}
-      {events.hasNextPage && (
-        <Box sx={{ p: 2, display: "flex", justifyContent: "center" }}>
-          <Button
-            variant="text"
-            onClick={() => void events.fetchNextPage()}
-            disabled={events.isFetchingNextPage}
-          >
-            {events.isFetchingNextPage ? tr("Loading…") : tr("Show older")}
-          </Button>
-        </Box>
+      {events.data && (page > 0 || events.data.has_more || rows.length >= limit) && (
+        <TablePagination
+          component="div"
+          count={-1}
+          page={page}
+          onPageChange={(_e, p) => goTo(p)}
+          rowsPerPage={limit}
+          onRowsPerPageChange={(e) => {
+            setLimit(Number(e.target.value));
+            setCursors([undefined]);
+            setPage(0);
+          }}
+          rowsPerPageOptions={[10, 25, 50]}
+          labelDisplayedRows={({ from, to }) => `${from}–${to}`}
+          slotProps={{
+            actions: {
+              nextButton: { disabled: !events.data.has_more || events.isFetching },
+              previousButton: { disabled: page === 0 || events.isFetching },
+            },
+          }}
+        />
       )}
     </Section>
   );

@@ -66,6 +66,7 @@ pub const SAML_PROVIDER: &str = "mock-saml";
 pub const SAML_CORP_PROVIDER: &str = "mock-saml-corp";
 pub const SAML_IDP_ENTITY: &str = "https://idp.test/saml";
 pub const SAML_IDP_SSO_URL: &str = "https://idp.test/saml/sso";
+pub const SAML_IDP_SLO_URL: &str = "https://idp.test/saml/slo";
 /// Dedicated SSH ID origin (`TERMOSO_SSHID_URL`) and its `Host` value.
 pub const SSHID_URL: &str = "http://sshid.test:8443";
 pub const SSHID_HOST: &str = "sshid.test:8443";
@@ -85,6 +86,8 @@ pub struct TestServer {
     pub mailpit: Option<String>,
     pub idp: oidc::MockIdp,
     pub llm: llm::MockLlm,
+    /// The running server's state, for driving background jobs directly.
+    pub state: termoso_server::state::AppState,
 }
 
 static SERVER: tokio::sync::OnceCell<Option<TestServer>> = tokio::sync::OnceCell::const_new();
@@ -238,7 +241,11 @@ async fn boot() -> Option<TestServer> {
 
     let s3 = s3_config().await;
     let smtp = smtp_config().await;
-    let storage = s3.is_some();
+    // No object store around: keep session logs on disk (the local backend).
+    let logs_dir = s3
+        .is_none()
+        .then(|| std::env::temp_dir().join(format!("termoso-test-logs-{}", uuid::Uuid::new_v4())));
+    let storage = true;
     let mailpit = smtp.as_ref().map(|(_, api)| api.clone());
 
     let mut sso = std::collections::BTreeMap::new();
@@ -273,9 +280,10 @@ async fn boot() -> Option<TestServer> {
         SsoProviderConfig {
             name: Some("Mock SAML".into()),
             kind: SsoKindConfig::Saml,
-            saml_metadata: Some(saml_support::idp_metadata_xml(
+            saml_metadata: Some(saml_support::idp_metadata_xml_slo(
                 SAML_IDP_ENTITY,
                 SAML_IDP_SSO_URL,
+                SAML_IDP_SLO_URL,
             )),
             ..SsoProviderConfig::default()
         },
@@ -317,6 +325,7 @@ async fn boot() -> Option<TestServer> {
         android_app_links: format!("com.termoso.android.debug={}", ANDROID_DEBUG_FINGERPRINT),
         swagger_ui: true,
         s3,
+        logs_dir,
         smtp: smtp.map(|(cfg, _)| cfg),
         webhooks_allow_private: true,
         webhooks_syslog_ca: Some(syslog_ca_path()),
@@ -343,8 +352,9 @@ async fn boot() -> Option<TestServer> {
     // Each `#[tokio::test]` owns a runtime that is torn down when the test
     // ends, so the shared server (and the mock IdP) must live on their own
     // runtime/thread.
-    let (ready_tx, ready_rx) =
-        std::sync::mpsc::channel::<anyhow::Result<(oidc::MockIdp, llm::MockLlm)>>();
+    let (ready_tx, ready_rx) = std::sync::mpsc::channel::<
+        anyhow::Result<(oidc::MockIdp, llm::MockLlm, termoso_server::state::AppState)>,
+    >();
     std::thread::Builder::new()
         .name("termoso-test-server".into())
         .spawn(move || {
@@ -386,8 +396,9 @@ async fn boot() -> Option<TestServer> {
                 };
                 tokio::spawn(termoso_server::ws::run_fanout(state.clone()));
                 tokio::spawn(termoso_server::live::run_fanout(state.clone()));
-                let app = termoso_server::app(state);
-                let _ = ready_tx.send(Ok((idp, llm)));
+                tokio::spawn(termoso_server::gateway::run_fanout(state.clone()));
+                let app = termoso_server::app(state.clone());
+                let _ = ready_tx.send(Ok((idp, llm, state)));
                 axum::serve(
                     listener,
                     app.into_make_service_with_connect_info::<SocketAddr>(),
@@ -397,7 +408,7 @@ async fn boot() -> Option<TestServer> {
             });
         })
         .expect("spawn server thread");
-    let (idp, llm) = ready_rx
+    let (idp, llm, state) = ready_rx
         .recv()
         .expect("server thread died")
         .expect("server state");
@@ -411,6 +422,7 @@ async fn boot() -> Option<TestServer> {
         mailpit,
         idp,
         llm,
+        state,
     })
 }
 
@@ -428,7 +440,7 @@ fn fake_web_dir(unique: &str) -> String {
     dir.to_string_lossy().into_owned()
 }
 
-fn fake_ip() -> String {
+pub fn fake_ip() -> String {
     static N: AtomicU32 = AtomicU32::new(1);
     let n = N.fetch_add(1, Ordering::Relaxed);
     format!("10.{}.{}.{}", (n >> 16) & 255, (n >> 8) & 255, n & 255)
@@ -628,6 +640,14 @@ impl User {
 impl TestServer {
     /// Run one statement against the test database (time travel for tests
     /// that would otherwise wait minutes or hours).
+    /// One pass of the automations scheduler (due slots → pending runs,
+    /// stale pending → missed).
+    pub async fn tick_automations(&self) {
+        termoso_server::routes::automations::tick(&self.state)
+            .await
+            .expect("automations tick");
+    }
+
     pub async fn sql(&self, statement: &str, bind: &str) {
         let mut conn = PgConnection::connect(&self.database_url)
             .await
@@ -725,6 +745,7 @@ pub fn device(name: &str) -> DeviceInfo {
         platform: Platform::Linux,
         app_version: "test".into(),
         client_device_id: Some(Uuid::new_v4()),
+        posture: None,
     }
 }
 

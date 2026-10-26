@@ -4,6 +4,7 @@
 mod account;
 mod agent_server;
 mod ai;
+mod automations;
 mod avatars;
 mod backup;
 mod cli;
@@ -126,7 +127,14 @@ pub fn run() {
             #[cfg(windows)]
             std::thread::spawn(quick::install_jump_list);
             let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async {
+                // Hardware-backed device keys are not implemented on desktop yet: say so.
+                let posture = termoso_core::posture::collect(Some(false)).await;
+                tracing::debug!(?posture, "device posture");
+                termoso_core::posture::set_reported(posture);
+            });
             tauri::async_runtime::spawn(security::inactivity_watcher(handle.clone()));
+            tauri::async_runtime::spawn(automations::executor(handle.clone()));
             if !locked {
                 tauri::async_runtime::spawn(startup(handle));
             }
@@ -318,6 +326,9 @@ pub fn run() {
             commands_tools::mdns_browse,
             commands_tools::tailnet_scan,
             commands_tools::hosts_export_csv,
+            commands_tools::hosts_export_as,
+            commands_tools::wake_host,
+            commands_tools::gateways_list,
             commands_tools::backup_export,
             commands_tools::backup_inspect,
             commands_tools::backup_discard,
@@ -385,6 +396,32 @@ pub fn run() {
             commands_tools::team_set_role_mappings,
             commands_tools::team_policies,
             commands_tools::team_update_policies,
+            commands_tools::team_ca,
+            commands_tools::team_update_ca,
+            commands_tools::team_delete_ca,
+            commands_tools::team_rotate_ca,
+            commands_tools::team_ca_certificates,
+            commands_tools::team_ca_revoke,
+            commands_tools::team_ca_local,
+            commands_tools::team_access_reviews,
+            commands_tools::team_access_review,
+            commands_tools::team_access_review_open,
+            commands_tools::team_access_review_decide,
+            commands_tools::team_access_review_complete,
+            commands_tools::team_access_review_cancel,
+            commands_tools::team_break_glass,
+            commands_tools::team_break_glass_configure,
+            commands_tools::team_break_glass_delete,
+            commands_tools::team_break_glass_use,
+            commands_tools::team_break_glass_end,
+            commands_tools::team_audit_verify,
+            commands_tools::team_automations,
+            commands_tools::team_automation_create,
+            commands_tools::team_automation_update,
+            commands_tools::team_automation_delete,
+            commands_tools::team_automation_run_now,
+            commands_tools::team_automation_runs,
+            commands_tools::team_automations_execute,
             commands_tools::team_idp,
             commands_tools::team_update_idp,
             commands_tools::team_test_idp,

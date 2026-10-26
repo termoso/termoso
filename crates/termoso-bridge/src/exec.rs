@@ -88,7 +88,7 @@ pub fn find_host<'a>(
 }
 
 /// SSH config of the host, falling back to its group chain (nearest first).
-fn effective_ssh(v: &VaultState, h: &Host) -> Option<SshConfig> {
+pub(crate) fn effective_ssh(v: &VaultState, h: &Host) -> Option<SshConfig> {
     let own = h
         .ssh_config_id
         .and_then(|c| v.get::<SshConfig>(c, "ssh_config"));
@@ -211,11 +211,12 @@ fn split_port(address: &str) -> (String, Option<u16>) {
 
 /// Connect, run `command`, disconnect.
 pub async fn run(
-    t: Target,
+    mut t: Target,
     command: &str,
     strict_host_key: bool,
     budget: Duration,
 ) -> Result<Output> {
+    resolve_secrets(&mut t).await?;
     if command.trim().is_empty() {
         return Err(BridgeError::Invalid("command is required".into()));
     }
@@ -278,6 +279,30 @@ fn clip(bytes: &[u8]) -> (String, bool) {
         bytes
     };
     (String::from_utf8_lossy(slice).into_owned(), truncated)
+}
+
+/// Replace `op://` / `bw://` / `pass://` / `env://` references in the
+/// target's password and passphrase with the values the manager returns.
+pub async fn resolve_secrets(t: &mut Target) -> Result<()> {
+    for m in &mut t.auth {
+        match m {
+            AuthMethod::Password(p) if termoso_core::extsecret::is_reference(p) => {
+                *p = termoso_core::extsecret::resolve(p)
+                    .await
+                    .map_err(|e| BridgeError::Invalid(e.to_string()))?;
+            }
+            AuthMethod::Key {
+                passphrase: Some(p),
+                ..
+            } if termoso_core::extsecret::is_reference(p) => {
+                *p = termoso_core::extsecret::resolve(p)
+                    .await
+                    .map_err(|e| BridgeError::Invalid(e.to_string()))?;
+            }
+            _ => {}
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

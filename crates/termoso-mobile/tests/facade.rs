@@ -1135,6 +1135,13 @@ async fn saved_host_keyboard_interactive_and_rejected_key() {
         app.known_hosts().unwrap().is_empty(),
         "accept once does not save"
     );
+    // OS detection runs on a side channel after `Connected`; closing the
+    // session before it lands would leave `os_name` unset (flaky otherwise).
+    let t = Instant::now();
+    while rec.os.lock().unwrap().is_empty() {
+        assert!(t.elapsed() < Duration::from_secs(15), "os not detected");
+        std::thread::sleep(Duration::from_millis(20));
+    }
 
     // Local close.
     s.disconnect();

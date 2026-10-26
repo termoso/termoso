@@ -153,6 +153,14 @@ impl From<tokio_tungstenite::tungstenite::Error> for CoreError {
 }
 
 impl CoreError {
+    /// HTTP status of an API error, `None` for anything else.
+    pub fn status(&self) -> Option<u16> {
+        match self {
+            CoreError::Api { status, .. } => Some(*status),
+            _ => None,
+        }
+    }
+
     /// Short machine-readable kind for the UI (`"db"`, `"host_key_rejected"`…).
     pub fn kind(&self) -> &'static str {
         match self {

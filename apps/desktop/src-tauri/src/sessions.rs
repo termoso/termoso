@@ -1347,6 +1347,16 @@ async fn connect_resolved<R: Runtime>(
     session_id: Uuid,
     resolved: &ResolvedHost,
 ) -> Result<(Arc<SshClient>, Vec<Arc<SshClient>>)> {
+    if resolved.chain.is_empty()
+        && termoso_core::policy::jump_required(
+            &*app.state::<AppState>().store()?,
+            resolved.host.vault_id,
+        )
+    {
+        return Err(DesktopError::invalid(
+            termoso_core::policy::Denied::DirectConnection.message(),
+        ));
+    }
     ssh_connect(
         app,
         session_id,
@@ -1524,6 +1534,16 @@ async fn ssh_connect<R: Runtime>(
         .and_then(|k| k.data.passphrase.clone())
         .filter(|p| !p.is_empty())
         .map(Zeroizing::new);
+    if let Some(p) = &password
+        && termoso_core::extsecret::is_reference(p)
+    {
+        password = Some(termoso_core::extsecret::resolve(p).await?);
+    }
+    if let Some(p) = &passphrase
+        && termoso_core::extsecret::is_reference(p)
+    {
+        passphrase = Some(termoso_core::extsecret::resolve(p).await?);
+    }
     let totp = identity
         .as_ref()
         .and_then(|i| i.data.totp_secret.as_deref())
@@ -1539,6 +1559,13 @@ async fn ssh_connect<R: Runtime>(
     let mut attempts = 0;
     loop {
         let mut auth: Vec<AuthMethod> = Vec::new();
+        // Team CA certificate first (hosts in a team vault; cached by the
+        // account sync, see `termoso_core::ca`).
+        if let Some(m) = resolved
+            .and_then(|r| termoso_core::ca::auth_method(&*state.store().ok()?, r.host.vault_id))
+        {
+            auth.push(m);
+        }
         if identity.as_ref().is_some_and(|i| i.data.ssh_id) {
             let preferred = identity.as_ref().and_then(|i| i.data.ssh_id_key_type);
             auth.extend(sshid::auth_methods(
@@ -1583,10 +1610,24 @@ async fn ssh_connect<R: Runtime>(
         if !agent_key_selected && state.settings().map(|s| s.use_ssh_agent).unwrap_or(true) {
             auth.push(AuthMethod::Agent);
         }
-        if let Some(pw) = &password {
-            auth.push(AuthMethod::Password(pw.clone()));
+        // Team policy `auth = keys_only`: no password-class methods at all.
+        let keys_only = resolved.is_some_and(|r| {
+            state
+                .store()
+                .is_ok_and(|st| termoso_core::policy::keys_only(&st, r.host.vault_id))
+        });
+        if keys_only {
+            if auth.is_empty() {
+                return Err(DesktopError::invalid(
+                    termoso_core::policy::Denied::PasswordAuth.message(),
+                ));
+            }
+        } else {
+            if let Some(pw) = &password {
+                auth.push(AuthMethod::Password(pw.clone()));
+            }
+            auth.push(AuthMethod::KeyboardInteractive);
         }
-        auth.push(AuthMethod::KeyboardInteractive);
 
         let ui_prompt: Arc<dyn termoso_core::ssh::InteractivePrompt> =
             Arc::new(UiInteractivePrompt {
@@ -1617,6 +1658,7 @@ async fn ssh_connect<R: Runtime>(
             keepalive: keepalive(&state, &ssh_cfg),
             timeout: Duration::from_secs(ssh_cfg.timeout.unwrap_or(20).clamp(1, 600) as u64),
             proxy: proxy.clone(),
+            gateway: gateway_dial(app, resolved).await,
             env: ssh_cfg.env_variables.clone(),
             agent_forwarding: ssh_cfg.agent_forwarding,
             x11: (ssh_cfg.forward_x11 && hop.is_none())
@@ -1803,6 +1845,7 @@ fn remember_on_identity(
         }
         let vault_id = resolved.host.vault_id;
         let mut identity = Identity {
+            external_id: None,
             label: format!("{username}@{}", resolved.host.data.address),
             username: username.to_string(),
             password: None,
@@ -1853,6 +1896,22 @@ fn remember_username(state: &AppState, resolved: &ResolvedHost, username: &str) 
     remember_on_identity(state, resolved, username, "username", |i| {
         i.username = username.to_string()
     });
+}
+
+/// Tunnel through the host's gateway (an API bridge in gateway mode), if it has one.
+async fn gateway_dial<R: Runtime>(
+    app: &AppHandle<R>,
+    resolved: Option<&termoso_core::model::ResolvedHost>,
+) -> Option<termoso_core::gateway::GatewayDial> {
+    let r = resolved?;
+    let gateway_id = r.gateway_id?;
+    let api = crate::account::api(app).await.ok()?;
+    Some(termoso_core::gateway::GatewayDial {
+        api,
+        gateway_id,
+        vault_id: r.host.vault_id,
+        host_id: r.host.id,
+    })
 }
 
 #[cfg(test)]

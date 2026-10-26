@@ -562,6 +562,14 @@ fn emit<R: Runtime>(app: &AppHandle<R>, id: Uuid) {
 pub async fn start<R: Runtime>(app: &AppHandle<R>, id: Uuid) -> Result<PfRuleCard> {
     let state = app.state::<AppState>();
     let e = state.store()?.require::<PfRule>(id)?;
+    if let Some(d) = termoso_core::policy::check_forward(
+        &*state.store()?,
+        e.vault_id,
+        &e.data.kind,
+        e.data.remote_port,
+    ) {
+        return Err(DesktopError::invalid(d.message()));
+    }
     let spec = ForwardSpec::from_rule(&e.data)?;
     let cancel = state.forwards.begin(id)?;
     emit(app, id);

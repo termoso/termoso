@@ -77,6 +77,62 @@ async fn ip_allowlist_and_admin_device_approval() {
         .await;
     }
 
+    // Posture: a team that requires disk encryption refuses devices that do
+    // not prove it (old clients report nothing → refused too); the fact is
+    // stored on the device row once a compliant client signs in.
+    let _: serde_json::Value = s
+        .json(
+            Method::PUT,
+            &policies,
+            Some(owner.token()),
+            Some(&serde_json::json!({ "posture_disk_encryption": true })),
+        )
+        .await;
+    let err = signin(s, &bob_email, bob_pw, device("bob old laptop"))
+        .await
+        .expect_err("no posture → blocked");
+    assert!(err.contains("device_posture"), "{err}");
+    let mut plain = device("bob plain laptop");
+    plain.posture = Some(termoso_proto::auth::Posture {
+        os_version: "Ubuntu 24.04".into(),
+        disk_encryption: Some(false),
+        ..Default::default()
+    });
+    let err = signin(s, &bob_email, bob_pw, plain)
+        .await
+        .expect_err("unencrypted → blocked");
+    assert!(err.contains("disk encryption"), "{err}");
+    let mut luks = device("bob luks laptop");
+    luks.posture = Some(termoso_proto::auth::Posture {
+        os_version: "Ubuntu 24.04".into(),
+        disk_encryption: Some(true),
+        screen_lock: Some(true),
+        secure_key_storage: None,
+    });
+    signin(s, &bob_email, bob_pw, luks)
+        .await
+        .expect("encrypted → signs in");
+    let devices: serde_json::Value = s
+        .json(Method::GET, "/account/devices", Some(bob.token()), NOBODY)
+        .await;
+    let luks = devices["devices"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|d| d["name"] == "bob luks laptop")
+        .expect("device listed");
+    assert_eq!(luks["posture"]["disk_encryption"], true);
+    assert_eq!(luks["posture"]["os_version"], "Ubuntu 24.04");
+    assert!(luks["posture_at"].is_string());
+    let _: serde_json::Value = s
+        .json(
+            Method::PUT,
+            &policies,
+            Some(owner.token()),
+            Some(&serde_json::json!({ "posture_disk_encryption": false })),
+        )
+        .await;
+
     // Outside the allow-list → refused at sign-in with ip_not_allowed.
     let p: serde_json::Value = s
         .json(

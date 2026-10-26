@@ -206,9 +206,9 @@ export const accountApi = {
     http.put<SettingsBlob>("/account/settings", { data, base_version }),
   devices: () => http.get<{ devices: Device[] }>("/account/devices"),
   revokeDevice: (id: string) => http.delete<undefined>(`/account/devices/${id}`),
-  securityEvents: (before?: string) =>
+  securityEvents: (before?: string, limit = 10) =>
     http.get<{ events: SecurityEvent[]; has_more: boolean }>("/account/security-events", {
-      query: before ? { before, limit: "50" } : { limit: "50" },
+      query: before ? { before, limit: String(limit) } : { limit: String(limit) },
     }),
   rotateRecovery: (req: RecoveryRotate) => http.post<undefined>("/account/recovery/rotate", req),
   cancelStartOver: () => http.post<undefined>("/account/start-over/cancel"),

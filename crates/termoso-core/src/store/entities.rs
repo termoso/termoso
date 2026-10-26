@@ -708,6 +708,7 @@ impl Store {
         tags.sort();
         tags.dedup();
 
+        let gateway_id = ssh.gateway_id;
         Ok(ResolvedHost {
             host,
             ssh,
@@ -716,6 +717,7 @@ impl Store {
             certificate,
             ssh_id_handle,
             proxy,
+            gateway_id,
             chain,
             telnet,
             serial,

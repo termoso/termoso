@@ -301,7 +301,19 @@ pub async fn key_export(
     passphrase: Option<String>,
     export_passphrase: Option<String>,
 ) -> Result<String> {
+    key_export_allowed(&*state.store()?, id)?;
     Ok(keychain::export(&*state.store()?, id, passphrase, export_passphrase)?.to_string())
+}
+
+/// Team policy `export = deny` covers private keys of the team vault.
+fn key_export_allowed(store: &termoso_core::store::Store, id: Uuid) -> Result<()> {
+    let e = store.require::<termoso_core::model::SshKey>(id)?;
+    if termoso_core::policy::export_denied(store, e.vault_id) {
+        return Err(DesktopError::invalid(
+            termoso_core::policy::Denied::Export.message(),
+        ));
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -312,6 +324,7 @@ pub async fn key_export_file(
     passphrase: Option<String>,
     export_passphrase: Option<String>,
 ) -> Result<()> {
+    key_export_allowed(&*state.store()?, id)?;
     let text = keychain::export(&*state.store()?, id, passphrase, export_passphrase)?;
     write_private(&path, text.as_bytes())?;
     let public = keychain::public_key(&*state.store()?, id)?;
@@ -868,6 +881,36 @@ pub async fn hosts_export_csv(
     path: String,
 ) -> Result<backup::CsvExportReport> {
     backup::export_hosts_csv(&*state.store()?, vault_id, include_passwords, &path)
+}
+
+/// Write SSH hosts as an OpenSSH `ssh_config` fragment or an Ansible INI
+/// inventory (`format`: `ssh_config` | `ansible`). Never includes secrets.
+#[tauri::command]
+pub async fn hosts_export_as(
+    state: State<'_, AppState>,
+    vault_id: Option<Uuid>,
+    format: String,
+    path: String,
+) -> Result<backup::CsvExportReport> {
+    backup::export_hosts_as(&*state.store()?, vault_id, &format, &path)
+}
+
+/// Wake-on-LAN: send the magic packet for the host's MAC (optionally to a
+/// specific broadcast address). Returns how many datagrams went out.
+#[tauri::command]
+pub async fn wake_host(mac: String, broadcast: Option<String>) -> Result<usize> {
+    let target = match broadcast
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        Some(b) => Some(
+            b.parse()
+                .map_err(|_| DesktopError::invalid(format!("not an IP address: {b}")))?,
+        ),
+        None => None,
+    };
+    Ok(termoso_core::wol::wake(&mac, target).await?)
 }
 
 /// Encrypt the given vaults (all unlocked when empty) into a `.termoso` file.
@@ -1492,6 +1535,62 @@ pub async fn team_policies<R: Runtime>(
 }
 
 #[tauri::command]
+pub async fn team_ca<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+) -> Result<Option<termoso_proto::ca::TeamCa>> {
+    team::ca(&app, team_id).await
+}
+
+#[tauri::command]
+pub async fn team_update_ca<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+    patch: termoso_proto::ca::UpdateTeamCaRequest,
+) -> Result<termoso_proto::ca::TeamCa> {
+    team::update_ca(&app, team_id, patch).await
+}
+
+#[tauri::command]
+pub async fn team_delete_ca<R: Runtime>(app: AppHandle<R>, team_id: Uuid) -> Result<()> {
+    team::delete_ca(&app, team_id).await
+}
+
+#[tauri::command]
+pub async fn team_rotate_ca<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+    grace_hours: Option<i32>,
+) -> Result<termoso_proto::ca::TeamCa> {
+    team::rotate_ca(&app, team_id, grace_hours).await
+}
+
+#[tauri::command]
+pub async fn team_ca_certificates<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+) -> Result<termoso_proto::ca::IssuedCertificateList> {
+    team::ca_certificates(&app, team_id).await
+}
+
+#[tauri::command]
+pub async fn team_ca_revoke<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+    certificate_id: Uuid,
+) -> Result<termoso_proto::ca::IssuedCertificate> {
+    team::ca_revoke(&app, team_id, certificate_id).await
+}
+
+#[tauri::command]
+pub async fn team_ca_local<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+) -> Result<Option<termoso_core::ca::CachedCert>> {
+    team::ca_local(&app, team_id).await
+}
+
+#[tauri::command]
 pub async fn team_update_policies<R: Runtime>(
     app: AppHandle<R>,
     team_id: Uuid,
@@ -1913,4 +2012,174 @@ pub async fn update_install<R: Runtime>(app: AppHandle<R>) -> Result<UpdateInfo>
 #[tauri::command]
 pub fn update_restart<R: Runtime>(app: AppHandle<R>) {
     app.restart()
+}
+
+#[tauri::command]
+pub async fn team_automations<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+) -> Result<termoso_proto::automation::AutomationList> {
+    crate::automations::list(&app, team_id).await
+}
+
+#[tauri::command]
+pub async fn team_automation_create<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+    req: termoso_proto::automation::CreateAutomationRequest,
+) -> Result<termoso_proto::automation::Automation> {
+    crate::automations::create(&app, team_id, req).await
+}
+
+#[tauri::command]
+pub async fn team_automation_update<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+    id: Uuid,
+    req: termoso_proto::automation::UpdateAutomationRequest,
+) -> Result<termoso_proto::automation::Automation> {
+    crate::automations::update(&app, team_id, id, req).await
+}
+
+#[tauri::command]
+pub async fn team_automation_delete<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+    id: Uuid,
+) -> Result<()> {
+    crate::automations::delete(&app, team_id, id).await
+}
+
+#[tauri::command]
+pub async fn team_automation_run_now<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+    id: Uuid,
+) -> Result<termoso_proto::automation::AutomationRun> {
+    crate::automations::run_now(&app, team_id, id).await
+}
+
+#[tauri::command]
+pub async fn team_automation_runs<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+    id: Uuid,
+) -> Result<termoso_proto::automation::AutomationRunList> {
+    crate::automations::runs(&app, team_id, id).await
+}
+
+/// Run due automations right now (the executor also polls every minute).
+#[tauri::command]
+pub async fn team_automations_execute<R: Runtime>(app: AppHandle<R>) -> Result<usize> {
+    crate::automations::pass(&app).await
+}
+
+/// Gateways (API bridges in `gateway` mode) this account can tunnel through.
+#[tauri::command]
+pub async fn gateways_list<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+) -> Result<Vec<termoso_proto::bridge::GatewayInfo>> {
+    Ok(crate::account::api(&app).await?.gateways().await?.gateways)
+}
+
+#[tauri::command]
+pub async fn team_access_reviews<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+) -> Result<termoso_proto::team::AccessReviewList> {
+    team::access_reviews(&app, team_id).await
+}
+
+#[tauri::command]
+pub async fn team_access_review<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+    review_id: Uuid,
+) -> Result<termoso_proto::team::AccessReviewDetail> {
+    team::access_review(&app, team_id, review_id).await
+}
+
+#[tauri::command]
+pub async fn team_access_review_open<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+) -> Result<termoso_proto::team::AccessReviewDetail> {
+    team::open_access_review(&app, team_id).await
+}
+
+#[tauri::command]
+pub async fn team_access_review_decide<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+    review_id: Uuid,
+    item_id: Uuid,
+    req: termoso_proto::team::DecideAccessReviewItemRequest,
+) -> Result<termoso_proto::team::AccessReviewItem> {
+    team::decide_access_review_item(&app, team_id, review_id, item_id, req).await
+}
+
+#[tauri::command]
+pub async fn team_access_review_complete<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+    review_id: Uuid,
+    req: termoso_proto::team::CompleteAccessReviewRequest,
+) -> Result<termoso_proto::team::AccessReviewDetail> {
+    team::complete_access_review(&app, team_id, review_id, req).await
+}
+
+#[tauri::command]
+pub async fn team_access_review_cancel<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+    review_id: Uuid,
+) -> Result<termoso_proto::team::AccessReview> {
+    team::cancel_access_review(&app, team_id, review_id).await
+}
+
+#[tauri::command]
+pub async fn team_break_glass<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+) -> Result<Option<termoso_proto::team::BreakGlass>> {
+    team::break_glass(&app, team_id).await
+}
+
+#[tauri::command]
+pub async fn team_break_glass_configure<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+    req: termoso_proto::team::ConfigureBreakGlassRequest,
+) -> Result<termoso_proto::team::BreakGlass> {
+    team::configure_break_glass(&app, team_id, req).await
+}
+
+#[tauri::command]
+pub async fn team_break_glass_delete<R: Runtime>(app: AppHandle<R>, team_id: Uuid) -> Result<()> {
+    team::delete_break_glass(&app, team_id).await
+}
+
+#[tauri::command]
+pub async fn team_break_glass_use<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+    req: termoso_proto::team::UseBreakGlassRequest,
+) -> Result<termoso_proto::team::BreakGlass> {
+    team::use_break_glass(&app, team_id, req).await
+}
+
+#[tauri::command]
+pub async fn team_break_glass_end<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+) -> Result<termoso_proto::team::BreakGlass> {
+    team::end_break_glass(&app, team_id).await
+}
+
+#[tauri::command]
+pub async fn team_audit_verify<R: Runtime>(
+    app: AppHandle<R>,
+    team_id: Uuid,
+) -> Result<termoso_proto::team::AuditVerification> {
+    team::verify_audit(&app, team_id).await
 }

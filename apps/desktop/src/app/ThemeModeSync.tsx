@@ -6,6 +6,7 @@ import { applyTerminalScheme, applyTerminalSettings } from "@/terminal/store";
 import { setCustomThemes } from "@/terminal/themes";
 import { applyNotificationSettings } from "./notifications";
 import { applyTraySettings } from "./tray";
+import { applyTriggers } from "@/terminal/store";
 
 /** Keeps MUI's color scheme, the UI language and the terminals in step with the settings stored by Rust. */
 export function ThemeModeSync() {
@@ -17,6 +18,7 @@ export function ThemeModeSync() {
       setLanguage(data.language);
       applyTerminalSettings(data);
       applyNotificationSettings(data);
+      applyTriggers(data.triggers);
       applyTraySettings(data);
     }
   }, [data, setMode]);

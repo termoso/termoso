@@ -5,10 +5,15 @@ import {
   Button,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
   IconButton,
   InputAdornment,
   List,
+  ListItem,
   ListItemButton,
   ListItemText,
   ListSubheader,
@@ -19,6 +24,7 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
+import AdminPanelSettingsRoundedIcon from "@mui/icons-material/AdminPanelSettingsRounded";
 import ArrowDropDownRoundedIcon from "@mui/icons-material/ArrowDropDownRounded";
 import FolderCopyRoundedIcon from "@mui/icons-material/FolderCopyRounded";
 import ReplayRoundedIcon from "@mui/icons-material/ReplayRounded";
@@ -47,6 +53,7 @@ import {
   editingPaths,
   openEdit,
   openSftpForHost,
+  openSftpForHostAsRoot,
   openSftpForSession,
   openWebDavForHost,
   reconnectSftp,
@@ -54,8 +61,8 @@ import {
   setLeftSource,
   sftpStore,
   startLeftPick,
-  type SftpConn,
   startTransfer,
+  type SftpConn,
   useSftp,
 } from "./store";
 import { tr } from "@/i18n";
@@ -566,6 +573,17 @@ function HostPickerList({ side }: { side: PaneKey }) {
   const hosts = useHosts(vault.data?.id ?? null);
   const panes = useTerminal((s) => s.panes);
   const [filter, setFilter] = useState("");
+  const [sudoFor, setSudoFor] = useState<HostCard | null>(null);
+  const [sudoPassword, setSudoPassword] = useState("");
+  const closeSudo = () => {
+    setSudoFor(null);
+    setSudoPassword("");
+  };
+  const openAsRoot = () => {
+    if (!sudoFor || !sudoPassword) return;
+    openSftpForHostAsRoot(sudoFor.id, sudoFor.label, sudoFor.vaultId, sudoPassword, side);
+    closeSudo();
+  };
   const q = filter.trim().toLowerCase();
   const matches = (h: HostCard) =>
     !q ||
@@ -626,13 +644,53 @@ function HostPickerList({ side }: { side: PaneKey }) {
         )}
         {sshHosts.length > 0 && <ListSubheader disableSticky>SFTP</ListSubheader>}
         {sshHosts.map((h) => (
-          <ListItemButton key={h.id} onClick={() => pickHost(h, "host")}>
-            <Box sx={{ mr: 1.5 }}>
-              <HostAvatar host={h} size={28} />
-            </Box>
-            <ListItemText primary={h.label} secondary={`${h.username}@${h.address}:${h.port}`} />
-          </ListItemButton>
+          <ListItem
+            key={h.id}
+            disablePadding
+            secondaryAction={
+              <Tooltip title={tr("Browse as root (sudo)")}>
+                <IconButton edge="end" size="small" onClick={() => setSudoFor(h)}>
+                  <AdminPanelSettingsRoundedIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            }
+          >
+            <ListItemButton onClick={() => pickHost(h, "host")}>
+              <Box sx={{ mr: 1.5 }}>
+                <HostAvatar host={h} size={28} />
+              </Box>
+              <ListItemText primary={h.label} secondary={`${h.username}@${h.address}:${h.port}`} />
+            </ListItemButton>
+          </ListItem>
         ))}
+        <Dialog open={sudoFor !== null} onClose={closeSudo} maxWidth="xs" fullWidth>
+          <DialogTitle>{tr("Browse as root")}</DialogTitle>
+          <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+            <Typography variant="body2" color="text.secondary">
+              {tr(
+                "Starts sftp-server through sudo on {host}. The password is sent once over the SSH channel and is not stored.",
+                { host: sudoFor?.label ?? "" },
+              )}
+            </Typography>
+            <TextField
+              autoFocus
+              size="small"
+              type="password"
+              label={tr("sudo password")}
+              value={sudoPassword}
+              onChange={(e) => setSudoPassword(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") openAsRoot();
+              }}
+            />
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button onClick={closeSudo}>{tr("Cancel")}</Button>
+            <Button variant="contained" onClick={openAsRoot} disabled={!sudoPassword}>
+              {tr("Open")}
+            </Button>
+          </DialogActions>
+        </Dialog>
         {davHosts.length > 0 && <ListSubheader disableSticky>{tr("WebDAV")}</ListSubheader>}
         {davHosts.map((h) => (
           <ListItemButton key={`dav-${h.id}`} onClick={() => pickHost(h, "webdav")}>

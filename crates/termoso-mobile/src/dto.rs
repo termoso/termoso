@@ -194,6 +194,10 @@ pub struct HostDraft {
     pub host_chain_id: Option<String>,
     /// SOCKS / HTTP proxy; `None` connects directly.
     pub proxy_id: Option<String>,
+    /// Team gateway (API bridge) to reach a host behind NAT; `None` dials directly.
+    pub gateway_id: Option<String>,
+    /// MAC address for Wake-on-LAN, `aa:bb:cc:dd:ee:ff`.
+    pub mac_address: Option<String>,
     /// Terminal colour scheme id; `None` follows the app setting.
     pub color_scheme: Option<String>,
     /// Terminal charset; `None` = UTF-8.
@@ -332,6 +336,8 @@ impl HostDraft {
             keep_alive_interval: None,
             host_chain_id: None,
             proxy_id: None,
+            gateway_id: None,
+            mac_address: None,
             color_scheme: None,
             charset: None,
             backspace: None,
@@ -382,6 +388,8 @@ impl From<hosts::HostForm> for HostDraft {
             timeout: f.timeout,
             host_chain_id: f.host_chain_id.map(|i| i.to_string()),
             proxy_id: f.proxy_id.map(|i| i.to_string()),
+            gateway_id: f.gateway_id.map(|i| i.to_string()),
+            mac_address: f.mac_address,
             color_scheme: f.color_scheme,
             charset: f.charset,
             backspace: f.backspace,
@@ -435,6 +443,11 @@ impl HostDraft {
         base.timeout = self.timeout;
         base.host_chain_id = parse_opt_id(&self.host_chain_id)?;
         base.proxy_id = parse_opt_id(&self.proxy_id)?;
+        base.gateway_id = parse_opt_id(&self.gateway_id)?;
+        base.mac_address = self
+            .mac_address
+            .map(|m| m.trim().to_string())
+            .filter(|m| !m.is_empty());
         base.color_scheme = self.color_scheme;
         base.charset = self.charset;
         base.backspace = self.backspace;
@@ -518,6 +531,8 @@ pub(crate) fn blank_form(vault_id: Uuid) -> hosts::HostForm {
         startup_snippet_id: None,
         host_chain_id: None,
         proxy_id: None,
+        gateway_id: None,
+        mac_address: None,
         telnet: None,
         webdav: None,
         env_variables: Vec::new(),

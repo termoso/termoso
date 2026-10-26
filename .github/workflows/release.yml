@@ -90,10 +90,17 @@ jobs:
             os: ubuntu-22.04-arm
             bundles: deb,rpm,appimage
             artifact: linux-aarch64
-          - name: windows (msi, nsis)
+          - name: windows x86_64 (msi, nsis)
             os: windows-latest
             bundles: msi,nsis
-            artifact: windows
+            artifact: windows-x86_64
+          # Cross-compiled on the x86_64 runner: the MSVC toolchain targets
+          # ARM64 natively and both WiX and NSIS produce arm64 installers.
+          - name: windows aarch64 (msi, nsis)
+            os: windows-latest
+            bundles: msi,nsis
+            target: aarch64-pc-windows-msvc
+            artifact: windows-aarch64
           # Two separate dmgs (Apple Silicon + Intel) rather than one universal
           # binary: half the download, and the updater picks the right one.
           - name: macos (dmg, Apple Silicon)
@@ -199,6 +206,9 @@ jobs:
             Linux: `_amd64` / `.x86_64` bundles are for x86_64, `_arm64` / `_aarch64` / `.aarch64`
             for 64-bit ARM (Raspberry Pi 4+, Apple Silicon VMs, Ampere and friends).
 
+            Windows: `_x64` installers are for x86_64, `_arm64` for Windows on ARM
+            (Snapdragon X, Surface Pro X and friends).
+
             macOS: `_aarch64.dmg` is for Apple Silicon, `_x64.dmg` for Intel. Unless this
             repository has a Developer ID configured, the builds are ad-hoc signed and not
             notarized: after dragging Termoso to Applications run
@@ -227,6 +237,10 @@ jobs:
             target/release/bundle/msi/*.msi.sig
             target/release/bundle/nsis/*.exe
             target/release/bundle/nsis/*.exe.sig
+            target/*/release/bundle/msi/*.msi
+            target/*/release/bundle/msi/*.msi.sig
+            target/*/release/bundle/nsis/*.exe
+            target/*/release/bundle/nsis/*.exe.sig
             target/*/release/bundle/dmg/*.dmg
             target/*/release/bundle/macos/*.app.tar.gz
             target/*/release/bundle/macos/*.app.tar.gz.sig
@@ -452,6 +466,8 @@ jobs:
               *.aarch64.rpm)        echo linux-aarch64-rpm ;;
               *_x64-setup.exe)      echo windows-x86_64 windows-x86_64-nsis ;;
               *_x64_*.msi)          echo windows-x86_64-msi ;;
+              *_arm64-setup.exe)    echo windows-aarch64 windows-aarch64-nsis ;;
+              *_arm64_*.msi)        echo windows-aarch64-msi ;;
               *_aarch64.app.tar.gz) echo darwin-aarch64 darwin-aarch64-app ;;
               *_x64.app.tar.gz)     echo darwin-x86_64 darwin-x86_64-app ;;
             esac
@@ -465,7 +481,7 @@ jobs:
               mv ../latest.tmp ../latest.json
             done
           done
-          for p in darwin-aarch64 darwin-x86_64 linux-x86_64 linux-aarch64 windows-x86_64; do
+          for p in darwin-aarch64 darwin-x86_64 linux-x86_64 linux-aarch64 windows-x86_64 windows-aarch64; do
             jq -e --arg p "$p" '.platforms[$p].url' ../latest.json > /dev/null || { echo "::error::latest.json lacks $p"; exit 1; }
           done
           jq '.platforms | map_values(.url)' ../latest.json

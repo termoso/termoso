@@ -280,6 +280,9 @@ pub(crate) struct Connector {
     /// Set when the user dismissed a prompt; turns the resulting connect
     /// error into `Cancelled`.
     cancelled: AtomicBool,
+    /// Signed-in account, when there is one: hosts with a `gateway_id` are
+    /// dialled through their API bridge gateway with its session token.
+    account: Option<Arc<crate::account::AccountRuntime>>,
 }
 
 impl Connector {
@@ -290,7 +293,32 @@ impl Connector {
             secrets,
             prompts: PromptBroker::new(),
             cancelled: AtomicBool::new(false),
+            account: None,
         }
+    }
+
+    /// Let hosts behind a gateway be reached through the signed-in account.
+    pub fn with_account(mut self, account: Option<Arc<crate::account::AccountRuntime>>) -> Self {
+        self.account = account;
+        self
+    }
+
+    /// Where to tunnel for `resolved`: its gateway, when it has one and the
+    /// account is signed in. Without an account the plain address is dialled,
+    /// which fails the usual way for a host that is only reachable inside.
+    async fn gateway_dial(
+        &self,
+        resolved: Option<&ResolvedHost>,
+    ) -> Option<termoso_core::gateway::GatewayDial> {
+        let r = resolved?;
+        let gateway_id = r.gateway_id?;
+        let api = self.account.as_ref()?.api().await.ok()?;
+        Some(termoso_core::gateway::GatewayDial {
+            api,
+            gateway_id,
+            vault_id: r.host.vault_id,
+            host_id: r.host.id,
+        })
     }
 
     pub fn answer(&self, id: u64, answer: PromptAnswer) -> bool {
@@ -494,6 +522,7 @@ fn remember_on_identity(
         }
         let vault_id = resolved.host.vault_id;
         let mut identity = Identity {
+            external_id: None,
             label: format!("{username}@{}", resolved.host.data.address),
             username: username.to_string(),
             password: None,
@@ -600,6 +629,14 @@ pub(crate) async fn connect_resolved(
     resolved: Option<&ResolvedHost>,
 ) -> Result<(Arc<SshClient>, Vec<Arc<SshClient>>)> {
     let chain = resolved.map(|r| r.chain.clone()).unwrap_or_default();
+    if let Some(r) = resolved
+        && chain.is_empty()
+        && termoso_core::policy::jump_required(&conn.store, r.host.vault_id)
+    {
+        return Err(MobileError::Invalid {
+            detail: termoso_core::policy::Denied::DirectConnection.message(),
+        });
+    }
     ssh_connect(conn, settings, target, resolved, &chain, None, None).await
 }
 
@@ -654,6 +691,16 @@ async fn ssh_connect(
         .and_then(|k| k.data.passphrase.clone())
         .filter(|p| !p.is_empty())
         .map(Zeroizing::new);
+    if let Some(p) = &password
+        && termoso_core::extsecret::is_reference(p)
+    {
+        password = Some(termoso_core::extsecret::resolve(p).await?);
+    }
+    if let Some(p) = &passphrase
+        && termoso_core::extsecret::is_reference(p)
+    {
+        passphrase = Some(termoso_core::extsecret::resolve(p).await?);
+    }
     let cache_passphrases = settings.cache_passphrases && key_id.is_some();
     let mut cached_passphrase = false;
     if passphrase.is_none()
@@ -720,6 +767,13 @@ async fn ssh_connect(
                 });
             }
         }
+        // Team CA certificate first (hosts in a team vault; cached by the
+        // account sync, see `termoso_core::ca`).
+        if let Some(m) =
+            resolved.and_then(|r| termoso_core::ca::auth_method(store, r.host.vault_id))
+        {
+            auth.push(m);
+        }
         if let Some(i) = identity.as_ref().filter(|i| i.data.ssh_id) {
             auth.extend(crate::sshid::auth_methods(
                 store,
@@ -727,10 +781,21 @@ async fn ssh_connect(
                 pin.clone(),
             )?);
         }
-        if let Some(pw) = &password {
-            auth.push(AuthMethod::Password(pw.clone()));
+        // Team policy `auth = keys_only`: no password-class methods at all.
+        let keys_only =
+            resolved.is_some_and(|r| termoso_core::policy::keys_only(store, r.host.vault_id));
+        if keys_only {
+            if auth.is_empty() {
+                return Err(MobileError::Invalid {
+                    detail: termoso_core::policy::Denied::PasswordAuth.message(),
+                });
+            }
+        } else {
+            if let Some(pw) = &password {
+                auth.push(AuthMethod::Password(pw.clone()));
+            }
+            auth.push(AuthMethod::KeyboardInteractive);
         }
-        auth.push(AuthMethod::KeyboardInteractive);
 
         let ask: Arc<dyn InteractivePrompt> = Arc::new(InteractiveAsk { conn: conn.clone() });
         let interactive: Option<Arc<dyn InteractivePrompt>> = match (&totp, &password) {
@@ -751,6 +816,7 @@ async fn ssh_connect(
             keepalive: keepalive(settings, &ssh_cfg),
             timeout: Duration::from_secs(ssh_cfg.timeout.unwrap_or(20).clamp(1, 600) as u64),
             proxy: proxy.clone(),
+            gateway: conn.gateway_dial(resolved).await,
             env: ssh_cfg.env_variables.clone(),
             agent_forwarding: ssh_cfg.agent_forwarding,
             // No local X server on a phone: the flag only travels with the

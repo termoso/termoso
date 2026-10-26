@@ -30,6 +30,10 @@ import VpnKeyOutlinedIcon from "@mui/icons-material/VpnKeyOutlined";
 import GroupsOutlinedIcon from "@mui/icons-material/GroupsOutlined";
 import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
 import ConnectedTvOutlinedIcon from "@mui/icons-material/ConnectedTvOutlined";
+import LockOpenOutlinedIcon from "@mui/icons-material/LockOpenOutlined";
+import PolicyOutlinedIcon from "@mui/icons-material/PolicyOutlined";
+import ScheduleOutlinedIcon from "@mui/icons-material/ScheduleOutlined";
+import VerifiedUserOutlinedIcon from "@mui/icons-material/VerifiedUserOutlined";
 import ShieldOutlinedIcon from "@mui/icons-material/ShieldOutlined";
 import VisibilityOffOutlinedIcon from "@mui/icons-material/VisibilityOffOutlined";
 import PhonelinkLockOutlinedIcon from "@mui/icons-material/PhonelinkLockOutlined";
@@ -117,6 +121,7 @@ const layout: { title: string; pages: Entry[] }[] = [
       ["keychain/security-keys", <FingerprintOutlinedIcon />],
       ["keychain/ssh-id", <AlternateEmailOutlinedIcon />],
       ["keychain/ssh-agent", <VpnKeyOutlinedIcon />],
+      ["keychain/external-secret-managers", <LockOpenOutlinedIcon />],
     ],
   },
   {
@@ -125,6 +130,10 @@ const layout: { title: string; pages: Entry[] }[] = [
       ["teams/teams-and-roles", <GroupsOutlinedIcon />],
       ["teams/team-vaults", <Inventory2OutlinedIcon />],
       ["teams/terminal-sharing", <ConnectedTvOutlinedIcon />],
+      ["teams/policies", <PolicyOutlinedIcon />],
+      ["teams/ssh-ca", <VerifiedUserOutlinedIcon />],
+      ["teams/audit", <HistoryOutlinedIcon />],
+      ["teams/automations", <ScheduleOutlinedIcon />],
     ],
   },
   {

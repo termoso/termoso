@@ -135,6 +135,24 @@ import type {
   WorkspacesState,
   QuietProgress,
   QuietRun,
+  IssuedCertificate,
+  IssuedCertificateList,
+  LocalTeamCertificate,
+  TeamCa,
+  UpdateTeamCaRequest,
+  Automation,
+  AutomationList,
+  AutomationRun,
+  AutomationRunList,
+  CreateAutomationRequest,
+  UpdateAutomationRequest,
+  GatewayInfo,
+  AccessReview,
+  AccessReviewDetail,
+  AccessReviewItem,
+  AccessReviewList,
+  AuditVerification,
+  BreakGlass,
 } from "./types";
 import type {
   AccessRequest,
@@ -598,6 +616,15 @@ export const tailnetScan = () => invoke<TailnetScan>("tailnet_scan");
 
 export const hostsExportCsv = (vaultId: Uuid | null, includePasswords: boolean, path: string) =>
   invoke<CsvExportReport>("hosts_export_csv", { vaultId, includePasswords, path });
+export const hostsExportAs = (
+  vaultId: Uuid | null,
+  format: "ssh_config" | "ansible",
+  path: string,
+) => invoke<CsvExportReport>("hosts_export_as", { vaultId, format, path });
+export const gatewaysList = () => invoke<GatewayInfo[]>("gateways_list");
+
+export const wakeHost = (mac: string, broadcast: string | null) =>
+  invoke<number>("wake_host", { mac, broadcast });
 export const backupExport = (vaultIds: Uuid[], password: string, path: string) =>
   invoke<BackupSummary>("backup_export", { vaultIds, password, path });
 export const backupInspect = (path: string, password: string) =>
@@ -854,6 +881,73 @@ export const teamScheduleDeletion = (teamId: Uuid, confirmName: string) =>
   invoke<TeamDataStatus>("team_schedule_deletion", { teamId, confirmName });
 export const teamCancelDeletion = (teamId: Uuid) =>
   invoke<TeamDataStatus>("team_cancel_deletion", { teamId });
+export const teamCa = (teamId: Uuid) => invoke<TeamCa | null>("team_ca", { teamId });
+export const teamUpdateCa = (teamId: Uuid, patch: UpdateTeamCaRequest) =>
+  invoke<TeamCa>("team_update_ca", { teamId, patch });
+export const teamDeleteCa = (teamId: Uuid) => invoke<null>("team_delete_ca", { teamId });
+export const teamRotateCa = (teamId: Uuid, graceHours: number | null) =>
+  invoke<TeamCa>("team_rotate_ca", { teamId, graceHours });
+export const teamCaCertificates = (teamId: Uuid) =>
+  invoke<IssuedCertificateList>("team_ca_certificates", { teamId });
+export const teamCaRevoke = (teamId: Uuid, certificateId: Uuid) =>
+  invoke<IssuedCertificate>("team_ca_revoke", { teamId, certificateId });
+export const teamAccessReviews = (teamId: Uuid) =>
+  invoke<AccessReviewList>("team_access_reviews", { teamId });
+export const teamAccessReview = (teamId: Uuid, reviewId: Uuid) =>
+  invoke<AccessReviewDetail>("team_access_review", { teamId, reviewId });
+export const teamAccessReviewOpen = (teamId: Uuid) =>
+  invoke<AccessReviewDetail>("team_access_review_open", { teamId });
+export const teamAccessReviewDecide = (
+  teamId: Uuid,
+  reviewId: Uuid,
+  itemId: Uuid,
+  decision: "keep" | "remove",
+  note: string | null,
+) =>
+  invoke<AccessReviewItem>("team_access_review_decide", {
+    teamId,
+    reviewId,
+    itemId,
+    req: { decision, note },
+  });
+export const teamAccessReviewComplete = (teamId: Uuid, reviewId: Uuid, undecided: "keep" | null) =>
+  invoke<AccessReviewDetail>("team_access_review_complete", {
+    teamId,
+    reviewId,
+    req: { undecided },
+  });
+export const teamAccessReviewCancel = (teamId: Uuid, reviewId: Uuid) =>
+  invoke<AccessReview>("team_access_review_cancel", { teamId, reviewId });
+export const teamBreakGlass = (teamId: Uuid) =>
+  invoke<BreakGlass | null>("team_break_glass", { teamId });
+export const teamBreakGlassConfigure = (teamId: Uuid, userId: Uuid, durationHours: number) =>
+  invoke<BreakGlass>("team_break_glass_configure", {
+    teamId,
+    req: { user_id: userId, duration_hours: durationHours },
+  });
+export const teamBreakGlassDelete = (teamId: Uuid) =>
+  invoke<null>("team_break_glass_delete", { teamId });
+export const teamBreakGlassUse = (teamId: Uuid, secret: string, reason: string) =>
+  invoke<BreakGlass>("team_break_glass_use", { teamId, req: { secret, reason } });
+export const teamBreakGlassEnd = (teamId: Uuid) =>
+  invoke<BreakGlass>("team_break_glass_end", { teamId });
+export const teamAuditVerify = (teamId: Uuid) =>
+  invoke<AuditVerification>("team_audit_verify", { teamId });
+export const teamCaLocal = (teamId: Uuid) =>
+  invoke<LocalTeamCertificate | null>("team_ca_local", { teamId });
+export const teamAutomations = (teamId: Uuid) =>
+  invoke<AutomationList>("team_automations", { teamId });
+export const teamAutomationCreate = (teamId: Uuid, req: CreateAutomationRequest) =>
+  invoke<Automation>("team_automation_create", { teamId, req });
+export const teamAutomationUpdate = (teamId: Uuid, id: Uuid, req: UpdateAutomationRequest) =>
+  invoke<Automation>("team_automation_update", { teamId, id, req });
+export const teamAutomationDelete = (teamId: Uuid, id: Uuid) =>
+  invoke<null>("team_automation_delete", { teamId, id });
+export const teamAutomationRunNow = (teamId: Uuid, id: Uuid) =>
+  invoke<AutomationRun>("team_automation_run_now", { teamId, id });
+export const teamAutomationRuns = (teamId: Uuid, id: Uuid) =>
+  invoke<AutomationRunList>("team_automation_runs", { teamId, id });
+export const teamAutomationsExecute = () => invoke<number>("team_automations_execute");
 export const teamDevices = (teamId: Uuid) => invoke<TeamDeviceList>("team_devices", { teamId });
 export const teamApproveDevice = (teamId: Uuid, deviceId: Uuid) =>
   invoke<null>("team_approve_device", { teamId, deviceId });

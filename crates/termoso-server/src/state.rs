@@ -46,6 +46,7 @@ pub struct Inner {
     pub events: broadcast::Sender<Event>,
     /// Local fan-out of multiplayer relay frames (see `live::bus`).
     pub live: broadcast::Sender<crate::live::BusFrame>,
+    pub gateway: broadcast::Sender<crate::gateway::RelayFrame>,
     pub started_at: chrono::DateTime<chrono::Utc>,
     /// Set on SIGTERM: `/readyz` answers 503 so the balancer drains this
     /// replica while in-flight requests finish.
@@ -72,13 +73,18 @@ impl Inner {
             .context("connecting to Redis")?;
         cache.ping().await.context("pinging Redis")?;
 
-        let storage = match &cfg.s3 {
-            Some(s3) => {
+        let storage = match (&cfg.s3, &cfg.logs_dir) {
+            (Some(s3), _) => {
                 let s = Storage::new(s3).await?;
                 s.ensure_bucket().await?;
                 Some(s)
             }
-            None => None,
+            (None, Some(dir)) => Some(Storage::local(
+                dir.clone(),
+                &cfg.public_url,
+                master_key.clone(),
+            )?),
+            (None, None) => None,
         };
 
         let mailer = match &cfg.smtp {
@@ -125,6 +131,7 @@ impl Inner {
             sso,
             events: broadcast::channel(4096).0,
             live: broadcast::channel(4096).0,
+            gateway: broadcast::channel(8192).0,
             started_at: chrono::Utc::now(),
             draining: std::sync::atomic::AtomicBool::new(false),
         });

@@ -601,6 +601,7 @@ pub async fn remove_member(
         .bind(user_id)
         .execute(&mut *tx)
         .await?;
+    crate::routes::ca::forget_member(&mut *tx, id, user_id).await?;
     tx.commit().await?;
     audit::record(
         &state.db,

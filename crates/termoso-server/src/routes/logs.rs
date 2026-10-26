@@ -771,3 +771,119 @@ pub async fn team_export(
         out,
     ))
 }
+
+// ───────────────────────── local blob store ─────────────────────────
+
+fn io_err(e: std::io::Error, what: &str) -> Error {
+    Error::Internal(anyhow::Error::from(e).context(what.to_string()))
+}
+
+/// `PUT /logs/blob/{token}` — upload for the local storage backend. The token
+/// (sealed with the master key, 15 min) names the object and caps its size.
+#[utoipa::path(put, path = "/api/v1/logs/blob/{token}", tag = "logs",
+    params(("token" = String, Path)), responses((status = 204), (status = 403), (status = 413)))]
+pub async fn blob_put(
+    State(state): State<AppState>,
+    Path(token): Path<String>,
+    body: axum::body::Body,
+) -> ApiResult<crate::error::NoContent> {
+    let storage = storage(&state)?;
+    let grant = storage
+        .open_grant(&token)
+        .map_err(|_| Error::forbidden("Invalid or expired upload token"))?;
+    if grant.method != "put" {
+        return Err(Error::forbidden("Not an upload token"));
+    }
+    let path = storage
+        .local_file(&grant.key)
+        .map_err(|e| Error::Internal(e.context("blob path")))?;
+    if let Some(parent) = path.parent() {
+        tokio::fs::create_dir_all(parent)
+            .await
+            .map_err(|e| io_err(e, "creating log directory"))?;
+    }
+    let tmp = path.with_extension("part");
+    let mut file = tokio::fs::File::create(&tmp)
+        .await
+        .map_err(|e| io_err(e, "creating log file"))?;
+    let mut stream = body.into_data_stream();
+    let mut written: i64 = 0;
+    use futures::StreamExt;
+    use tokio::io::AsyncWriteExt;
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| Error::Internal(anyhow::anyhow!("upload stream: {e}")))?;
+        written += chunk.len() as i64;
+        if written > grant.max_len {
+            drop(file);
+            tokio::fs::remove_file(&tmp).await.ok();
+            return Err(Error::quota_exceeded("Upload exceeds the declared size"));
+        }
+        file.write_all(&chunk)
+            .await
+            .map_err(|e| io_err(e, "writing log file"))?;
+    }
+    file.flush()
+        .await
+        .map_err(|e| io_err(e, "flushing log file"))?;
+    drop(file);
+    tokio::fs::rename(&tmp, &path)
+        .await
+        .map_err(|e| io_err(e, "placing log file"))?;
+    Ok(crate::error::NoContent)
+}
+
+/// `GET /logs/blob/{token}` — download for the local storage backend.
+#[utoipa::path(get, path = "/api/v1/logs/blob/{token}", tag = "logs",
+    params(("token" = String, Path)), responses((status = 200, description = "octet-stream"), (status = 403)))]
+pub async fn blob_get(
+    State(state): State<AppState>,
+    Path(token): Path<String>,
+) -> ApiResult<axum::response::Response> {
+    use axum::response::IntoResponse;
+    let storage = storage(&state)?;
+    let grant = storage
+        .open_grant(&token)
+        .map_err(|_| Error::forbidden("Invalid or expired download token"))?;
+    if grant.method != "get" {
+        return Err(Error::forbidden("Not a download token"));
+    }
+    let path = storage
+        .local_file(&grant.key)
+        .map_err(|e| Error::Internal(e.context("blob path")))?;
+    let file = match tokio::fs::File::open(&path).await {
+        Ok(f) => f,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Err(Error::not_found("Log data"));
+        }
+        Err(e) => return Err(io_err(e, "opening log file")),
+    };
+    let len = file
+        .metadata()
+        .await
+        .map_err(|e| io_err(e, "log file metadata"))?
+        .len();
+    let stream = futures::stream::unfold(file, |mut file| async move {
+        use tokio::io::AsyncReadExt;
+        let mut buf = vec![0u8; 64 * 1024];
+        match file.read(&mut buf).await {
+            Ok(0) => None,
+            Ok(n) => {
+                buf.truncate(n);
+                Some((Ok::<_, std::io::Error>(bytes::Bytes::from(buf)), file))
+            }
+            Err(e) => Some((Err(e), file)),
+        }
+    });
+    let body = axum::body::Body::from_stream(stream);
+    Ok((
+        [
+            (
+                axum::http::header::CONTENT_TYPE,
+                "application/octet-stream".to_string(),
+            ),
+            (axum::http::header::CONTENT_LENGTH, len.to_string()),
+        ],
+        body,
+    )
+        .into_response())
+}

@@ -189,6 +189,24 @@ fn digest(alg: &str, data: &[u8], allow_sha1: bool) -> Result<Vec<u8>, DsigError
     })
 }
 
+/// Verify a detached signature (HTTP-Redirect binding: `SigAlg` over the
+/// raw `SAMLRequest=…&RelayState=…&SigAlg=…` query) against any IdP key.
+pub fn verify_detached(
+    alg: &str,
+    keys: &[RsaPublicKey],
+    msg: &[u8],
+    sig: &[u8],
+    allow_sha1: bool,
+) -> Result<(), DsigError> {
+    let sig = Signature::try_from(sig).map_err(|_| DsigError::Malformed("bad signature"))?;
+    for key in keys {
+        if verify_with(alg, key, msg, &sig, allow_sha1)? {
+            return Ok(());
+        }
+    }
+    Err(DsigError::Signature)
+}
+
 fn verify_with(
     alg: &str,
     key: &RsaPublicKey,

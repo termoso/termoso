@@ -928,3 +928,181 @@ async fn mcp_server_lists_hosts_and_gates_tools() {
         .unwrap();
     assert_eq!(unknown["error"]["code"], -32601);
 }
+
+#[tokio::test]
+async fn snippets_identities_keys_round_trip() {
+    let s = server!();
+    let r = rig(s, "bridge-shared").await;
+
+    // Key first; the response never echoes the private half or passphrase.
+    let (status, text) = r
+        .call(
+            Method::PUT,
+            "/v1/key/k-ops/",
+            Some(serde_json::json!({
+                "label": "ops key",
+                "private": KEY_PEM,
+                "public": "ssh-ed25519 AAAAC3 ops",
+                "passphrase": "pp"
+            })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{text}");
+    let k: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(k["external_id"], "k-ops");
+    assert_eq!(k["key_type"], "ed25519");
+    assert_eq!(k["has_passphrase"], true);
+    assert_eq!(k["used_by"], 0);
+    for secret in ["PRIVATE KEY", "\"pp\""] {
+        assert!(!text.contains(secret), "response leaks {secret:?}: {text}");
+    }
+    let key_id: Uuid = k["id"].as_str().unwrap().parse().unwrap();
+
+    // Identity referencing the key; a dangling key reference is a 404.
+    let (status, text) = r
+        .call(
+            Method::PUT,
+            "/v1/identity/ops/",
+            Some(serde_json::json!({ "username": "ops", "password": PASSWORD, "key": "k-ops" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{text}");
+    let i: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(i["label"], "ops");
+    assert_eq!(i["key"], "k-ops");
+    assert_eq!(i["has_password"], true);
+    assert_eq!(i["used_by"], 0);
+    assert!(!text.contains(PASSWORD));
+    let identity_id: Uuid = i["id"].as_str().unwrap().parse().unwrap();
+    let (status, _) = r
+        .call(
+            Method::PUT,
+            "/v1/identity/bad/",
+            Some(serde_json::json!({ "username": "x", "key": "missing" })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, _) = r
+        .call(
+            Method::PUT,
+            "/v1/identity/empty/",
+            Some(serde_json::json!({})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    // A host uses the shared identity instead of inline credentials.
+    let h = r
+        .ok(
+            Method::PUT,
+            "/v1/host/web-9/",
+            Some(serde_json::json!({
+                "address": "10.0.0.9",
+                "ssh": { "credentials": { "identity": "ops" } }
+            })),
+        )
+        .await;
+    assert_eq!(h["has_credentials"], true);
+    let host_id: Uuid = h["id"].as_str().unwrap().parse().unwrap();
+    let one = r.ok(Method::GET, "/v1/identity/ops/", None).await;
+    assert_eq!(one["used_by"], 1);
+    let keys = r.ok(Method::GET, "/v1/keys/", None).await;
+    assert_eq!(keys[0]["used_by"], 1);
+    let snap = r.snapshot(s).await;
+    assert_eq!(
+        count(&snap, "identity"),
+        1,
+        "no inline identity was created"
+    );
+    let host: Host = of(&snap, host_id, "host");
+    let cfg = host.ssh_config_id.unwrap();
+    let ssh: serde_json::Value = snap[&cfg].1.clone();
+    assert_eq!(ssh["identity_id"], identity_id.to_string());
+    let ident: serde_json::Value = snap[&identity_id].1.clone();
+    assert_eq!(ident["is_visible"], true);
+    assert_eq!(ident["ssh_key_id"], key_id.to_string());
+
+    // Shared + inline together is rejected; in-use entries cannot be deleted.
+    let (status, _) = r
+        .call(
+            Method::PUT,
+            "/v1/host/web-9/",
+            Some(serde_json::json!({
+                "address": "10.0.0.9",
+                "ssh": { "credentials": { "identity": "ops", "username": "root" } }
+            })),
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let (status, _) = r.call(Method::DELETE, "/v1/identity/ops/", None).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    let (status, _) = r.call(Method::DELETE, "/v1/key/k-ops/", None).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+
+    // Back to inline credentials: the shared identity is untouched and free to go.
+    r.ok(
+        Method::PUT,
+        "/v1/host/web-9/",
+        Some(serde_json::json!({
+            "address": "10.0.0.9",
+            "ssh": { "credentials": { "username": "root", "password": PASSWORD } }
+        })),
+    )
+    .await;
+    let snap = r.snapshot(s).await;
+    assert_eq!(count(&snap, "identity"), 2);
+    let one = r.ok(Method::GET, "/v1/identity/ops/", None).await;
+    assert_eq!(one["used_by"], 0);
+    let (status, _) = r.call(Method::DELETE, "/v1/identity/ops/", None).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (status, _) = r.call(Method::DELETE, "/v1/key/k-ops/", None).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let snap = r.snapshot(s).await;
+    assert_eq!(count(&snap, "ssh_key"), 0);
+    assert_eq!(count(&snap, "identity"), 1);
+    let list = r.ok(Method::GET, "/v1/identities/", None).await;
+    assert!(
+        list.as_array().unwrap().is_empty(),
+        "inline identities are not listed"
+    );
+
+    // Snippets: upsert is idempotent by external_id.
+    let sn = r
+        .ok(
+            Method::PUT,
+            "/v1/snippet/uptime/",
+            Some(serde_json::json!({ "label": "Uptime", "script": "uptime\n" })),
+        )
+        .await;
+    assert_eq!(sn["external_id"], "uptime");
+    let again = r
+        .ok(
+            Method::PUT,
+            "/v1/snippet/uptime/",
+            Some(serde_json::json!({ "label": "Uptime", "script": "uptime -p\n", "close_after_run": true })),
+        )
+        .await;
+    assert_eq!(again["id"], sn["id"]);
+    assert_eq!(again["script"], "uptime -p\n");
+    assert_eq!(again["close_after_run"], true);
+    let list = r.ok(Method::GET, "/v1/snippets/", None).await;
+    assert_eq!(list.as_array().unwrap().len(), 1);
+    let snap = r.snapshot(s).await;
+    assert_eq!(count(&snap, "snippet"), 1);
+    let (status, _) = r
+        .call(
+            Method::PUT,
+            "/v1/snippet/bad/",
+            Some(serde_json::json!({ "label": "x", "script": "y", "colour": "red" })),
+        )
+        .await;
+    assert_eq!(
+        status,
+        StatusCode::BAD_REQUEST,
+        "unknown fields are rejected"
+    );
+    let (status, _) = r.call(Method::DELETE, "/v1/snippet/uptime/", None).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (status, _) = r.call(Method::DELETE, "/v1/snippet/uptime/", None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}

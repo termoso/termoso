@@ -202,6 +202,7 @@ fn validate(store: &Store, form: &SnippetForm) -> Result<Snippet> {
         }
     }
     Ok(Snippet {
+        external_id: None,
         label: label.to_string(),
         script: form.script.clone(),
         package_id: form.package_id,

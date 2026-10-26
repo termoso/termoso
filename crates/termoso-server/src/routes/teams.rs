@@ -633,6 +633,7 @@ pub(crate) async fn remove(state: &AppState, team_id: Uuid, user_id: Uuid) -> Ap
         .bind(user_id)
         .execute(&mut *tx)
         .await?;
+    crate::routes::ca::forget_member(&mut *tx, team_id, user_id).await?;
     let converted = sqlx::query(
         "UPDATE users SET managed_by_team_id = NULL WHERE id = $1 AND managed_by_team_id = $2",
     )

@@ -4,6 +4,7 @@ import {
   Alert,
   Box,
   Button,
+  Autocomplete,
   Chip,
   Divider,
   Drawer,
@@ -30,7 +31,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { errorMessage } from "@/api/client";
 import { adminApi } from "@/api/endpoints";
 import { queryKeys } from "@/api/hooks";
-import type { AdminUpdateUserRequest, AdminUser } from "@/api/types";
+import type { AdminTeam, AdminUpdateUserRequest, AdminUser } from "@/api/types";
 import { useAuthState } from "@/auth/store";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EmptyState } from "@/components/EmptyState";
@@ -40,6 +41,9 @@ import { Section } from "@/components/Section";
 import { useSnackbar } from "@/components/Snackbar";
 import { UserCell } from "@/components/UserCell";
 import { formatDateTime, formatRelative } from "@/components/format";
+
+/** Team chips shown inline per user; the rest collapse into a "+N more" tooltip. */
+const TEAM_CHIPS = 3;
 
 function useDebounced(value: string, ms = 300): string {
   const [v, setV] = useState(value);
@@ -56,11 +60,16 @@ export function AdminUsersPage() {
   const [page, setPage] = useState(0);
   const [limit, setLimit] = useState(25);
   const [selected, setSelected] = useState<string | null>(null);
-  const [team, setTeam] = useState("");
+  const [teamPick, setTeamPick] = useState<AdminTeam | null>(null);
+  const team = teamPick?.id ?? "";
+  const [teamInput, setTeamInput] = useState("");
+  const teamQ = useDebounced(teamInput.trim());
   const [sort, setSort] = useState("created");
+  // Server-side search: instances with hundreds of teams never load them all.
   const teamList = useQuery({
-    queryKey: ["admin", "teams", "all"],
-    queryFn: () => adminApi.teams({ offset: 0, limit: 200 }),
+    queryKey: ["admin", "teams", "pick", teamQ],
+    queryFn: () => adminApi.teams({ q: teamQ || undefined, offset: 0, limit: 50 }),
+    placeholderData: (prev) => prev,
   });
   const offset = page * limit;
   const users = useQuery({
@@ -99,24 +108,26 @@ export function AdminUsersPage() {
         }
       />
       <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mb: 2 }}>
-        <TextField
-          select
+        <Autocomplete
           size="small"
-          label={tr("Team")}
-          value={team}
-          onChange={(e) => {
-            setTeam(e.target.value);
+          options={teamList.data?.items ?? []}
+          value={teamPick}
+          onChange={(_e, v) => {
+            setTeamPick(v);
             setPage(0);
           }}
-          sx={{ minWidth: 200 }}
-        >
-          <MenuItem value="">{tr("All teams")}</MenuItem>
-          {(teamList.data?.items ?? []).map((t) => (
-            <MenuItem key={t.id} value={t.id}>
-              {t.name}
-            </MenuItem>
-          ))}
-        </TextField>
+          inputValue={teamInput}
+          onInputChange={(_e, v) => setTeamInput(v)}
+          getOptionLabel={(t) => t.name}
+          isOptionEqualToValue={(a, b) => a.id === b.id}
+          filterOptions={(x) => x}
+          loading={teamList.isFetching}
+          noOptionsText={tr("No teams match")}
+          renderInput={(params) => (
+            <TextField {...params} label={tr("Team")} placeholder={tr("All teams")} />
+          )}
+          sx={{ minWidth: 240 }}
+        />
         <TextField
           select
           size="small"
@@ -209,15 +220,40 @@ export function AdminUsersPage() {
                         </Stack>
                       </TableCell>
                       <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>
-                        <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: "wrap" }}>
-                          {(u.teams ?? []).map((t) => (
+                        <Stack
+                          direction="row"
+                          spacing={0.5}
+                          useFlexGap
+                          sx={{ flexWrap: "wrap", maxWidth: 360 }}
+                        >
+                          {(u.teams ?? []).slice(0, TEAM_CHIPS).map((t) => (
                             <Chip
                               key={t.id}
                               size="small"
                               variant="outlined"
                               label={`${t.name} · ${tr(t.role)}`}
+                              sx={{ maxWidth: 160 }}
                             />
                           ))}
+                          {(u.teams ?? []).length > TEAM_CHIPS && (
+                            <Tooltip
+                              title={
+                                <Stack component="span" spacing={0.25}>
+                                  {(u.teams ?? []).slice(TEAM_CHIPS).map((t) => (
+                                    <span key={t.id}>{`${t.name} · ${tr(t.role)}`}</span>
+                                  ))}
+                                </Stack>
+                              }
+                            >
+                              <Chip
+                                size="small"
+                                variant="outlined"
+                                label={tr("+{n} more", {
+                                  n: String((u.teams ?? []).length - TEAM_CHIPS),
+                                })}
+                              />
+                            </Tooltip>
+                          )}
                           {u.source && u.source !== "password" && (
                             <Chip
                               size="small"

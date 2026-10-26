@@ -12,10 +12,12 @@
 //!                                    (your network)                  (opaque sync)
 //! ```
 
+pub mod automations;
 pub mod bridge;
 pub mod credentials;
 pub mod error;
 pub mod exec;
+pub mod gateway;
 pub mod mcp;
 pub mod model;
 pub mod rest;

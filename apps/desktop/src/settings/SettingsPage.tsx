@@ -45,6 +45,7 @@ import { FontPicker, FontPreview } from "./FontPicker";
 import { KeyboardPage } from "./KeyboardPage";
 import { SecurityPage } from "./SecurityPage";
 import { SftpPage } from "./SftpPage";
+import { TriggersCard } from "./TriggersCard";
 import { TeamPage } from "@/team/TeamPage";
 import { VaultsPage } from "@/team/VaultsPage";
 import { IS_MAC } from "@/lib/platform";
@@ -404,7 +405,6 @@ function General({ s, update }: SectionProps) {
           hint={tr(
             "Termoso runs its own agent: ssh, git and editors on this computer can sign with keys from the vault without the private keys ever being written to disk. Point SSH_AUTH_SOCK at it (line below).",
           )}
-          last={!s.serveSshAgent}
           control={
             <Toggle checked={s.serveSshAgent} onChange={(v) => update({ serveSshAgent: v })} />
           }
@@ -421,6 +421,16 @@ function General({ s, update }: SectionProps) {
             <AgentServerCard />
           </>
         )}
+        <SettingRow
+          label={tr("Run team automations on this computer")}
+          hint={tr(
+            "Scheduled snippets of your teams run here when their vault is unlocked (otherwise the API bridge or another member's desktop picks them up). Results go to the team page.",
+          )}
+          last
+          control={
+            <Toggle checked={s.runAutomations} onChange={(v) => update({ runAutomations: v })} />
+          }
+        />
       </SectionCard>
 
       <SectionCard title={tr("Sync")}>
@@ -728,6 +738,7 @@ function Terminal({ s, update }: SectionProps) {
         <LocalShellRow value={s.localShell} onChange={(v) => update({ localShell: v })} />
       </SectionCard>
 
+      <TriggersCard s={s} update={update} />
       <SectionCard title={tr("Behaviour")}>
         <SettingRow
           label={tr("Audible bell")}

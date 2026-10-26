@@ -621,14 +621,17 @@ impl SshSession {
             ConnectStage::Connecting,
             None,
         )));
-        let conn = Arc::new(Connector::new(
-            store.clone(),
-            secrets.clone(),
-            Arc::new(TerminalUi {
-                listener: listener.clone(),
-                state: state.clone(),
-            }),
-        ));
+        let conn = Arc::new(
+            Connector::new(
+                store.clone(),
+                secrets.clone(),
+                Arc::new(TerminalUi {
+                    listener: listener.clone(),
+                    state: state.clone(),
+                }),
+            )
+            .with_account(account.clone()),
+        );
         let (input, input_rx) = mpsc::unbounded_channel();
         let inner = Arc::new(Inner {
             store,

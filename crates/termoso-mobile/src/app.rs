@@ -41,9 +41,11 @@ use crate::sftp::{Backend as FileBackend, SftpLaunch, SftpListener, SftpSession}
 use crate::snippets::{self, SnippetDraft, SnippetItem, SnippetPackageItem, SnippetRun};
 use crate::sshid::SshIdView;
 use crate::team::{
-    AccessRequestCard, AccessRequestsCard, AclRuleCard, AuditPage, InviteCard, InviteSent,
-    PendingKeyCard, PermissionCard, RotationCard, TeamCard, TeamDataCard, TeamDevicesCard,
-    TeamMemberCard, TeamPoliciesCard, TeamRole, TeamRoleCard, VaultAccessDraft, VaultMemberCard,
+    AccessRequestCard, AccessRequestsCard, AccessReviewCard, AccessReviewDetailCard,
+    AccessReviewItemCard, AclRuleCard, AuditPage, AutomationCard, AutomationRunCard,
+    BreakGlassCard, GatewayCard, InviteCard, InviteSent, PendingKeyCard, PermissionCard,
+    RotationCard, TeamCard, TeamDataCard, TeamDevicesCard, TeamMemberCard, TeamPoliciesCard,
+    TeamRole, TeamRoleCard, VaultAccessDraft, VaultMemberCard,
 };
 use crate::themes::TerminalTheme;
 
@@ -644,8 +646,15 @@ impl TermosoApp {
         passphrase: Option<String>,
         export_passphrase: Option<String>,
     ) -> Result<String> {
+        let id = parse_id(&id)?;
+        let key = self.store.require::<termoso_core::model::SshKey>(id)?;
+        if termoso_core::policy::export_denied(&self.store, key.vault_id) {
+            return Err(MobileError::Invalid {
+                detail: termoso_core::policy::Denied::Export.message(),
+            });
+        }
         let text: Zeroizing<String> =
-            keychain::export(&self.store, parse_id(&id)?, passphrase, export_passphrase)?;
+            keychain::export(&self.store, id, passphrase, export_passphrase)?;
         Ok(text.to_string())
     }
 
@@ -993,6 +1002,19 @@ impl TermosoApp {
     /// Name this installation registers under (shown in the devices list).
     pub fn set_device_name(&self, name: String) {
         self.account.set_device_name(name);
+    }
+
+    /// Security facts about this device, sent with every sign-in / refresh so
+    /// team posture policies can be checked server-side.
+    pub fn set_posture(
+        &self,
+        os_version: String,
+        disk_encryption: Option<bool>,
+        screen_lock: Option<bool>,
+        secure_key_storage: Option<bool>,
+    ) {
+        self.account
+            .set_posture(os_version, disk_encryption, screen_lock, secure_key_storage);
     }
 
     pub fn account_status(&self) -> Result<AccountStatus> {
@@ -1956,6 +1978,7 @@ impl TermosoApp {
                 settings: MobileSettings::load(&self.store)?,
                 listener,
                 presence,
+                account: Some(self.account.clone()),
             },
         ))
     }
@@ -2099,6 +2122,98 @@ impl TermosoApp {
         paste: bool,
     ) -> Result<SnippetRun> {
         snippets::run(&self.store, parse_id(&id)?, &sessions, &vars, paste)
+    }
+
+    // Compliance on the go: access reviews, break-glass, automations.
+
+    pub fn team_access_reviews(&self, team_id: String) -> Result<Vec<AccessReviewCard>> {
+        RUNTIME.block_on(self.account.team_access_reviews(team_id))
+    }
+
+    pub fn team_access_review(
+        &self,
+        team_id: String,
+        review_id: String,
+    ) -> Result<AccessReviewDetailCard> {
+        RUNTIME.block_on(self.account.team_access_review(team_id, review_id))
+    }
+
+    pub fn team_decide_access_review_item(
+        &self,
+        team_id: String,
+        review_id: String,
+        item_id: String,
+        decision: String,
+        note: Option<String>,
+    ) -> Result<AccessReviewItemCard> {
+        RUNTIME.block_on(
+            self.account
+                .team_decide_access_review_item(team_id, review_id, item_id, decision, note),
+        )
+    }
+
+    pub fn team_complete_access_review(
+        &self,
+        team_id: String,
+        review_id: String,
+    ) -> Result<AccessReviewDetailCard> {
+        RUNTIME.block_on(self.account.team_complete_access_review(team_id, review_id))
+    }
+
+    pub fn team_break_glass(&self, team_id: String) -> Result<Option<BreakGlassCard>> {
+        RUNTIME.block_on(self.account.team_break_glass(team_id))
+    }
+
+    pub fn team_use_break_glass(
+        &self,
+        team_id: String,
+        secret: String,
+        reason: String,
+    ) -> Result<BreakGlassCard> {
+        RUNTIME.block_on(self.account.team_use_break_glass(team_id, secret, reason))
+    }
+
+    pub fn team_end_break_glass(&self, team_id: String) -> Result<BreakGlassCard> {
+        RUNTIME.block_on(self.account.team_end_break_glass(team_id))
+    }
+
+    pub fn team_automations(&self, team_id: String) -> Result<Vec<AutomationCard>> {
+        RUNTIME.block_on(self.account.team_automations(team_id))
+    }
+
+    pub fn team_automation_runs(
+        &self,
+        team_id: String,
+        automation_id: String,
+    ) -> Result<Vec<AutomationRunCard>> {
+        RUNTIME.block_on(self.account.team_automation_runs(team_id, automation_id))
+    }
+
+    pub fn team_run_automation_now(
+        &self,
+        team_id: String,
+        automation_id: String,
+    ) -> Result<AutomationRunCard> {
+        RUNTIME.block_on(self.account.team_run_automation_now(team_id, automation_id))
+    }
+
+    pub fn gateways(&self) -> Result<Vec<GatewayCard>> {
+        RUNTIME.block_on(self.account.gateways())
+    }
+
+    /// Wake-on-LAN: broadcast a magic packet for `mac` (`aa:bb:cc:dd:ee:ff`)
+    /// on the local network; `broadcast` overrides 255.255.255.255.
+    pub fn wake_host(&self, mac: String, broadcast: Option<String>) -> Result<u32> {
+        let target = match broadcast {
+            Some(b) => Some(
+                b.trim()
+                    .parse()
+                    .map_err(|_| MobileError::invalid("broadcast must be an IP address"))?,
+            ),
+            None => None,
+        };
+        let n = RUNTIME.block_on(termoso_core::wol::wake(&mac, target))?;
+        Ok(n as u32)
     }
 }
 

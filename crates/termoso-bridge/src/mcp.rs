@@ -21,7 +21,7 @@ use uuid::Uuid;
 use crate::Bridge;
 use crate::error::{BridgeError, Result};
 use crate::exec;
-use crate::model::{GroupRequest, HostRequest};
+use crate::model::{GroupRequest, HostRequest, IdentityRequest, KeyRequest, SnippetRequest};
 use crate::vault::VaultState;
 
 /// Protocol revisions we speak; the first is offered when the client's is unknown.
@@ -62,6 +62,12 @@ pub fn tools_for(cfg: McpConfig) -> Vec<Value> {
                "inputSchema": {"type": "object", "required": ["host"], "properties": {"host": host_prop, "vault": vault_prop}, "additionalProperties": false}}),
         json!({"name": "list_groups", "description": "All groups with parent and host counts.",
                "inputSchema": {"type": "object", "properties": {"vault": vault_prop}, "additionalProperties": false}}),
+        json!({"name": "list_snippets", "description": "Snippets managed through the bridge (external_id, label, script).",
+               "inputSchema": {"type": "object", "properties": {"vault": vault_prop}, "additionalProperties": false}}),
+        json!({"name": "list_identities", "description": "Shared identities managed through the bridge (label, username, whether a password/key is set, how many hosts use it). Never returns secrets.",
+               "inputSchema": {"type": "object", "properties": {"vault": vault_prop}, "additionalProperties": false}}),
+        json!({"name": "list_keys", "description": "SSH keys managed through the bridge (label, type, public key). Never returns private keys.",
+               "inputSchema": {"type": "object", "properties": {"vault": vault_prop}, "additionalProperties": false}}),
         json!({"name": "sync", "description": "Pull the latest vault changes from the Termoso server now.",
                "inputSchema": {"type": "object", "properties": {}, "additionalProperties": false}}),
     ];
@@ -74,6 +80,18 @@ pub fn tools_for(cfg: McpConfig) -> Vec<Value> {
             json!({"name": "upsert_group", "description": "Create or update a group by external_id (label, parent, vault, ssh/telnet defaults).",
                    "inputSchema": {"type": "object", "required": ["external_id", "group"], "properties": {"external_id": {"type": "string"}, "group": {"type": "object"}}, "additionalProperties": false}}),
             json!({"name": "delete_group", "description": "Delete a group by external_id (must be empty).",
+                   "inputSchema": {"type": "object", "required": ["external_id"], "properties": {"external_id": {"type": "string"}, "vault": vault_prop}, "additionalProperties": false}}),
+            json!({"name": "upsert_snippet", "description": "Create or update a snippet by external_id (label, script, close_after_run, vault).",
+                   "inputSchema": {"type": "object", "required": ["external_id", "snippet"], "properties": {"external_id": {"type": "string"}, "snippet": {"type": "object"}}, "additionalProperties": false}}),
+            json!({"name": "delete_snippet", "description": "Delete a snippet by external_id.",
+                   "inputSchema": {"type": "object", "required": ["external_id"], "properties": {"external_id": {"type": "string"}, "vault": vault_prop}, "additionalProperties": false}}),
+            json!({"name": "upsert_identity", "description": "Create or update a shared identity by external_id (label, username, password, key = external_id of a key, vault). Hosts reference it as credentials.identity.",
+                   "inputSchema": {"type": "object", "required": ["external_id", "identity"], "properties": {"external_id": {"type": "string"}, "identity": {"type": "object"}}, "additionalProperties": false}}),
+            json!({"name": "delete_identity", "description": "Delete a shared identity by external_id (must not be used by hosts or groups).",
+                   "inputSchema": {"type": "object", "required": ["external_id"], "properties": {"external_id": {"type": "string"}, "vault": vault_prop}, "additionalProperties": false}}),
+            json!({"name": "upsert_key", "description": "Create or update an SSH key by external_id (label, private (PEM/OpenSSH), public, passphrase, vault).",
+                   "inputSchema": {"type": "object", "required": ["external_id", "key"], "properties": {"external_id": {"type": "string"}, "key": {"type": "object"}}, "additionalProperties": false}}),
+            json!({"name": "delete_key", "description": "Delete an SSH key by external_id (must not be referenced by identities).",
                    "inputSchema": {"type": "object", "required": ["external_id"], "properties": {"external_id": {"type": "string"}, "vault": vault_prop}, "additionalProperties": false}}),
         ]);
     }
@@ -95,7 +113,11 @@ pub fn guard(cfg: McpConfig, tool: &str) -> Result<()> {
         )))
     };
     match tool {
-        "upsert_host" | "delete_host" | "upsert_group" | "delete_group" if !cfg.allow_write => {
+        "upsert_host" | "delete_host" | "upsert_group" | "delete_group" | "upsert_snippet"
+        | "delete_snippet" | "upsert_identity" | "delete_identity" | "upsert_key"
+        | "delete_key"
+            if !cfg.allow_write =>
+        {
             denied("--allow-write")
         }
         "ssh_exec" if !cfg.allow_exec => denied("--allow-exec"),
@@ -318,7 +340,7 @@ impl McpServer {
             "Termoso vault access through an API Bridge. Hosts are identified by id, external_id, label or address. Secrets are never returned.",
         );
         if !self.cfg.allow_write {
-            s.push_str(" This bridge is read-only: hosts and groups cannot be changed.");
+            s.push_str(" This bridge is read-only: hosts, groups, snippets, identities and keys cannot be changed.");
         }
         if self.cfg.allow_exec {
             s.push_str(" `ssh_exec` runs a single non-interactive command on a host and returns its output; prefer read-only commands and confirm destructive ones with the user first.");
@@ -430,6 +452,52 @@ impl McpServer {
             "delete_group" => {
                 let ext = req_str(&args, "external_id")?;
                 Ok(json!({"deleted": self.bridge.delete_group(ext, vault).await?}))
+            }
+            "list_snippets" => Ok(serde_json::to_value(
+                self.bridge.list_snippets(vault).await?,
+            )?),
+            "upsert_snippet" => {
+                let ext = req_str(&args, "external_id")?;
+                let req: SnippetRequest =
+                    serde_json::from_value(args.get("snippet").cloned().unwrap_or_default())
+                        .map_err(|e| BridgeError::Invalid(format!("snippet: {e}")))?;
+                Ok(serde_json::to_value(
+                    self.bridge.upsert_snippet(ext, req).await?,
+                )?)
+            }
+            "delete_snippet" => {
+                let ext = req_str(&args, "external_id")?;
+                Ok(json!({"deleted": self.bridge.delete_snippet(ext, vault).await?}))
+            }
+            "list_identities" => Ok(serde_json::to_value(
+                self.bridge.list_identities(vault).await?,
+            )?),
+            "upsert_identity" => {
+                let ext = req_str(&args, "external_id")?;
+                let req: IdentityRequest =
+                    serde_json::from_value(args.get("identity").cloned().unwrap_or_default())
+                        .map_err(|e| BridgeError::Invalid(format!("identity: {e}")))?;
+                Ok(serde_json::to_value(
+                    self.bridge.upsert_identity(ext, req).await?,
+                )?)
+            }
+            "delete_identity" => {
+                let ext = req_str(&args, "external_id")?;
+                Ok(json!({"deleted": self.bridge.delete_identity(ext, vault).await?}))
+            }
+            "list_keys" => Ok(serde_json::to_value(self.bridge.list_keys(vault).await?)?),
+            "upsert_key" => {
+                let ext = req_str(&args, "external_id")?;
+                let req: KeyRequest =
+                    serde_json::from_value(args.get("key").cloned().unwrap_or_default())
+                        .map_err(|e| BridgeError::Invalid(format!("key: {e}")))?;
+                Ok(serde_json::to_value(
+                    self.bridge.upsert_key(ext, req).await?,
+                )?)
+            }
+            "delete_key" => {
+                let ext = req_str(&args, "external_id")?;
+                Ok(json!({"deleted": self.bridge.delete_key(ext, vault).await?}))
             }
             "ssh_exec" => {
                 let sel = req_str(&args, "host")?;

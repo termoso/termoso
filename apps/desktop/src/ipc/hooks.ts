@@ -155,6 +155,13 @@ export const useHostChains = (vaultId: Uuid | null) =>
     queryFn: () => ipc.entitiesList<HostChainData>("host_chain", vaultId),
   });
 
+export const useGateways = () =>
+  useQuery({
+    queryKey: ["gateways"],
+    queryFn: () => ipc.gatewaysList(),
+    staleTime: 30_000,
+  });
+
 export const useColorSchemes = (vaultId: Uuid | null) =>
   useQuery({
     queryKey: keys.colorSchemes(vaultId),

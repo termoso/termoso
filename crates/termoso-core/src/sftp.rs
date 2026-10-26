@@ -327,6 +327,37 @@ impl Sftp {
         Ok(Self { session, home })
     }
 
+    /// Start `sftp-server` under `sudo` (the user's password is fed to
+    /// `sudo -S`), so the session browses and edits files as root. Needs a
+    /// sudoers entry that allows the binary; the common install paths are tried.
+    pub async fn open_sudo(client: &SshClient, password: &str) -> Result<Self> {
+        let channel = client.open_session().await?;
+        let cmd = "sudo -S -p '' sh -c 'for p in /usr/lib/openssh/sftp-server /usr/libexec/sftp-server \
+                  /usr/lib/ssh/sftp-server /usr/libexec/openssh/sftp-server /usr/lib64/misc/sftp-server; \
+                  do [ -x \"$p\" ] && exec \"$p\"; done; command -v sftp-server >/dev/null && exec sftp-server; \
+                  echo \"sftp-server not found\" >&2; exit 127'";
+        channel.exec(true, cmd).await?;
+        let mut secret = zeroize::Zeroizing::new(password.to_string());
+        secret.push('\n');
+        channel.data(secret.as_bytes()).await?;
+        let cfg = SftpConfig {
+            max_packet_len: CHUNK as u32,
+            max_write_packet_len: CHUNK as u32,
+            max_concurrent_reads: IN_FLIGHT,
+            max_concurrent_writes: IN_FLIGHT,
+            request_timeout_secs: REQUEST_TIMEOUT_SECS,
+        };
+        let session = SftpSession::new_with_config(channel.into_stream(), cfg)
+            .await
+            .map_err(|e| {
+                CoreError::Sftp(format!(
+                    "sudo sftp-server did not start (wrong password or no sudoers rule?): {e}"
+                ))
+            })?;
+        let home = session.canonicalize(".").await.map_err(sftp_err)?;
+        Ok(Self { session, home })
+    }
+
     /// The user's home directory (server's idea of `.`).
     pub fn home(&self) -> &str {
         &self.home

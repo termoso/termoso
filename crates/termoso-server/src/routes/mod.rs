@@ -1,12 +1,16 @@
 //! HTTP routing.
 
 pub mod access;
+pub mod access_reviews;
 pub mod account;
 pub mod acl;
 pub mod admin;
 pub mod ai;
 pub mod auth;
+pub mod automations;
+pub mod break_glass;
 pub mod bridges;
+pub mod ca;
 pub mod captcha;
 pub mod gdpr;
 pub mod history;
@@ -68,6 +72,7 @@ pub fn router(state: AppState) -> Router {
         .route("/auth/password/start", post(auth::password_start))
         .route("/auth/password/finish", post(auth::password_finish))
         .route("/auth/logout", post(auth::logout))
+        .route("/auth/logout/sso", post(auth::logout_sso))
         .route("/auth/reauth/start", post(auth::reauth_start))
         .route("/auth/reauth/finish", post(auth::reauth_finish))
         .route("/auth/start-over/request", post(start_over::request))
@@ -94,6 +99,10 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/auth/sso/saml/post/{flow_id}", get(auth::sso_saml_post))
         .route("/auth/sso/saml/acs", post(auth::sso_saml_acs))
+        .route(
+            "/auth/sso/saml/slo",
+            get(auth::sso_saml_slo_redirect).post(auth::sso_saml_slo_post),
+        )
         // account
         .route(
             "/account",
@@ -192,6 +201,36 @@ pub fn router(state: AppState) -> Router {
         .route("/teams/{id}/presence", get(teams::get_presence))
         .route("/teams/{id}/audit", get(crate::audit::list))
         .route("/teams/{id}/audit/export", get(crate::audit::export))
+        .route("/teams/{id}/audit/verify", get(crate::audit_chain::verify))
+        .route(
+            "/teams/{id}/access-reviews",
+            get(access_reviews::list).post(access_reviews::open),
+        )
+        .route("/teams/{id}/access-reviews/{rid}", get(access_reviews::get))
+        .route(
+            "/teams/{id}/access-reviews/{rid}/items/{iid}",
+            post(access_reviews::decide),
+        )
+        .route(
+            "/teams/{id}/access-reviews/{rid}/complete",
+            post(access_reviews::complete),
+        )
+        .route(
+            "/teams/{id}/access-reviews/{rid}/cancel",
+            post(access_reviews::cancel),
+        )
+        .route(
+            "/teams/{id}/break-glass",
+            get(break_glass::get)
+                .put(break_glass::configure)
+                .delete(break_glass::remove),
+        )
+        .route("/teams/{id}/break-glass/use", post(break_glass::use_secret))
+        .route("/teams/{id}/break-glass/end", post(break_glass::end))
+        .route(
+            "/teams/{id}/audit/checkpoint",
+            post(crate::audit_chain::checkpoint),
+        )
         .route(
             "/teams/{id}/webhooks",
             get(crate::webhooks::list).post(crate::webhooks::create),
@@ -221,6 +260,38 @@ pub fn router(state: AppState) -> Router {
             "/teams/{id}/scim/groups/{gid}/vaults",
             put(scim_admin::set_group_vaults),
         )
+        .route(
+            "/teams/{id}/ca",
+            get(ca::get).put(ca::put).delete(ca::delete),
+        )
+        .route("/teams/{id}/ca/rotate", post(ca::rotate))
+        .route("/teams/{id}/ca/issue", post(ca::issue))
+        .route("/teams/{id}/ca/certificates", get(ca::list))
+        .route("/teams/{id}/ca/certificates/{cid}/revoke", post(ca::revoke))
+        .route("/teams/{id}/ca/revoked", get(ca::revoked))
+        .route(
+            "/teams/{id}/automations",
+            get(automations::list).post(automations::create),
+        )
+        .route(
+            "/teams/{id}/automations/runs/claim",
+            post(automations::claim),
+        )
+        .route(
+            "/teams/{id}/automations/runs/{rid}",
+            get(automations::run).patch(automations::finish),
+        )
+        .route(
+            "/teams/{id}/automations/{aid}",
+            get(automations::get)
+                .put(automations::update)
+                .delete(automations::delete),
+        )
+        .route(
+            "/teams/{id}/automations/{aid}/run",
+            post(automations::run_now),
+        )
+        .route("/teams/{id}/automations/{aid}/runs", get(automations::runs))
         .route(
             "/teams/{id}/policies",
             get(policies::get).put(policies::put),
@@ -328,6 +399,9 @@ pub fn router(state: AppState) -> Router {
         .route("/live", get(crate::live::list).post(crate::live::create))
         .route("/live/{id}/stop", post(crate::live::stop))
         .route("/live/{id}/ws", get(crate::live::ws))
+        .route("/gateways", get(crate::gateway::list))
+        .route("/gateways/ws", get(crate::gateway::agent_ws))
+        .route("/gateways/{id}/connect", get(crate::gateway::client_ws))
         // admin
         .route("/admin/stats", get(admin::stats))
         .route("/admin/config", get(admin::config))
@@ -367,6 +441,12 @@ pub fn router(state: AppState) -> Router {
         .route("/.well-known/assetlinks.json", get(server::assetlinks))
         .route("/captcha", get(captcha::page))
         .nest("/scim/v2", crate::scim::router())
+        .route("/ca/{team_id}", get(ca::trusted_keys))
+        .route("/audit/key", get(crate::audit_chain::public_key))
+        .route(
+            "/api/v1/logs/blob/{token}",
+            get(logs::blob_get).put(logs::blob_put),
+        )
         .route("/sshid/{handle}", get(sshid::public_default))
         .route("/sshid/{handle}/{type}", get(sshid::public_typed))
         .nest(

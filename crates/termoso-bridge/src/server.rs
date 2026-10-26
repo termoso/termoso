@@ -9,6 +9,7 @@ use termoso_proto::bridge::BridgeSelf;
 use termoso_proto::error::ApiError;
 use termoso_proto::sync::{PullRequest, PullResponse, PushRequest, PushResponse};
 use url::Url;
+use uuid::Uuid;
 
 use crate::error::{BridgeError, Result};
 
@@ -31,6 +32,10 @@ impl ServerClient {
             .timeout(Duration::from_secs(30))
             .build()?;
         Ok(Self { http, base, token })
+    }
+
+    pub fn token(&self) -> &str {
+        &self.token
     }
 
     pub fn server_url(&self) -> &Url {
@@ -74,6 +79,35 @@ impl ServerClient {
     /// `POST /sync/pull`.
     pub async fn pull(&self, req: &PullRequest) -> Result<PullResponse> {
         self.send(Method::POST, "sync/pull", Some(req)).await
+    }
+
+    /// `POST /teams/{id}/automations/runs/claim`.
+    pub async fn claim_runs(
+        &self,
+        team_id: Uuid,
+        req: &termoso_proto::automation::ClaimRunsRequest,
+    ) -> Result<termoso_proto::automation::ClaimRunsResponse> {
+        self.send(
+            Method::POST,
+            &format!("teams/{team_id}/automations/runs/claim"),
+            Some(req),
+        )
+        .await
+    }
+
+    /// `PATCH /teams/{id}/automations/runs/{rid}`.
+    pub async fn finish_run(
+        &self,
+        team_id: Uuid,
+        run_id: Uuid,
+        req: &termoso_proto::automation::FinishRunRequest,
+    ) -> Result<termoso_proto::automation::AutomationRun> {
+        self.send(
+            Method::PATCH,
+            &format!("teams/{team_id}/automations/runs/{run_id}"),
+            Some(req),
+        )
+        .await
     }
 
     /// `POST /sync/push`.

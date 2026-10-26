@@ -139,6 +139,9 @@ pub mod payload {
             pub label: String,
             /// Hostname or IP.
             pub address: String,
+            /// MAC address for Wake-on-LAN (`aa:bb:cc:dd:ee:ff`), if the host sleeps.
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub mac_address: Option<String>,
             /// Group.
             #[serde(default, skip_serializing_if = "Option::is_none")]
             pub group_id: Option<Uuid>,
@@ -213,6 +216,10 @@ pub mod payload {
             /// Proxy.
             #[serde(default, skip_serializing_if = "Option::is_none")]
             pub proxy_id: Option<Uuid>,
+            /// Reach the host through this gateway (an API bridge running `termoso-bridge gateway`)
+            /// instead of dialling it directly; the bridge id.
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub gateway_id: Option<Uuid>,
             /// Port knocking sequence.
             #[serde(default, skip_serializing_if = "Option::is_none")]
             pub port_knocking_id: Option<Uuid>,
@@ -382,6 +389,10 @@ pub mod payload {
             /// one-time-code prompt of keyboard-interactive logins.
             #[serde(default, skip_serializing_if = "Option::is_none")]
             pub totp_secret: Option<String>,
+            /// Stable id assigned by an external system (API Bridge, importers)
+            /// so repeated syncs update instead of duplicating.
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub external_id: Option<String>,
         }
     }
 
@@ -423,6 +434,10 @@ pub mod payload {
             /// Settings → SSH ID, not listed in the Keychain).
             #[serde(default, skip_serializing_if = "std::ops::Not::not")]
             pub ssh_id: bool,
+            /// Stable id assigned by an external system (API Bridge, importers)
+            /// so repeated syncs update instead of duplicating.
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub external_id: Option<String>,
         }
     }
 
@@ -473,6 +488,10 @@ pub mod payload {
             /// Sort order.
             #[serde(default)]
             pub sort_order: i32,
+            /// Stable id assigned by an external system (API Bridge, importers)
+            /// so repeated syncs update instead of duplicating.
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub external_id: Option<String>,
         }
     }
 

@@ -203,6 +203,7 @@ pub(crate) struct TunnelLaunch {
     pub settings: MobileSettings,
     pub listener: Arc<dyn TunnelListener>,
     pub presence: Slot,
+    pub account: Option<Arc<crate::account::AccountRuntime>>,
 }
 
 impl PfTunnel {
@@ -214,19 +215,23 @@ impl PfTunnel {
             settings,
             listener,
             presence,
+            account,
         } = launch;
         let state = Arc::new(Mutex::new(TunnelState::connecting(
             ConnectStage::Connecting,
             None,
         )));
-        let conn = Arc::new(Connector::new(
-            store.clone(),
-            secrets.clone(),
-            Arc::new(TunnelUi {
-                listener: listener.clone(),
-                state: state.clone(),
-            }),
-        ));
+        let conn = Arc::new(
+            Connector::new(
+                store.clone(),
+                secrets.clone(),
+                Arc::new(TunnelUi {
+                    listener: listener.clone(),
+                    state: state.clone(),
+                }),
+            )
+            .with_account(account),
+        );
         let inner = Arc::new(Inner {
             conn,
             listener,
@@ -610,6 +615,13 @@ pub(crate) fn delete(store: &Store, id: Uuid) -> Result<()> {
 
 pub(crate) fn resolve_for_tunnel(store: &Store, id: Uuid) -> Result<Entity<PfRule>> {
     let e = store.require::<PfRule>(id)?;
+    if let Some(d) =
+        termoso_core::policy::check_forward(store, e.vault_id, &e.data.kind, e.data.remote_port)
+    {
+        return Err(MobileError::Invalid {
+            detail: d.message(),
+        });
+    }
     let _: ResolvedHost = store.resolve_host_in(e.data.host_id, Some(e.vault_id))?;
     Ok(e)
 }

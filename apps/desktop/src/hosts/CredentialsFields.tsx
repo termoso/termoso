@@ -348,11 +348,15 @@ export function CredentialsFields({
                   : tr("Password")
             }
             helperText={
-              value.hasPassword && value.password === null
-                ? tr("A password is stored. Type to replace it or clear it to remove.")
-                : !value.hasPassword && value.password === null && inherited?.hasPassword && from
-                  ? tr("From {from}", { from })
-                  : undefined
+              value.password && /^(op|bw|pass|env):\/\//.test(value.password)
+                ? tr(
+                    "Reference: fetched from the external manager when connecting, not stored here.",
+                  )
+                : value.hasPassword && value.password === null
+                  ? tr("A password is stored. Type to replace it or clear it to remove.")
+                  : !value.hasPassword && value.password === null && inherited?.hasPassword && from
+                    ? tr("From {from}", { from })
+                    : undefined
             }
             slotProps={{
               htmlInput: { "aria-label": tr("Password") },

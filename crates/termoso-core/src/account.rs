@@ -44,6 +44,7 @@ pub fn device_info(
         platform,
         app_version: app_version.to_string(),
         client_device_id: Some(store.device_id()?),
+        posture: crate::posture::reported(),
     })
 }
 
@@ -524,6 +525,8 @@ pub async fn sign_out(api: &ApiClient, store: &Store) -> Result<()> {
 pub fn sign_out_local(api: &ApiClient, store: &Store) -> Result<()> {
     api.set_token(None);
     crate::sshid::forget(store)?;
+    crate::ca::forget_certificates(store)?;
+    crate::policy::clear(store)?;
     store.clear_account()
 }
 

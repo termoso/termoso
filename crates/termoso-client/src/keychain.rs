@@ -397,6 +397,7 @@ pub fn store_security_key(
     let credential =
         fido2::describe(&material.private_key, passphrase).and_then(|s| s.credential_id);
     let key = SshKey {
+        external_id: None,
         label,
         private_key: material.private_key.to_string(),
         public_key: Some(material.public_key.clone()),
@@ -474,6 +475,7 @@ pub fn generate(store: &Store, form: &GenerateForm) -> Result<KeyCard> {
     let passphrase = non_empty(form.passphrase.clone());
     let material = keys::generate(form.algorithm, form.comment.trim(), passphrase.as_deref())?;
     let key = SshKey {
+        external_id: None,
         label,
         private_key: material.private_key.to_string(),
         public_key: Some(material.public_key.clone()),
@@ -506,6 +508,7 @@ pub fn import(store: &Store, form: &ImportForm) -> Result<KeyCard> {
         _ => None,
     };
     let key = SshKey {
+        external_id: None,
         label: label.clone(),
         private_key: material.private_key.to_string(),
         public_key: Some(material.public_key.clone()),
@@ -541,6 +544,7 @@ pub fn agent_key(label: &str, public_key: &str) -> Result<SshKey> {
         l => label_of(l, "key")?,
     };
     Ok(SshKey {
+        external_id: None,
         label,
         private_key: String::new(),
         public_key: Some(info.public_key),
@@ -1022,6 +1026,7 @@ pub fn save_identity(store: &Store, form: &IdentityForm) -> Result<IdentityCard>
         None => existing.as_ref().and_then(|e| e.data.totp_secret.clone()),
     };
     let data = Identity {
+        external_id: None,
         label,
         username,
         password,

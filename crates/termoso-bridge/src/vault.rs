@@ -7,7 +7,7 @@ use serde::de::DeserializeOwned;
 use termoso_crypto::aead::{self, Aad};
 use termoso_crypto::keys::SymmetricKey;
 use termoso_proto::entities::SyncEntity;
-use termoso_proto::entities::payload::{Group, Host, Tag};
+use termoso_proto::entities::payload::{Group, Host, Identity, Snippet, SshKey, Tag};
 use termoso_proto::sync::EntityChange;
 use termoso_proto::vault::{VaultKind, VaultRole};
 use uuid::Uuid;
@@ -133,6 +133,21 @@ impl VaultState {
             .map(|(id, _, h)| (id, h))
     }
 
+    pub fn snippet_by_external_id(&self, external_id: &str) -> Option<(Uuid, Snippet)> {
+        self.iter_kind::<Snippet>("snippet")
+            .find(|(_, _, s)| s.external_id.as_deref() == Some(external_id))
+            .map(|(id, _, s)| (id, s))
+    }
+    pub fn identity_by_external_id(&self, external_id: &str) -> Option<(Uuid, Identity)> {
+        self.iter_kind::<Identity>("identity")
+            .find(|(_, _, i)| i.external_id.as_deref() == Some(external_id))
+            .map(|(id, _, i)| (id, i))
+    }
+    pub fn key_by_external_id(&self, external_id: &str) -> Option<(Uuid, SshKey)> {
+        self.iter_kind::<SshKey>("ssh_key")
+            .find(|(_, _, k)| k.external_id.as_deref() == Some(external_id))
+            .map(|(id, _, k)| (id, k))
+    }
     pub fn group_by_external_id(&self, external_id: &str) -> Option<(Uuid, Group)> {
         self.iter_kind::<Group>("group")
             .find(|(_, _, g)| g.external_id.as_deref() == Some(external_id))

@@ -18,6 +18,7 @@ pub mod metadata;
 pub mod sp_key;
 pub mod xmlenc;
 
+use std::io::Read as _;
 use std::io::Write as _;
 
 use base64::Engine;
@@ -121,6 +122,8 @@ const GROUP_ATTRIBUTES: &[&str] = &[
 pub struct SpConfig {
     pub entity_id: String,
     pub acs_url: String,
+    /// Our SingleLogoutService endpoint (Redirect and POST bindings).
+    pub slo_url: String,
     pub key: Option<SpKey>,
     pub cert_der: Option<Vec<u8>>,
     pub sign_requests: bool,
@@ -160,6 +163,7 @@ impl ServiceProvider {
         metadata::render_sp(&metadata::SpDescriptor {
             entity_id: &self.sp.entity_id,
             acs_url: &self.sp.acs_url,
+            slo_url: &self.sp.slo_url,
             cert_der: self.sp.cert_der.as_deref(),
             sign_requests: self.sp.sign_requests,
         })
@@ -533,6 +537,295 @@ impl ServiceProvider {
     }
 }
 
+/// A `LogoutRequest` from the IdP: IdP-initiated Single Logout, or the IdP
+/// propagating a logout another service provider started.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LogoutRequest {
+    pub id: String,
+    pub name_id: String,
+    /// IdP sessions to end; empty means every session of the subject.
+    pub session_indexes: Vec<String>,
+}
+
+/// One message at our SingleLogoutService endpoint.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SloMessage {
+    Request(LogoutRequest),
+    /// The IdP answering a `LogoutRequest` we sent.
+    Response {
+        in_response_to: Option<String>,
+        success: bool,
+    },
+}
+
+/// Percent-decode one query value (the Redirect binding form-encodes them).
+fn urldec(s: &str) -> String {
+    url::form_urlencoded::parse(format!("v={s}").as_bytes())
+        .next()
+        .map(|(_, v)| v.into_owned())
+        .unwrap_or_default()
+}
+
+impl ServiceProvider {
+    /// Whether the IdP advertises a SingleLogoutService at all.
+    pub fn slo_enabled(&self) -> bool {
+        self.idp.slo_redirect.is_some() || self.idp.slo_post.is_some()
+    }
+
+    /// HTTP-Redirect binding at our SLO endpoint. `raw_query` is the query
+    /// string exactly as received: the IdP's signature covers the encoded
+    /// `SAMLRequest`/`SAMLResponse`, `RelayState` and `SigAlg` values as
+    /// sent. Unsigned messages are rejected — anyone could otherwise sign a
+    /// user out by guessing their NameID. Returns the message and the
+    /// decoded `RelayState`.
+    pub fn consume_slo_redirect(
+        &self,
+        raw_query: &str,
+        now: DateTime<Utc>,
+    ) -> Result<(SloMessage, Option<String>), SamlError> {
+        let (mut message, mut relay, mut sig_alg, mut signature) = (None, None, None, None);
+        for part in raw_query.split('&') {
+            let (k, v) = part.split_once('=').unwrap_or((part, ""));
+            match k {
+                "SAMLRequest" | "SAMLResponse" if message.is_none() => message = Some((k, v)),
+                "RelayState" => relay = Some(v),
+                "SigAlg" => sig_alg = Some(v),
+                "Signature" => signature = Some(v),
+                _ => {}
+            }
+        }
+        let (kind, raw) =
+            message.ok_or_else(|| SamlError::Malformed("no SAMLRequest or SAMLResponse".into()))?;
+        let (Some(alg), Some(sig)) = (sig_alg, signature) else {
+            return Err(SamlError::Unsigned);
+        };
+        let mut signed = format!("{kind}={raw}");
+        if let Some(r) = relay {
+            signed.push_str(&format!("&RelayState={r}"));
+        }
+        signed.push_str(&format!("&SigAlg={alg}"));
+        let sig_bytes = STANDARD
+            .decode(urldec(sig).replace(char::is_whitespace, ""))
+            .map_err(|_| SamlError::Malformed("Signature is not base64".into()))?;
+        dsig::verify_detached(
+            &urldec(alg),
+            &self.idp.signing_keys,
+            signed.as_bytes(),
+            &sig_bytes,
+            self.sp.allow_sha1,
+        )?;
+        let deflated = STANDARD
+            .decode(urldec(raw).replace(char::is_whitespace, ""))
+            .map_err(|_| SamlError::Malformed(format!("{kind} is not base64")))?;
+        let mut xml = String::new();
+        std::io::Read::take(
+            flate2::read::DeflateDecoder::new(&deflated[..]),
+            MAX_RESPONSE_BYTES as u64,
+        )
+        .read_to_string(&mut xml)
+        .map_err(|_| SamlError::Malformed(format!("{kind} is not deflated XML")))?;
+        let doc = Document::parse(&xml).map_err(|e| SamlError::Malformed(e.to_string()))?;
+        let msg = self.parse_slo(&doc, now, false)?;
+        Ok((msg, relay.map(urldec)))
+    }
+
+    /// HTTP-POST binding at our SLO endpoint: the message carries an
+    /// enveloped signature, which must verify with an IdP key.
+    pub fn consume_slo_post(
+        &self,
+        message_b64: &str,
+        now: DateTime<Utc>,
+    ) -> Result<SloMessage, SamlError> {
+        let compact: String = message_b64.chars().filter(|c| !c.is_whitespace()).collect();
+        if compact.len() > MAX_RESPONSE_BYTES {
+            return Err(SamlError::Malformed("message too large".into()));
+        }
+        let bytes = STANDARD
+            .decode(&compact)
+            .map_err(|_| SamlError::Malformed("message is not base64".into()))?;
+        let xml = String::from_utf8(bytes).map_err(|_| SamlError::Malformed("not UTF-8".into()))?;
+        let doc = Document::parse(&xml).map_err(|e| SamlError::Malformed(e.to_string()))?;
+        self.parse_slo(&doc, now, true)
+    }
+
+    fn parse_slo(
+        &self,
+        doc: &Document,
+        now: DateTime<Utc>,
+        require_enveloped: bool,
+    ) -> Result<SloMessage, SamlError> {
+        let root = doc.root_element();
+        let is_request = is(root, NS_PROTOCOL, "LogoutRequest");
+        if !is_request && !is(root, NS_PROTOCOL, "LogoutResponse") {
+            return Err(SamlError::Malformed(
+                "root is not a LogoutRequest or LogoutResponse".into(),
+            ));
+        }
+        if root.attribute("Version") != Some("2.0") {
+            return Err(SamlError::Malformed("unsupported SAML version".into()));
+        }
+        if let Some(dest) = root.attribute("Destination")
+            && dest != self.sp.slo_url
+        {
+            return Err(SamlError::Destination);
+        }
+        let issuer = child(root, NS_ASSERTION, "Issuer")
+            .and_then(|i| i.text())
+            .map(str::trim);
+        if issuer != Some(self.idp.entity_id.as_str()) {
+            return Err(SamlError::Issuer);
+        }
+        if require_enveloped {
+            if !dsig::is_signed(root) {
+                return Err(SamlError::Unsigned);
+            }
+            dsig::verify_enveloped(doc, root, &self.idp.signing_keys, self.sp.allow_sha1)?;
+        }
+        let skew = self.sp.clock_skew;
+        if let Some(t) = root.attribute("IssueInstant")
+            && parse_time(t)? > now + skew
+        {
+            return Err(SamlError::Expired);
+        }
+        if is_request {
+            if let Some(t) = root.attribute("NotOnOrAfter")
+                && parse_time(t)? + skew <= now
+            {
+                return Err(SamlError::Expired);
+            }
+            let id = root
+                .attribute("ID")
+                .ok_or_else(|| SamlError::Malformed("LogoutRequest without ID".into()))?
+                .to_string();
+            // EncryptedID is not supported; it shows up here as "no NameID".
+            let name_id = child(root, NS_ASSERTION, "NameID")
+                .and_then(|n| n.text())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .ok_or_else(|| SamlError::Malformed("LogoutRequest without NameID".into()))?
+                .to_string();
+            let session_indexes = children(root, NS_PROTOCOL, "SessionIndex")
+                .filter_map(|n| n.text())
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            Ok(SloMessage::Request(LogoutRequest {
+                id,
+                name_id,
+                session_indexes,
+            }))
+        } else {
+            let success = child(root, NS_PROTOCOL, "Status")
+                .and_then(|s| child(s, NS_PROTOCOL, "StatusCode"))
+                .and_then(|c| c.attribute("Value"))
+                == Some(STATUS_SUCCESS);
+            Ok(SloMessage::Response {
+                in_response_to: root.attribute("InResponseTo").map(String::from),
+                success,
+            })
+        }
+    }
+
+    /// Redirect-binding message to `endpoint`: DEFLATE + base64 + URL-encode,
+    /// signed over the encoded query when the SP signs requests.
+    fn redirect_to(
+        &self,
+        endpoint: &str,
+        param: &str,
+        xml: &str,
+        relay_state: Option<&str>,
+    ) -> anyhow::Result<String> {
+        let mut enc =
+            flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::default());
+        enc.write_all(xml.as_bytes())?;
+        let deflated = enc.finish()?;
+        let mut query = format!("{param}={}", urlenc(&STANDARD.encode(deflated)));
+        if let Some(r) = relay_state {
+            query.push_str(&format!("&RelayState={}", urlenc(r)));
+        }
+        if self.sp.sign_requests {
+            let key = self
+                .sp
+                .key
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("no SP key"))?;
+            query.push_str(&format!("&SigAlg={}", urlenc(dsig::RSA_SHA256)));
+            let sig = key
+                .sign_sha256(query.as_bytes())
+                .map_err(|_| anyhow::anyhow!("signing SLO message"))?;
+            query.push_str(&format!("&Signature={}", urlenc(&STANDARD.encode(sig))));
+        }
+        let sep = if endpoint.contains('?') { '&' } else { '?' };
+        Ok(format!("{endpoint}{sep}{query}"))
+    }
+
+    /// Answer the IdP's `LogoutRequest` with a successful `LogoutResponse`.
+    /// `None` when the IdP has no Redirect-binding SLO endpoint to send it to.
+    pub fn logout_response_url(
+        &self,
+        in_response_to: &str,
+        relay_state: Option<&str>,
+        now: DateTime<Utc>,
+    ) -> anyhow::Result<Option<String>> {
+        let Some(dest) = &self.idp.slo_redirect else {
+            return Ok(None);
+        };
+        let xml = format!(
+            concat!(
+                r#"<samlp:LogoutResponse xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" "#,
+                r#"ID="{id}" Version="2.0" IssueInstant="{instant}" Destination="{dest}" InResponseTo="{irt}">"#,
+                r#"<saml:Issuer>{issuer}</saml:Issuer>"#,
+                r#"<samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></samlp:Status>"#,
+                r#"</samlp:LogoutResponse>"#
+            ),
+            id = Self::new_request_id(),
+            instant = now.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+            dest = metadata::xml_attr(dest),
+            irt = metadata::xml_attr(in_response_to),
+            issuer = xml_text(&self.sp.entity_id),
+        );
+        self.redirect_to(dest, "SAMLResponse", &xml, relay_state)
+            .map(Some)
+    }
+
+    /// SP-initiated logout: ask the IdP to end the session it opened for
+    /// `name_id` (narrowed to `session_index` when we know it). `None` when
+    /// the IdP has no Redirect-binding SLO endpoint.
+    pub fn logout_request_url(
+        &self,
+        request_id: &str,
+        name_id: &str,
+        session_index: Option<&str>,
+        relay_state: Option<&str>,
+        now: DateTime<Utc>,
+    ) -> anyhow::Result<Option<String>> {
+        let Some(dest) = &self.idp.slo_redirect else {
+            return Ok(None);
+        };
+        let si = session_index
+            .map(|s| format!("<samlp:SessionIndex>{}</samlp:SessionIndex>", xml_text(s)))
+            .unwrap_or_default();
+        let xml = format!(
+            concat!(
+                r#"<samlp:LogoutRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" "#,
+                r#"ID="{id}" Version="2.0" IssueInstant="{instant}" Destination="{dest}" NotOnOrAfter="{noa}">"#,
+                r#"<saml:Issuer>{issuer}</saml:Issuer><saml:NameID>{name_id}</saml:NameID>{si}"#,
+                r#"</samlp:LogoutRequest>"#
+            ),
+            id = request_id,
+            instant = now.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+            dest = metadata::xml_attr(dest),
+            noa = (now + chrono::Duration::minutes(5))
+                .to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+            issuer = xml_text(&self.sp.entity_id),
+            name_id = xml_text(name_id),
+            si = si,
+        );
+        self.redirect_to(dest, "SAMLRequest", &xml, relay_state)
+            .map(Some)
+    }
+}
+
 fn is(n: Node, ns: &str, name: &str) -> bool {
     n.is_element() && n.tag_name().namespace() == Some(ns) && n.tag_name().name() == name
 }
@@ -648,6 +941,96 @@ pub mod test_support {
             binding = binding,
             sso = sso_url
         )
+    }
+
+    /// IdP metadata with a Redirect-binding SingleLogoutService.
+    pub fn idp_metadata_xml_slo(entity_id: &str, sso_url: &str, slo_url: &str) -> String {
+        idp_metadata_xml(entity_id, sso_url).replace(
+            "</md:IDPSSODescriptor>",
+            &format!(
+                r#"<md:SingleLogoutService Binding="{}" Location="{slo_url}"/></md:IDPSSODescriptor>"#,
+                metadata::BINDING_REDIRECT
+            ),
+        )
+    }
+
+    /// Redirect-binding query (`SAMLRequest`/`SAMLResponse`, `RelayState`,
+    /// `SigAlg`, `Signature`) signed with `key`.
+    pub fn redirect_query(
+        param: &str,
+        xml: &str,
+        relay_state: Option<&str>,
+        key: &SpKey,
+    ) -> String {
+        let mut enc =
+            flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::default());
+        enc.write_all(xml.as_bytes()).unwrap();
+        let mut query = format!(
+            "{param}={}",
+            urlenc(&STANDARD.encode(enc.finish().unwrap()))
+        );
+        if let Some(r) = relay_state {
+            query.push_str(&format!("&RelayState={}", urlenc(r)));
+        }
+        query.push_str(&format!("&SigAlg={}", urlenc(dsig::RSA_SHA256)));
+        let sig = key.sign_sha256(query.as_bytes()).unwrap();
+        query.push_str(&format!("&Signature={}", urlenc(&STANDARD.encode(sig))));
+        query
+    }
+
+    /// A `LogoutRequest` the IdP would send to our SLO endpoint (Redirect
+    /// binding, signed with the IdP key). Returns `(query, request id)`.
+    pub fn logout_request_query(
+        idp_entity_id: &str,
+        destination: &str,
+        name_id: &str,
+        session_index: Option<&str>,
+        relay_state: Option<&str>,
+    ) -> (String, String) {
+        let id = format!("_lr{}", hex::encode(rand::random::<[u8; 8]>()));
+        let si = session_index
+            .map(|s| format!("<samlp:SessionIndex>{s}</samlp:SessionIndex>"))
+            .unwrap_or_default();
+        let xml = format!(
+            concat!(
+                r#"<samlp:LogoutRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" "#,
+                r#"ID="{id}" Version="2.0" IssueInstant="{now}" Destination="{dest}">"#,
+                r#"<saml:Issuer>{issuer}</saml:Issuer><saml:NameID>{name_id}</saml:NameID>{si}</samlp:LogoutRequest>"#
+            ),
+            id = id,
+            now = ts(Utc::now()),
+            dest = metadata::xml_attr(destination),
+            issuer = idp_entity_id,
+            name_id = name_id,
+            si = si,
+        );
+        (
+            redirect_query("SAMLRequest", &xml, relay_state, &idp_key()),
+            id,
+        )
+    }
+
+    /// The IdP's `LogoutResponse` to a request of ours.
+    pub fn logout_response_query(
+        idp_entity_id: &str,
+        destination: &str,
+        in_response_to: &str,
+        relay_state: Option<&str>,
+    ) -> String {
+        let xml = format!(
+            concat!(
+                r#"<samlp:LogoutResponse xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" "#,
+                r#"ID="_lp{id}" Version="2.0" IssueInstant="{now}" Destination="{dest}" InResponseTo="{irt}">"#,
+                r#"<saml:Issuer>{issuer}</saml:Issuer><samlp:Status><samlp:StatusCode Value="{ok}"/></samlp:Status></samlp:LogoutResponse>"#
+            ),
+            id = hex::encode(rand::random::<[u8; 8]>()),
+            now = ts(Utc::now()),
+            dest = metadata::xml_attr(destination),
+            irt = in_response_to,
+            issuer = idp_entity_id,
+            ok = STATUS_SUCCESS,
+        );
+        redirect_query("SAMLResponse", &xml, relay_state, &idp_key())
     }
 
     /// Everything a test needs to shape a response.
@@ -833,7 +1216,7 @@ pub mod test_support {
         let mut relay = None;
         for (k, v) in u.query_pairs() {
             match &*k {
-                "SAMLRequest" => req = Some(v.to_string()),
+                "SAMLRequest" | "SAMLResponse" => req = Some(v.to_string()),
                 "RelayState" => relay = Some(v.to_string()),
                 _ => {}
             }
@@ -857,6 +1240,7 @@ mod tests {
     const IDP: &str = "https://idp.example/saml";
     const SP: &str = "https://sp.example/api/v1/auth/sso/corp/saml/metadata";
     const ACS: &str = "https://sp.example/api/v1/auth/sso/saml/acs";
+    const SLO: &str = "https://sp.example/api/v1/auth/sso/saml/slo";
 
     fn provider(with_key: bool) -> ServiceProvider {
         let idp =
@@ -865,6 +1249,7 @@ mod tests {
             SpConfig {
                 entity_id: SP.into(),
                 acs_url: ACS.into(),
+                slo_url: SLO.into(),
                 key: with_key.then(sp_key),
                 cert_der: with_key.then(sp_cert_der),
                 sign_requests: with_key,
@@ -1162,6 +1547,7 @@ mod interop_tests {
             SpConfig {
                 entity_id: "https://sp.example/api/v1/auth/sso/corp/saml/metadata".into(),
                 acs_url: "https://sp.example/api/v1/auth/sso/saml/acs".into(),
+                slo_url: "https://sp.example/api/v1/auth/sso/saml/slo".into(),
                 key: None,
                 cert_der: None,
                 sign_requests: false,

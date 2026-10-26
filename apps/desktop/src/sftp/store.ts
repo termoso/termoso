@@ -189,6 +189,23 @@ export const openSftpForHost = (
   openSftp({ kind: "host", host_id: hostId, vault_id: vaultId }, title, hostId, side);
 };
 
+/** Browse as root: the password is used once to start `sftp-server` under sudo and is never stored. */
+export const openSftpForHostAsRoot = (
+  hostId: Uuid,
+  title: string,
+  vaultId: Uuid | null,
+  sudoPassword: string,
+  side: PaneSide = "right",
+) => {
+  if (!requirePerm(vaultId, "connect.sftp")) return;
+  openSftp(
+    { kind: "host", host_id: hostId, vault_id: vaultId, sudo_password: sudoPassword },
+    `${title} (root)`,
+    hostId,
+    side,
+  );
+};
+
 export const openSftpForSession = (
   sessionId: Uuid,
   title: string,

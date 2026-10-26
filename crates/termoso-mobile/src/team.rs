@@ -279,6 +279,15 @@ pub struct TeamPoliciesCard {
     pub password_max_age_days: i32,
     pub ip_allowlist: Vec<String>,
     pub device_admin_approval: bool,
+    /// `any` | `keys_only`.
+    pub auth: String,
+    pub jump_host_required: bool,
+    /// `allow` | `deny`.
+    pub export: String,
+    pub forward_ports: Vec<String>,
+    pub posture_disk_encryption: bool,
+    pub posture_screen_lock: bool,
+    pub posture_secure_key: bool,
 }
 
 /// A member device awaiting (or past) admin review.
@@ -462,6 +471,12 @@ impl AccountRuntime {
     async fn refresh_vaults(self: &Arc<Self>) -> Result<()> {
         let api = self.api().await?;
         core::refresh_vaults(&api, self.store()).await?;
+        if let Err(e) = termoso_core::ca::refresh_all(&api, self.store()).await {
+            tracing::debug!("team CA refresh: {e}");
+        }
+        if let Err(e) = termoso_core::policy::refresh(&api, self.store()).await {
+            tracing::debug!("team policy refresh: {e}");
+        }
         self.notify_changed(SyncChange::Vaults);
         self.sync_in_background();
         Ok(())
@@ -816,6 +831,13 @@ impl AccountRuntime {
             password_max_age_days: p.password_max_age_days,
             ip_allowlist: p.ip_allowlist,
             device_admin_approval: p.device_admin_approval,
+            auth: p.auth,
+            jump_host_required: p.jump_host_required,
+            export: p.export,
+            forward_ports: p.forward_ports,
+            posture_disk_encryption: p.posture_disk_encryption,
+            posture_screen_lock: p.posture_screen_lock,
+            posture_secure_key: p.posture_secure_key,
         })
     }
 
@@ -1192,6 +1214,372 @@ impl AccountRuntime {
     }
 }
 
+/// One periodic access review (`members.view` to see, `members.remove` to decide).
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct AccessReviewCard {
+    pub id: String,
+    /// `open` | `completed` | `cancelled`.
+    pub status: String,
+    pub opened_at: String,
+    pub due_at: String,
+    pub closed_at: Option<String>,
+    pub items: i64,
+    pub decided: i64,
+    pub kept: i32,
+    pub removed: i32,
+}
+
+/// One line of a review: a member or a vault access.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct AccessReviewItemCard {
+    pub id: String,
+    /// `member` | `vault_access`.
+    pub kind: String,
+    pub user_id: String,
+    pub email: Option<String>,
+    pub display_name: Option<String>,
+    pub vault_name: Option<String>,
+    pub role: String,
+    pub last_seen_at: Option<String>,
+    /// `keep` | `remove` once decided.
+    pub decision: Option<String>,
+    pub note: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct AccessReviewDetailCard {
+    pub review: AccessReviewCard,
+    pub items: Vec<AccessReviewItemCard>,
+}
+
+/// The team's break-glass arrangement; the secret itself is never returned here.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct BreakGlassCard {
+    pub user_id: String,
+    pub email: Option<String>,
+    pub duration_hours: i32,
+    /// `armed` | `active` | `used` | `locked`.
+    pub status: String,
+    pub used_at: Option<String>,
+    pub expires_at: Option<String>,
+    pub attempts: i32,
+}
+
+/// A scheduled snippet run (read-only on mobile, plus "run now").
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct AutomationCard {
+    pub id: String,
+    pub vault_id: String,
+    pub name: String,
+    pub schedule: String,
+    pub timezone: String,
+    pub enabled: bool,
+    pub last_run_at: Option<String>,
+    pub last_status: Option<String>,
+    pub next_run_at: Option<String>,
+}
+
+/// Outcome on one host, opened from the sealed results with the vault key.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct HostRunCard {
+    pub host_id: String,
+    pub label: String,
+    pub target: String,
+    pub exit_code: Option<u32>,
+    pub stdout: String,
+    pub stderr: String,
+    pub error: Option<String>,
+    pub ms: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct AutomationRunCard {
+    pub id: String,
+    /// `pending` | `running` | `done` | `failed` | `missed` | `cancelled`.
+    pub status: String,
+    pub scheduled_for: String,
+    pub manual: bool,
+    pub claimed_by_name: Option<String>,
+    pub finished_at: Option<String>,
+    pub hosts_total: i32,
+    pub hosts_failed: i32,
+    pub error: Option<String>,
+    /// Per-host results; empty when `locked`.
+    pub results: Vec<HostRunCard>,
+    /// Results exist but this device cannot open them (vault locked here).
+    pub locked: bool,
+}
+
+/// A team gateway (API bridge in gateway mode) hosts can be reached through.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct GatewayCard {
+    pub id: String,
+    pub name: String,
+    pub online: bool,
+    pub vault_ids: Vec<String>,
+}
+
+fn review_card(r: termoso_proto::team::AccessReview) -> AccessReviewCard {
+    AccessReviewCard {
+        id: r.id.to_string(),
+        status: r.status,
+        opened_at: r.opened_at.to_rfc3339(),
+        due_at: r.due_at.to_rfc3339(),
+        closed_at: r.closed_at.map(|t| t.to_rfc3339()),
+        items: r.items,
+        decided: r.decided,
+        kept: r.kept,
+        removed: r.removed,
+    }
+}
+
+fn review_item_card(i: termoso_proto::team::AccessReviewItem) -> AccessReviewItemCard {
+    AccessReviewItemCard {
+        id: i.id.to_string(),
+        kind: i.kind,
+        user_id: i.user_id.to_string(),
+        email: i.email,
+        display_name: i.display_name,
+        vault_name: i.vault_name,
+        role: i.role,
+        last_seen_at: i.last_seen_at.map(|t| t.to_rfc3339()),
+        decision: i.decision,
+        note: i.note,
+    }
+}
+
+fn review_detail_card(d: termoso_proto::team::AccessReviewDetail) -> AccessReviewDetailCard {
+    AccessReviewDetailCard {
+        review: review_card(d.review),
+        items: d.items.into_iter().map(review_item_card).collect(),
+    }
+}
+
+fn break_glass_card(b: termoso_proto::team::BreakGlass) -> BreakGlassCard {
+    BreakGlassCard {
+        user_id: b.user_id.to_string(),
+        email: b.email,
+        duration_hours: b.duration_hours,
+        status: b.status,
+        used_at: b.used_at.map(|t| t.to_rfc3339()),
+        expires_at: b.expires_at.map(|t| t.to_rfc3339()),
+        attempts: b.attempts,
+    }
+}
+
+fn automation_card(a: termoso_proto::automation::Automation) -> AutomationCard {
+    AutomationCard {
+        id: a.id.to_string(),
+        vault_id: a.vault_id.to_string(),
+        name: a.name,
+        schedule: a.schedule,
+        timezone: a.timezone,
+        enabled: a.enabled,
+        last_run_at: a.last_run_at.map(|t| t.to_rfc3339()),
+        last_status: a.last_status,
+        next_run_at: a.next_run_at.map(|t| t.to_rfc3339()),
+    }
+}
+
+/// Open the sealed per-host results with the vault key when this device
+/// holds it; otherwise the run is reported as `locked`.
+fn run_card(store: &Store, r: termoso_proto::automation::AutomationRun) -> AutomationRunCard {
+    use termoso_crypto::aead::{self, Aad};
+    use termoso_proto::automation::{HostRunResult, RUN_AAD};
+    let mut results: Vec<HostRunResult> = Vec::new();
+    let mut locked = false;
+    if let Some(sealed) = &r.sealed {
+        let opened = store.vault_key(r.vault_id).ok().and_then(|k| {
+            aead::decrypt_str(&k, &Aad::label(&[RUN_AAD, &r.id.to_string()]), sealed).ok()
+        });
+        match opened.and_then(|pt| serde_json::from_str(&pt).ok()) {
+            Some(v) => results = v,
+            None => locked = true,
+        }
+    }
+    AutomationRunCard {
+        id: r.id.to_string(),
+        status: r.status,
+        scheduled_for: r.scheduled_for.to_rfc3339(),
+        manual: r.manual,
+        claimed_by_name: r.claimed_by_name,
+        finished_at: r.finished_at.map(|t| t.to_rfc3339()),
+        hosts_total: r.hosts_total,
+        hosts_failed: r.hosts_failed,
+        error: r.error,
+        results: results
+            .into_iter()
+            .map(|h| HostRunCard {
+                host_id: h.host_id.to_string(),
+                label: h.label,
+                target: h.target,
+                exit_code: h.exit_code,
+                stdout: h.stdout,
+                stderr: h.stderr,
+                error: h.error,
+                ms: h.ms,
+            })
+            .collect(),
+        locked,
+    }
+}
+
+impl AccountRuntime {
+    pub async fn team_access_reviews(
+        self: &Arc<Self>,
+        team_id: String,
+    ) -> Result<Vec<AccessReviewCard>> {
+        let list = self
+            .api()
+            .await?
+            .access_reviews(parse_id(&team_id)?)
+            .await?;
+        Ok(list.reviews.into_iter().map(review_card).collect())
+    }
+
+    pub async fn team_access_review(
+        self: &Arc<Self>,
+        team_id: String,
+        review_id: String,
+    ) -> Result<AccessReviewDetailCard> {
+        let d = self
+            .api()
+            .await?
+            .access_review(parse_id(&team_id)?, parse_id(&review_id)?)
+            .await?;
+        Ok(review_detail_card(d))
+    }
+
+    /// `decision` is `keep` or `remove` (`members.remove`).
+    pub async fn team_decide_access_review_item(
+        self: &Arc<Self>,
+        team_id: String,
+        review_id: String,
+        item_id: String,
+        decision: String,
+        note: Option<String>,
+    ) -> Result<AccessReviewItemCard> {
+        let req = termoso_proto::team::DecideAccessReviewItemRequest { decision, note };
+        let i = self
+            .api()
+            .await?
+            .decide_access_review_item(
+                parse_id(&team_id)?,
+                parse_id(&review_id)?,
+                parse_id(&item_id)?,
+                &req,
+            )
+            .await?;
+        Ok(review_item_card(i))
+    }
+
+    /// Apply the decisions; undecided lines are kept.
+    pub async fn team_complete_access_review(
+        self: &Arc<Self>,
+        team_id: String,
+        review_id: String,
+    ) -> Result<AccessReviewDetailCard> {
+        let req = termoso_proto::team::CompleteAccessReviewRequest {
+            undecided: Some("keep".into()),
+        };
+        let d = self
+            .api()
+            .await?
+            .complete_access_review(parse_id(&team_id)?, parse_id(&review_id)?, &req)
+            .await?;
+        Ok(review_detail_card(d))
+    }
+
+    pub async fn team_break_glass(
+        self: &Arc<Self>,
+        team_id: String,
+    ) -> Result<Option<BreakGlassCard>> {
+        let b = self.api().await?.break_glass(parse_id(&team_id)?).await?;
+        Ok(b.map(break_glass_card))
+    }
+
+    /// The designated member presents the offline secret and a reason and
+    /// becomes an admin for the configured hours.
+    pub async fn team_use_break_glass(
+        self: &Arc<Self>,
+        team_id: String,
+        secret: String,
+        reason: String,
+    ) -> Result<BreakGlassCard> {
+        let req = termoso_proto::team::UseBreakGlassRequest { secret, reason };
+        let b = self
+            .api()
+            .await?
+            .use_break_glass(parse_id(&team_id)?, &req)
+            .await?;
+        Ok(break_glass_card(b))
+    }
+
+    pub async fn team_end_break_glass(self: &Arc<Self>, team_id: String) -> Result<BreakGlassCard> {
+        let b = self
+            .api()
+            .await?
+            .end_break_glass(parse_id(&team_id)?)
+            .await?;
+        Ok(break_glass_card(b))
+    }
+
+    pub async fn team_automations(
+        self: &Arc<Self>,
+        team_id: String,
+    ) -> Result<Vec<AutomationCard>> {
+        let list = self
+            .api()
+            .await?
+            .team_automations(parse_id(&team_id)?)
+            .await?;
+        Ok(list.automations.into_iter().map(automation_card).collect())
+    }
+
+    pub async fn team_automation_runs(
+        self: &Arc<Self>,
+        team_id: String,
+        automation_id: String,
+    ) -> Result<Vec<AutomationRunCard>> {
+        let list = self
+            .api()
+            .await?
+            .automation_runs(parse_id(&team_id)?, parse_id(&automation_id)?)
+            .await?;
+        let store = self.store();
+        Ok(list.runs.into_iter().map(|r| run_card(store, r)).collect())
+    }
+
+    /// Queue a run now (`automations.run`); an executor picks it up.
+    pub async fn team_run_automation_now(
+        self: &Arc<Self>,
+        team_id: String,
+        automation_id: String,
+    ) -> Result<AutomationRunCard> {
+        let r = self
+            .api()
+            .await?
+            .run_automation_now(parse_id(&team_id)?, parse_id(&automation_id)?)
+            .await?;
+        Ok(run_card(self.store(), r))
+    }
+
+    /// Gateways of every team the user is in, with online status.
+    pub async fn gateways(self: &Arc<Self>) -> Result<Vec<GatewayCard>> {
+        let list = self.api().await?.gateways().await?;
+        Ok(list
+            .gateways
+            .into_iter()
+            .map(|g| GatewayCard {
+                id: g.id.to_string(),
+                name: g.name,
+                online: g.online,
+                vault_ids: g.vault_ids.iter().map(|v| v.to_string()).collect(),
+            })
+            .collect())
+    }
+}
+
 fn access_card(r: termoso_proto::team::AccessRequest) -> AccessRequestCard {
     AccessRequestCard {
         id: r.id.to_string(),
@@ -1223,6 +1611,8 @@ mod tests {
     #[test]
     fn audit_details_flatten_to_pairs() {
         let e = proto::AuditEvent {
+            hash: None,
+            prev_hash: None,
             id: 7,
             team_id: Uuid::nil(),
             actor_id: None,

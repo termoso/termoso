@@ -352,6 +352,13 @@ schema! {
         pub details: serde_json::Value,
         /// When.
         pub created_at: DateTime<Utc>,
+        /// Hex SHA-256 over this entry's canonical fields and `prev_hash`
+        /// (tamper-evident chain; see `GET /teams/{id}/audit/verify`).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub hash: Option<String>,
+        /// Hex hash of the team's previous entry (`None` for the first one).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub prev_hash: Option<String>,
     }
 }
 
@@ -519,6 +526,13 @@ pub const PERMISSIONS: &[&str] = &[
     "bridges.use",
     // sshid
     "sshid.manage",
+    // ca
+    "ca.manage",
+    "ca.issue",
+    // automations
+    "automations.manage",
+    "automations.view",
+    "automations.run",
     // ai
     "ai.use",
     // mcp
@@ -701,6 +715,14 @@ schema! {
 
 // ───────────────────────────── policies ─────────────────────────────
 
+fn default_auth() -> String {
+    "any".into()
+}
+
+fn default_export() -> String {
+    "allow".into()
+}
+
 schema! {
     /// Team policies (`GET/PUT /teams/{id}/policies`). Server-enforced unless
     /// noted; the strictest value across a user's teams applies to them.
@@ -744,6 +766,32 @@ schema! {
         /// (`devices.approve`) before they can sign in.
         #[serde(default)]
         pub device_admin_approval: bool,
+        /// `any` or `keys_only`: whether hosts in team vaults may be opened
+        /// with a password or keyboard-interactive authentication.
+        #[serde(default = "default_auth")]
+        pub auth: String,
+        /// Hosts in team vaults must be reached through a jump host.
+        #[serde(default)]
+        pub jump_host_required: bool,
+        /// `allow` or `deny`: local export/backup of team vault data.
+        #[serde(default = "default_export")]
+        pub export: String,
+        /// Remote ports (`22`, `8000-8999`) members may forward from team
+        /// hosts; empty means any port.
+        #[serde(default)]
+        pub forward_ports: Vec<String>,
+        /// Members may sign in only from devices whose disk is encrypted.
+        #[serde(default)]
+        pub posture_disk_encryption: bool,
+        /// Members may sign in only from devices with a screen lock.
+        #[serde(default)]
+        pub posture_screen_lock: bool,
+        /// Members may sign in only from devices whose key is in hardware (TPM / Secure Enclave / StrongBox).
+        #[serde(default)]
+        pub posture_secure_key: bool,
+        /// Open an access review every this many days (0 = off, else 7..=365).
+        #[serde(default)]
+        pub access_review_days: i32,
         /// Last change.
         pub updated_at: DateTime<Utc>,
     }
@@ -798,6 +846,26 @@ schema! {
         /// See [`TeamPolicies::device_admin_approval`].
         #[serde(default)]
         pub device_admin_approval: Option<bool>,
+        /// `any` or `keys_only`.
+        pub auth: Option<String>,
+        /// Hosts in team vaults must go through a jump host.
+        pub jump_host_required: Option<bool>,
+        /// `allow` or `deny`.
+        pub export: Option<String>,
+        /// Port allowlist (`22`, `8000-8999`); empty = any.
+        pub forward_ports: Option<Vec<String>>,
+        /// Require disk encryption on members' devices.
+        #[serde(default)]
+        pub posture_disk_encryption: Option<bool>,
+        /// Require a screen lock on members' devices.
+        #[serde(default)]
+        pub posture_screen_lock: Option<bool>,
+        /// Require a hardware-backed device key.
+        #[serde(default)]
+        pub posture_secure_key: Option<bool>,
+        /// Access review cadence in days (0 = off, else 7..=365).
+        #[serde(default)]
+        pub access_review_days: Option<i32>,
     }
 }
 
@@ -1466,5 +1534,200 @@ schema! {
     pub struct MyAclResponse {
         /// Rules that apply to the caller across all team vaults.
         pub rules: Vec<MyAclRule>,
+    }
+}
+
+schema! {
+    /// One line of an access review: a team membership or a team-vault access
+    /// an admin confirms (`keep`) or revokes (`remove`).
+    pub struct AccessReviewItem {
+        /// Item id.
+        pub id: Uuid,
+        /// `member` (team membership) or `vault_access` (access to one team vault).
+        pub kind: String,
+        /// Whose access.
+        pub user_id: Uuid,
+        /// Their e-mail at review time.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub email: Option<String>,
+        /// Display name at review time.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub display_name: Option<String>,
+        /// The vault, for `vault_access`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub vault_id: Option<Uuid>,
+        /// Vault name, for `vault_access`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub vault_name: Option<String>,
+        /// Team role (`admin` / `member`) or vault role (`manager` / `editor` / `viewer`) when the review opened.
+        pub role: String,
+        /// When the user was last seen (any device), if ever.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub last_seen_at: Option<DateTime<Utc>>,
+        /// `keep` / `remove`, `None` until decided.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub decision: Option<String>,
+        /// Who decided.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub decided_by: Option<Uuid>,
+        /// When.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub decided_at: Option<DateTime<Utc>>,
+        /// Reviewer's note.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub note: Option<String>,
+    }
+}
+
+schema! {
+    /// A periodic access review (`/teams/{id}/access-reviews`).
+    pub struct AccessReview {
+        /// Review id.
+        pub id: Uuid,
+        /// Team.
+        pub team_id: Uuid,
+        /// `open`, `completed` or `cancelled`.
+        pub status: String,
+        /// Who opened it (`None` = the scheduler).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub opened_by: Option<Uuid>,
+        /// When it opened.
+        pub opened_at: DateTime<Utc>,
+        /// When it should be completed (reminders go out after this).
+        pub due_at: DateTime<Utc>,
+        /// Who completed / cancelled it.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub closed_by: Option<Uuid>,
+        /// When.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub closed_at: Option<DateTime<Utc>>,
+        /// Lines in total.
+        pub items: i64,
+        /// Lines decided so far.
+        pub decided: i64,
+        /// Lines kept (final once completed).
+        pub kept: i32,
+        /// Lines removed (final once completed).
+        pub removed: i32,
+    }
+}
+
+schema! {
+    /// `GET /teams/{id}/access-reviews`.
+    pub struct AccessReviewList {
+        /// Newest first.
+        pub reviews: Vec<AccessReview>,
+    }
+}
+
+schema! {
+    /// `GET /teams/{id}/access-reviews/{rid}`.
+    pub struct AccessReviewDetail {
+        /// The review.
+        pub review: AccessReview,
+        /// Its lines, members first, then vault accesses.
+        pub items: Vec<AccessReviewItem>,
+    }
+}
+
+schema! {
+    /// `POST /teams/{id}/access-reviews/{rid}/items/{iid}`.
+    pub struct DecideAccessReviewItemRequest {
+        /// `keep` or `remove`.
+        pub decision: String,
+        /// Optional note (≤ 500 chars).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub note: Option<String>,
+    }
+}
+
+schema! {
+    /// `POST /teams/{id}/access-reviews/{rid}/complete`.
+    pub struct CompleteAccessReviewRequest {
+        /// What to do with lines nobody decided: `keep` (default) or refuse
+        /// (`None` → 409 while any line is undecided).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub undecided: Option<String>,
+    }
+}
+
+schema! {
+    /// `PUT /teams/{id}/break-glass` — designate the emergency admin.
+    pub struct ConfigureBreakGlassRequest {
+        /// Team member (not the owner) who may redeem the secret.
+        pub user_id: Uuid,
+        /// How long the emergency admin role lasts once redeemed (1..=72 hours).
+        pub duration_hours: i32,
+    }
+}
+
+schema! {
+    /// Break-glass status (`GET /teams/{id}/break-glass`); the secret itself is
+    /// only in the `PUT` response, once.
+    pub struct BreakGlass {
+        /// Designated member.
+        pub user_id: Uuid,
+        /// Their e-mail.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub email: Option<String>,
+        /// Duration of the emergency role once redeemed.
+        pub duration_hours: i32,
+        /// Who set it up.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub created_by: Option<Uuid>,
+        /// When.
+        pub created_at: DateTime<Utc>,
+        /// `ready` (secret unused), `active` (redeemed, role elevated), `used`
+        /// (redeemed and ended/expired — the owner must issue a new secret).
+        pub status: String,
+        /// When the secret was redeemed.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub used_at: Option<DateTime<Utc>>,
+        /// When the emergency role ends / ended.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub expires_at: Option<DateTime<Utc>>,
+        /// Wrong secrets entered since set-up.
+        pub attempts: i32,
+        /// The secret, only in the `PUT` response.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub secret: Option<String>,
+    }
+}
+
+schema! {
+    /// `POST /teams/{id}/break-glass/use`.
+    pub struct UseBreakGlassRequest {
+        /// The secret from the envelope.
+        pub secret: String,
+        /// Why (≤ 500 chars) — goes to the audit log and the notification.
+        pub reason: String,
+    }
+}
+
+schema! {
+    /// `GET /teams/{id}/audit/verify` — result of walking the audit hash chain.
+    pub struct AuditVerification {
+        /// Every entry re-hashes, links to its predecessor and the latest signed checkpoint verifies.
+        pub ok: bool,
+        /// Entries checked.
+        pub events: i64,
+        /// Oldest surviving entry.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub first_id: Option<i64>,
+        /// Newest entry.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub last_id: Option<i64>,
+        /// Hex hash of the newest entry.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub head_hash: Option<String>,
+        /// First entry that fails, if any.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub broken_at: Option<i64>,
+        /// Why it fails: `hash`, `link`, `anchor` or `unhashed`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub reason: Option<String>,
+        /// Whether the latest signed checkpoint matches, when there is one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub checkpoint_ok: Option<bool>,
     }
 }

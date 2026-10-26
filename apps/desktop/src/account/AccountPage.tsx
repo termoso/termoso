@@ -446,6 +446,18 @@ function SignedIn({
                         <Mono>{d.last_ip}</Mono>
                       </>
                     )}
+                    {d.posture && (
+                      <>
+                        <br />
+                        {d.posture.os_version}
+                        {" · "}
+                        {tr("Disk encryption")}: {fact(d.posture.disk_encryption)}
+                        {" · "}
+                        {tr("Screen lock")}: {fact(d.posture.screen_lock)}
+                        {" · "}
+                        {tr("Hardware key")}: {fact(d.posture.secure_key_storage)}
+                      </>
+                    )}
                   </>
                 }
                 actions={
@@ -575,4 +587,8 @@ export function AccountPage() {
       </Stack>
     </PageBody>
   );
+}
+
+function fact(v: boolean | null | undefined): string {
+  return v == null ? tr("unknown") : v ? tr("on") : tr("off");
 }

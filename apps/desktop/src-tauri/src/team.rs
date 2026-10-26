@@ -458,6 +458,93 @@ pub async fn set_role_mappings<R: Runtime>(
         .mappings)
 }
 
+// ───────────────────────────── SSH CA ─────────────────────────────
+
+pub async fn ca<R: Runtime>(
+    app: &AppHandle<R>,
+    team_id: Uuid,
+) -> Result<Option<termoso_proto::ca::TeamCa>> {
+    Ok(api(app).await?.team_ca(team_id).await?)
+}
+
+pub async fn update_ca<R: Runtime>(
+    app: &AppHandle<R>,
+    team_id: Uuid,
+    patch: termoso_proto::ca::UpdateTeamCaRequest,
+) -> Result<termoso_proto::ca::TeamCa> {
+    let ca = api(app).await?.update_team_ca(team_id, &patch).await?;
+    refresh_local_certificates(app).await;
+    Ok(ca)
+}
+
+pub async fn delete_ca<R: Runtime>(app: &AppHandle<R>, team_id: Uuid) -> Result<()> {
+    api(app).await?.delete_team_ca(team_id).await?;
+    let state = app.state::<AppState>();
+    let _ = termoso_core::ca::forget_certificates(&*state.store()?);
+    let _ = termoso_core::policy::clear(&*state.store()?);
+    Ok(())
+}
+
+pub async fn rotate_ca<R: Runtime>(
+    app: &AppHandle<R>,
+    team_id: Uuid,
+    grace_hours: Option<i32>,
+) -> Result<termoso_proto::ca::TeamCa> {
+    let ca = api(app)
+        .await?
+        .rotate_team_ca(
+            team_id,
+            &termoso_proto::ca::RotateTeamCaRequest { grace_hours },
+        )
+        .await?;
+    refresh_local_certificates(app).await;
+    Ok(ca)
+}
+
+pub async fn ca_certificates<R: Runtime>(
+    app: &AppHandle<R>,
+    team_id: Uuid,
+) -> Result<termoso_proto::ca::IssuedCertificateList> {
+    Ok(api(app).await?.team_certificates(team_id).await?)
+}
+
+pub async fn ca_revoke<R: Runtime>(
+    app: &AppHandle<R>,
+    team_id: Uuid,
+    certificate_id: Uuid,
+) -> Result<termoso_proto::ca::IssuedCertificate> {
+    Ok(api(app)
+        .await?
+        .revoke_team_certificate(team_id, certificate_id)
+        .await?)
+}
+
+/// This device's cached certificate for the team, after asking the server
+/// for a fresh one when the cache is stale.
+pub async fn ca_local<R: Runtime>(
+    app: &AppHandle<R>,
+    team_id: Uuid,
+) -> Result<Option<termoso_core::ca::CachedCert>> {
+    refresh_local_certificates(app).await;
+    let state = app.state::<AppState>();
+    let store = state.store()?;
+    Ok(termoso_core::ca::cached(&store)?
+        .into_iter()
+        .find(|c| c.team_id == team_id))
+}
+
+async fn refresh_local_certificates<R: Runtime>(app: &AppHandle<R>) {
+    let Ok(api) = api(app).await else { return };
+    let state = app.state::<AppState>();
+    let Ok(store) = state.store() else { return };
+    if let Err(e) = termoso_core::ca::refresh_all(&api, &store).await {
+        tracing::debug!("team CA refresh: {e}");
+    }
+    if let Err(e) = termoso_core::policy::refresh(&api, &store).await {
+        tracing::debug!("team policy refresh: {e}");
+    }
+}
+
 pub async fn policies<R: Runtime>(
     app: &AppHandle<R>,
     team_id: Uuid,
@@ -939,6 +1026,106 @@ pub async fn reject_device<R: Runtime>(
         .await?
         .team_reject_device(team_id, device_id)
         .await?)
+}
+// ───────────── compliance: access reviews, break-glass, audit chain ─────────────
+
+pub async fn access_reviews<R: Runtime>(
+    app: &AppHandle<R>,
+    team_id: Uuid,
+) -> Result<proto::AccessReviewList> {
+    Ok(api(app).await?.access_reviews(team_id).await?)
+}
+
+pub async fn access_review<R: Runtime>(
+    app: &AppHandle<R>,
+    team_id: Uuid,
+    review_id: Uuid,
+) -> Result<proto::AccessReviewDetail> {
+    Ok(api(app).await?.access_review(team_id, review_id).await?)
+}
+
+pub async fn open_access_review<R: Runtime>(
+    app: &AppHandle<R>,
+    team_id: Uuid,
+) -> Result<proto::AccessReviewDetail> {
+    Ok(api(app).await?.open_access_review(team_id).await?)
+}
+
+pub async fn decide_access_review_item<R: Runtime>(
+    app: &AppHandle<R>,
+    team_id: Uuid,
+    review_id: Uuid,
+    item_id: Uuid,
+    req: proto::DecideAccessReviewItemRequest,
+) -> Result<proto::AccessReviewItem> {
+    Ok(api(app)
+        .await?
+        .decide_access_review_item(team_id, review_id, item_id, &req)
+        .await?)
+}
+
+pub async fn complete_access_review<R: Runtime>(
+    app: &AppHandle<R>,
+    team_id: Uuid,
+    review_id: Uuid,
+    req: proto::CompleteAccessReviewRequest,
+) -> Result<proto::AccessReviewDetail> {
+    Ok(api(app)
+        .await?
+        .complete_access_review(team_id, review_id, &req)
+        .await?)
+}
+
+pub async fn cancel_access_review<R: Runtime>(
+    app: &AppHandle<R>,
+    team_id: Uuid,
+    review_id: Uuid,
+) -> Result<proto::AccessReview> {
+    Ok(api(app)
+        .await?
+        .cancel_access_review(team_id, review_id)
+        .await?)
+}
+
+pub async fn break_glass<R: Runtime>(
+    app: &AppHandle<R>,
+    team_id: Uuid,
+) -> Result<Option<proto::BreakGlass>> {
+    Ok(api(app).await?.break_glass(team_id).await?)
+}
+
+pub async fn configure_break_glass<R: Runtime>(
+    app: &AppHandle<R>,
+    team_id: Uuid,
+    req: proto::ConfigureBreakGlassRequest,
+) -> Result<proto::BreakGlass> {
+    Ok(api(app).await?.configure_break_glass(team_id, &req).await?)
+}
+
+pub async fn delete_break_glass<R: Runtime>(app: &AppHandle<R>, team_id: Uuid) -> Result<()> {
+    Ok(api(app).await?.delete_break_glass(team_id).await?)
+}
+
+pub async fn use_break_glass<R: Runtime>(
+    app: &AppHandle<R>,
+    team_id: Uuid,
+    req: proto::UseBreakGlassRequest,
+) -> Result<proto::BreakGlass> {
+    Ok(api(app).await?.use_break_glass(team_id, &req).await?)
+}
+
+pub async fn end_break_glass<R: Runtime>(
+    app: &AppHandle<R>,
+    team_id: Uuid,
+) -> Result<proto::BreakGlass> {
+    Ok(api(app).await?.end_break_glass(team_id).await?)
+}
+
+pub async fn verify_audit<R: Runtime>(
+    app: &AppHandle<R>,
+    team_id: Uuid,
+) -> Result<proto::AuditVerification> {
+    Ok(api(app).await?.verify_audit(team_id).await?)
 }
 
 #[cfg(test)]

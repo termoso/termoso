@@ -24,6 +24,9 @@ termoso-proto = { workspace = true }
 zeroize = { workspace = true }
 
 tokio = { workspace = true }
+futures = { workspace = true }
+bytes = { workspace = true }
+tokio-tungstenite = { version = "0.29", features = ["rustls-tls-webpki-roots"] }
 axum = { workspace = true }
 tower-http = { workspace = true }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }

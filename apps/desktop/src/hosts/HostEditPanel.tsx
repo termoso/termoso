@@ -51,6 +51,7 @@ import {
   useSaveHost,
   useSnippets,
   useTags,
+  useGateways,
 } from "@/ipc/hooks";
 import {
   emptyHostForm,
@@ -64,6 +65,7 @@ import {
   type Uuid,
   type WebDavForm,
 } from "@/ipc/types";
+import * as ipc from "@/ipc/commands";
 import { useActiveVault } from "@/app/vault";
 import { allTerminalThemes, useCustomThemes } from "@/terminal/themes";
 import { monoFontFamily, sizes } from "@/theme/theme";
@@ -191,6 +193,19 @@ function HostEditor({
   const tags = useTags(vaultId);
   const snippets = useSnippets(vaultId);
   const proxies = useProxies(vaultId);
+  const gateways = useGateways();
+  const wake = async () => {
+    const mac = (form.macAddress ?? "").trim();
+    if (!mac) return;
+    try {
+      const n = await ipc.wakeHost(mac, null);
+      snackbar.notify(
+        trn(n, "Sent {count} Wake-on-LAN packet", "Sent {count} Wake-on-LAN packets"),
+      );
+    } catch (e) {
+      snackbar.error(errorMessage(e));
+    }
+  };
   const chains = useHostChains(vaultId);
   const presence = useVaultPresence(vaultId);
   const save = useSaveHost();
@@ -484,6 +499,24 @@ function HostEditor({
                 ))}
               </ToggleButtonGroup>
             </Box>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+              <TextField
+                size="small"
+                value={form.macAddress ?? ""}
+                onChange={(e) => set("macAddress", e.target.value === "" ? null : e.target.value)}
+                placeholder={tr("MAC address for Wake-on-LAN")}
+                slotProps={{ input: { sx: { fontFamily: monoFontFamily } } }}
+                sx={{ flex: 1 }}
+              />
+              <Button
+                size="small"
+                variant="outlined"
+                disabled={!(form.macAddress ?? "").trim()}
+                onClick={wake}
+              >
+                {tr("Wake")}
+              </Button>
+            </Box>
           </SectionCard>
 
           <SectionCard title={tr("General")}>
@@ -701,6 +734,37 @@ function HostEditor({
                     </TextField>
                   </Field>
                   {proxyField}
+                  <Field label={tr("Gateway")}>
+                    <TextField
+                      select
+                      value={form.gatewayId ?? ""}
+                      onChange={(e) =>
+                        set("gatewayId", e.target.value === "" ? null : e.target.value)
+                      }
+                      helperText={tr(
+                        "Tunnel through an API bridge running `termoso-bridge gateway` next to the host — for hosts without a public address.",
+                      )}
+                    >
+                      <MenuItem value="">
+                        <em>{tr("None (direct)")}</em>
+                      </MenuItem>
+                      {(gateways.data ?? [])
+                        .filter((g) => g.vault_ids.includes(vaultId) || g.id === form.gatewayId)
+                        .map((g) => (
+                          <MenuItem key={g.id} value={g.id}>
+                            {g.name}
+                            <Typography
+                              component="span"
+                              variant="caption"
+                              color={g.online ? "success.main" : "text.secondary"}
+                              sx={{ ml: 1 }}
+                            >
+                              {g.online ? tr("online") : tr("offline")}
+                            </Typography>
+                          </MenuItem>
+                        ))}
+                    </TextField>
+                  </Field>
                   <Field
                     label={tr("Environment Variables")}
                     hint={

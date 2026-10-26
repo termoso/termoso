@@ -33,6 +33,7 @@ import com.termoso.android.ui.components.RowDivider
 import com.termoso.android.ui.components.SwitchRow
 import com.termoso.core.HostChainDraft
 import com.termoso.core.HostDraft
+import com.termoso.core.GatewayCard
 import com.termoso.core.ProxyDraft
 import com.termoso.core.terminalThemes
 import androidx.compose.runtime.produceState
@@ -99,6 +100,36 @@ fun ConnectionSection(state: HostEditorState, draft: HostDraft, vm: HostEditorVi
             EditLink { proxyEditor = ProxyDraft(proxy.id, proxy.vaultId, proxy.kind, proxy.host, proxy.port, proxy.identityId, proxy.username, proxy.password) }
         }
 
+        if (draft.ssh && state.gateways.isNotEmpty()) {
+            val online = stringResource(R.string.gateway_online)
+            val offline = stringResource(R.string.gateway_offline)
+            fun gwLabel(g: GatewayCard) = "${g.name} · ${if (g.online) online else offline}"
+            val gw = state.gateways.firstOrNull { it.id == draft.gatewayId }
+            PickerRow(
+                label = stringResource(R.string.gateway),
+                value = gw?.let { gwLabel(it) } ?: stringResource(R.string.none),
+                options = listOf<Pair<String?, String>>(null to stringResource(R.string.none)) + state.gateways.map { it.id to gwLabel(it) },
+                selected = draft.gatewayId,
+                onPick = { id -> vm.update { it.copy(gatewayId = id) } },
+                empty = null,
+            )
+        }
+        if (draft.ssh) {
+            val sent = stringResource(R.string.magic_packet_sent)
+            val mac = draft.macAddress.orEmpty()
+            FormField(
+                mac,
+                { v -> vm.update { it.copy(macAddress = v.ifBlank { null }) } },
+                stringResource(R.string.mac_address),
+                placeholder = "aa:bb:cc:dd:ee:ff",
+                trailing = if (mac.isBlank()) null else {
+                    { TextButton(onClick = { vm.wake(mac, sent) }) { Text(stringResource(R.string.wake)) } }
+                },
+            )
+            state.notice?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
         if (draft.ssh) PickerRow(
             label = stringResource(R.string.color_scheme),
             value = themes.firstOrNull { it.id == draft.colorScheme || it.name == draft.colorScheme }?.name

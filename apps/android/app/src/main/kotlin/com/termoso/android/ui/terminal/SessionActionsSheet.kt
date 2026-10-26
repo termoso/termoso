@@ -25,6 +25,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -94,6 +102,32 @@ fun SessionActionsSheet(
     val ssh = !session.isView && session.local == null && (quick?.protocol?.equals("ssh", true) ?: (hostId != null))
 
     fun then(action: () -> Unit): () -> Unit = { onClose(); action() }
+
+    var saveWorkspace by remember { mutableStateOf(false) }
+    if (saveWorkspace) {
+        var name by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { saveWorkspace = false },
+            title = { Text(stringResource(R.string.save_as_workspace)) },
+            text = {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    singleLine = true,
+                    label = { Text(stringResource(R.string.name)) },
+                    supportingText = { Text(pluralStringResource(R.plurals.n_tabs, sessions.size, sessions.size)) },
+                )
+            },
+            confirmButton = {
+                TextButton(enabled = name.isNotBlank(), onClick = {
+                    saveWorkspace = false
+                    shell.saveWorkspace(name)
+                    onClose()
+                }) { Text(stringResource(R.string.save)) }
+            },
+            dismissButton = { TextButton(onClick = { saveWorkspace = false }) { Text(stringResource(R.string.cancel)) } },
+        )
+    }
 
     ModalBottomSheet(onDismissRequest = onClose) {
         Column(
@@ -202,6 +236,10 @@ fun SessionActionsSheet(
                 ActionRow(Icons.Filled.Keyboard, stringResource(R.string.customize_keys), onClick = then(onCustomizeKeys))
                 RowDivider()
                 ActionRow(Icons.Filled.Add, stringResource(R.string.new_session), onClick = then(onNewSession))
+                if (shell.sessions.workspaces != null && sessions.any { !it.isView }) {
+                    RowDivider()
+                    ActionRow(Icons.Filled.Dashboard, stringResource(R.string.save_as_workspace), onClick = { saveWorkspace = true })
+                }
             }
 
             SectionLabel(stringResource(R.string.close))

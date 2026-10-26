@@ -3082,4 +3082,148 @@ export const ru: Readonly<Record<string, string>> = {
   Time: "Время",
   "Exit {code}": "Код {code}",
   error: "ошибка",
+  "SSH CA": "SSH CA (центр сертификации)",
+  "CA settings saved": "Настройки CA сохранены",
+  "Certificate authority created": "Центр сертификации создан",
+  "CA key rotated; hosts keep trusting the old key for the grace period":
+    "Ключ CA ротирован; хосты доверяют старому ключу до конца переходного периода",
+  "Certificate authority deleted": "Центр сертификации удалён",
+  "Certificate revoked": "Сертификат отозван",
+  "SSH certificate authority": "Центр сертификации SSH",
+  "The server signs short-lived certificates for members' devices; hosts trust one CA key instead of per-user authorized_keys. Leaving the team or losing a device stops new certificates without touching any host.":
+    "Сервер подписывает короткоживущие сертификаты для устройств участников; хостам достаточно доверять одному ключу CA вместо authorized_keys на каждого. Выход из команды или потеря устройства прекращают выдачу — хосты трогать не нужно.",
+  "Create certificate authority": "Создать центр сертификации",
+  "No certificate authority": "Центра сертификации нет",
+  "A team admin can create one.": "Его может создать администратор команды.",
+  Issuing: "Выдаёт",
+  "Issue certificates": "Выдавать сертификаты",
+  "Hosts need one line in sshd_config. Run this on every host of the team:":
+    "Хостам нужна одна строка в sshd_config. Выполните на каждом хосте команды:",
+  "Copy command": "Копировать команду",
+  "Copy CA public key": "Копировать открытый ключ CA",
+  "rotated {when}": "ротирован {when}",
+  "previous key trusted until {when}": "прежний ключ доверен до {when}",
+  "{count} active certificates":
+    "{count} активный сертификат|{count} активных сертификата|{count} активных сертификатов",
+  "Principals are the login names a certificate may carry (ubuntu, deploy…). A member asks for all of them or a subset; sshd matches the one they log in as.":
+    "Принципалы — имена входа, которые может нести сертификат (ubuntu, deploy…). Участник запрашивает все или часть; sshd сверяет с тем, под кем он входит.",
+  "Principals (login names)": "Принципалы (имена входа)",
+  "`{name}` is not a valid login name": "`{name}` — недопустимое имя входа",
+  "No principals yet — certificates are not issued until at least one is set.":
+    "Принципалов нет — сертификаты не выдаются, пока не задан хотя бы один.",
+  "Certificate lifetime (hours)": "Срок сертификата (часы)",
+  "1 to 168 hours": "От 1 до 168 часов",
+  "Rotate key…": "Ротировать ключ…",
+  "Delete CA…": "Удалить CA…",
+  "This device is not approved for the team yet; no certificate.":
+    "Это устройство ещё не одобрено для команды; сертификата нет.",
+  "Issuing is paused; this device has no certificate.":
+    "Выдача приостановлена; у этого устройства нет сертификата.",
+  "No certificate yet — it is requested with the next sync.":
+    "Сертификата пока нет — запросится при следующей синхронизации.",
+  "Valid until {when}": "Действует до {when}",
+  "Issued certificates": "Выданные сертификаты",
+  "Your certificates. Admins see everyone's.": "Ваши сертификаты. Администраторы видят все.",
+  "No certificates issued yet": "Сертификаты ещё не выдавались",
+  Principals: "Принципалы",
+  Serial: "Серийный номер",
+  "Valid until": "Действует до",
+  "Rotate the CA key?": "Ротировать ключ CA?",
+  "A new key is generated and published; the previous one stays in the trusted list for the grace period so hosts that re-fetch it keep accepting unexpired certificates.":
+    "Будет создан и опубликован новый ключ; прежний остаётся в списке доверенных на переходный период, чтобы хосты, перечитавшие список, продолжали принимать неистёкшие сертификаты.",
+  "Grace period (hours)": "Переходный период (часы)",
+  "Delete the certificate authority?": "Удалить центр сертификации?",
+  "No more certificates will be issued and the records are gone. Hosts that still trust the key accept unexpired certificates until they expire.":
+    "Сертификаты больше не будут выдаваться, записи удалятся. Хосты, всё ещё доверяющие ключу, принимают неистёкшие сертификаты до их истечения.",
+  "Revoke certificate?": "Отозвать сертификат?",
+  "The device gets a new certificate on its next sync only if it is still allowed to. Hosts enforce revocation through the KRL list (Settings → revoked certificates).":
+    "Устройство получит новый сертификат при следующей синхронизации, только если ему всё ещё разрешено. На хостах отзыв применяется через KRL-список (Настройки → отозванные сертификаты).",
+  "After every run": "После каждого запуска",
+  "Also e-mail team owners and admins": "Также писать владельцам и админам команды",
+  Automations: "Автоматизации",
+  Collapse: "Свернуть",
+  "Comma-separated. Audit events and webhooks fire regardless.":
+    "Через запятую. События аудита и вебхуки срабатывают в любом случае.",
+  "Cron expression": "Cron-выражение",
+  "Custom (cron)": "Своё (cron)",
+  "Delete automation?": "Удалить автоматизацию?",
+  "E-mail alert": "Оповещение по почте",
+  "Edit automation": "Изменить автоматизацию",
+  "Every Monday at 03:00": "Каждый понедельник в 03:00",
+  "Every day at 03:00": "Каждый день в 03:00",
+  Executor: "Исполнитель",
+  Expand: "Развернуть",
+  "Extra recipients": "Дополнительные получатели",
+  Finished: "Завершён",
+  "First day of the month at 03:00": "Первого числа месяца в 03:00",
+  "Host group (all hosts inside, including subgroups)":
+    "Группа хостов (все хосты внутри, включая подгруппы)",
+  "Its run history is deleted too. Hosts and the snippet stay in the vault.":
+    "История запусков тоже удалится. Хосты и сниппет останутся в хранилище.",
+  Missed: "Пропущен",
+  "Never ran": "Не запускалась",
+  "New automation": "Новая автоматизация",
+  "Next run": "Следующий запуск",
+  "No automations yet": "Автоматизаций пока нет",
+  "No runs yet": "Запусков пока нет",
+  "Not an e-mail address: {v}": "Не похоже на адрес почты: {v}",
+  "On failure": "При ошибке",
+  "Run a snippet on a set of hosts on a schedule. The server only keeps the schedule and opaque ids: the snippet and host credentials are resolved by an executor that holds the vault key — the API bridge, or a member's desktop with “Run team automations” enabled in Settings.":
+    "Запуск сниппета на наборе хостов по расписанию. Сервер хранит только расписание и непрозрачные идентификаторы: сниппет и учётные данные хостов разрешает исполнитель с ключом хранилища — API-мост или десктоп участника с включённым в настройках «Выполнять автоматизации команды».",
+  "Run history: {name}": "История запусков: {name}",
+  "Run now": "Запустить сейчас",
+  "Run queued. It starts when an executor with the vault picks it up.":
+    "Запуск поставлен в очередь. Начнётся, когда его подхватит исполнитель с этим хранилищем.",
+  "Run team automations on this computer": "Выполнять автоматизации команды на этом компьютере",
+  Schedule: "Расписание",
+  "Schedule a snippet on a group of hosts and get alerted when it fails.":
+    "Запланируйте сниппет на группе хостов и получайте оповещения при ошибках.",
+  Scheduled: "Запланирован",
+  "Scheduled snippets of your teams run here when their vault is unlocked (otherwise the API bridge or another member's desktop picks them up). Results go to the team page.":
+    "Сниппеты ваших команд по расписанию выполняются здесь, когда их хранилище разблокировано (иначе их подхватит API-мост или десктоп другого участника). Результаты — на странице команды.",
+  Snippet: "Сниппет",
+  "This vault has no hosts.": "В этом хранилище нет хостов.",
+  "This vault has no snippets yet.": "В этом хранилище ещё нет сниппетов.",
+  "Time zone": "Часовой пояс",
+  "Timeout per host, seconds": "Таймаут на хост, секунд",
+  "UTC or a fixed offset like +03:00": "UTC или фиксированное смещение вида +03:00",
+  "Unlock one of this team's vaults first: the snippet and hosts come from it.":
+    "Сначала разблокируйте одно из хранилищ команды: сниппет и хосты берутся из него.",
+  "Variables are not prompted for on a schedule; use fixed values.":
+    "По расписанию переменные не запрашиваются — используйте фиксированные значения.",
+  "Weekdays at 08:00": "По будням в 08:00",
+  "exit {code}": "код {code}",
+  "minute hour day month weekday, or @hourly / @daily / @weekly / @monthly":
+    "минута час день месяц день_недели, либо @hourly / @daily / @weekly / @monthly",
+  "{failed} of {total} failed": "{failed} из {total} с ошибкой",
+  "Per-host output is encrypted with the vault key — unlock the vault to see it.":
+    "Вывод по хостам зашифрован ключом хранилища — разблокируйте хранилище, чтобы его увидеть.",
+  "{total} ok": "{total} успешно",
+  "Reference: fetched from the external manager when connecting, not stored here.":
+    "Ссылка: значение берётся из внешнего менеджера при подключении и здесь не хранится.",
+  "Key-based authentication only": "Только аутентификация по ключу",
+  "Hosts in team vaults never try passwords or keyboard-interactive prompts; keys, certificates, SSH ID and agents still work. Honoured by the apps.":
+    "Хосты из командных хранилищ никогда не пробуют пароль и keyboard-interactive; ключи, сертификаты, SSH ID и агенты работают. Соблюдается приложениями.",
+  "Jump host required": "Обязательный jump-хост",
+  "Hosts in team vaults can be opened only through a jump host on their chain; direct connections are refused by the apps.":
+    "Хосты из командных хранилищ открываются только через jump-хост в цепочке; прямые подключения приложения отклоняют.",
+  "No local export": "Без локального экспорта",
+  "Backups, CSV export and private-key export skip or refuse team vault data on members' devices. Honoured by the apps.":
+    "Резервные копии, экспорт CSV и приватных ключей пропускают или отклоняют данные командного хранилища на устройствах участников. Соблюдается приложениями.",
+  "Forwarded ports": "Пробрасываемые порты",
+  "Remote ports members may forward from team hosts (22, 8000-8999; comma-separated, up to 100). Empty allows any; a non-empty list also disables dynamic (SOCKS) forwarding.":
+    "Удалённые порты, которые участники могут пробрасывать с командных хостов (22, 8000-8999; через запятую, до 100). Пусто — любые; непустой список также отключает динамический (SOCKS) проброс.",
+  "Require disk encryption": "Требовать шифрование диска",
+  "Members sign in only from devices that report an encrypted system disk (LUKS, FileVault, BitLocker, Android file-based encryption). Devices that cannot tell are refused; owners are exempt.":
+    "Участники входят только с устройств, сообщающих о зашифрованном системном диске (LUKS, FileVault, BitLocker, файловое шифрование Android). Устройства, которые не могут это подтвердить, отклоняются; владельцы освобождены.",
+  "Require a screen lock": "Требовать блокировку экрана",
+  "Members sign in only from devices with a password, PIN or biometric lock. Owners are exempt.":
+    "Участники входят только с устройств с паролем, PIN или биометрической блокировкой. Владельцы освобождены.",
+  "Require a hardware-backed device key": "Требовать аппаратный ключ устройства",
+  "Members sign in only from devices whose key lives in a TPM, Secure Enclave or StrongBox / TEE. Today only Android reports this; desktop devices are refused. Owners are exempt.":
+    "Участники входят только с устройств, чей ключ хранится в TPM, Secure Enclave или StrongBox / TEE. Сейчас это сообщает только Android; десктопы отклоняются. Владельцы освобождены.",
+  "Device posture": "Состояние устройства",
+  "Disk encryption": "Шифрование диска",
+  "Screen lock": "Блокировка экрана",
+  "Hardware key": "Аппаратный ключ",
 };

@@ -197,6 +197,10 @@ impl Cache {
         format!("{}live", self.prefix)
     }
 
+    pub fn gateway_channel(&self) -> String {
+        format!("{}gateway", self.prefix)
+    }
+
     fn key(&self, key: &str) -> String {
         format!("{}{key}", self.prefix)
     }
@@ -295,6 +299,12 @@ impl Cache {
     pub async fn publish_live(&self, frame: Vec<u8>) -> ApiResult<()> {
         let mut c = self.conn();
         let _: () = c.publish(self.live_channel(), frame).await?;
+        Ok(())
+    }
+
+    pub async fn publish_gateway(&self, frame: Vec<u8>) -> ApiResult<()> {
+        let mut c = self.conn();
+        let _: () = c.publish(self.gateway_channel(), frame).await?;
         Ok(())
     }
 

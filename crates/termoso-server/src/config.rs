@@ -74,6 +74,9 @@ pub struct Config {
     pub log: String,
     pub log_format: LogFormat,
     pub s3: Option<S3Config>,
+    /// Keep session logs in this directory instead of S3 (`TERMOSO_LOGS_DIR`).
+    /// Ignored when `s3` is set. Not shared between replicas: use S3 for HA.
+    pub logs_dir: Option<std::path::PathBuf>,
     pub smtp: Option<SmtpConfig>,
     /// Cloudflare Turnstile (`TERMOSO_TURNSTILE__SITE_KEY` / `__SECRET_KEY`).
     /// Unset = no captcha anywhere.
@@ -372,6 +375,7 @@ impl Default for Config {
             log: "info,sqlx=warn,hyper=warn,aws=warn".into(),
             log_format: LogFormat::Text,
             s3: None,
+            logs_dir: None,
             smtp: None,
             turnstile: None,
             webauthn: None,

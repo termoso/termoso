@@ -413,8 +413,19 @@ pub async fn put_settings(
 
 #[utoipa::path(get, path = "/api/v1/account/devices", tag = "account", responses((status = 200, body = DeviceList)))]
 pub async fn devices(State(state): State<AppState>, auth: Auth) -> ApiResult<Json<DeviceList>> {
-    let rows: Vec<(Uuid, String, String, Option<String>, DateTime<Utc>, DateTime<Utc>, Option<String>)> = sqlx::query_as(
-        "SELECT d.id, d.name, d.platform, d.app_version, d.created_at, d.last_seen_at, d.last_ip
+    #[allow(clippy::type_complexity)]
+    let rows: Vec<(
+        Uuid,
+        String,
+        String,
+        Option<String>,
+        DateTime<Utc>,
+        DateTime<Utc>,
+        Option<String>,
+        Option<serde_json::Value>,
+        Option<DateTime<Utc>>,
+    )> = sqlx::query_as(
+        "SELECT d.id, d.name, d.platform, d.app_version, d.created_at, d.last_seen_at, d.last_ip, d.posture, d.posture_at
          FROM devices d
          WHERE d.user_id = $1
            AND EXISTS (SELECT 1 FROM sessions s WHERE s.device_id = d.id AND s.revoked_at IS NULL AND s.expires_at > now())
@@ -427,7 +438,17 @@ pub async fn devices(State(state): State<AppState>, auth: Auth) -> ApiResult<Jso
     let devices = rows
         .into_iter()
         .map(
-            |(id, name, platform, app_version, created_at, last_seen_at, last_ip)| Device {
+            |(
+                id,
+                name,
+                platform,
+                app_version,
+                created_at,
+                last_seen_at,
+                last_ip,
+                posture,
+                posture_at,
+            )| Device {
                 id,
                 name,
                 platform: session::parse_platform(&platform),
@@ -436,6 +457,8 @@ pub async fn devices(State(state): State<AppState>, auth: Auth) -> ApiResult<Jso
                 last_seen_at,
                 last_ip,
                 current: id == auth.device_id(),
+                posture: posture.and_then(|v| serde_json::from_value(v).ok()),
+                posture_at,
             },
         )
         .collect();
