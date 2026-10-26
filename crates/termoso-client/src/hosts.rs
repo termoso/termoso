@@ -1359,6 +1359,7 @@ fn upsert_identity(
         return Ok(None);
     }
     let data = Identity {
+        external_id: None,
         label: c.label.to_string(),
         username,
         password,

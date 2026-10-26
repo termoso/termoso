@@ -1845,6 +1845,7 @@ fn remember_on_identity(
         }
         let vault_id = resolved.host.vault_id;
         let mut identity = Identity {
+            external_id: None,
             label: format!("{username}@{}", resolved.host.data.address),
             username: username.to_string(),
             password: None,

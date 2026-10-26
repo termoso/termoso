@@ -24,6 +24,18 @@ docker run -d --name termoso-bridge --restart unless-stopped \
 
 With Docker Compose use the `bridge` profile: `docker compose -f deploy/docker-compose.yml --profile bridge up -d`.
 
+## Snippets, identities and keys
+
+Besides hosts and groups, the bridge manages three more kinds of vault entries, all addressed by an `external_id` you choose so repeated runs update instead of duplicating:
+
+| Resource | List | One entry |
+|---|---|---|
+| Snippets | `GET /v1/snippets` | `GET` / `PUT` / `DELETE /v1/snippet/{external_id}` — `{ "label", "script", "close_after_run", "vault" }` |
+| Identities | `GET /v1/identities` | `GET` / `PUT` / `DELETE /v1/identity/{external_id}` — `{ "label", "username", "password", "key", "vault" }`; `key` is the `external_id` of a key |
+| Keys | `GET /v1/keys` | `GET` / `PUT` / `DELETE /v1/key/{external_id}` — `{ "label", "private", "public", "passphrase", "vault" }` |
+
+Identities created this way are visible in the keychain and can be shared by many hosts: pass `"credentials": { "identity": "<external_id>" }` in a host or group instead of inline username/password/key. Deleting an identity or a key that is still referenced is refused (`409`). Reads never return passwords, passphrases or private keys — only whether they are set, the public key and how many entries use them. The same operations are available as MCP tools (`list_snippets`, `upsert_identity`, …) when the bridge runs with `--allow-write`.
+
 ## MCP server for AI assistants
 
 `termoso-bridge mcp` serves the [Model Context Protocol](https://modelcontextprotocol.io)

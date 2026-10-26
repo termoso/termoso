@@ -389,6 +389,10 @@ pub mod payload {
             /// one-time-code prompt of keyboard-interactive logins.
             #[serde(default, skip_serializing_if = "Option::is_none")]
             pub totp_secret: Option<String>,
+            /// Stable id assigned by an external system (API Bridge, importers)
+            /// so repeated syncs update instead of duplicating.
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub external_id: Option<String>,
         }
     }
 
@@ -430,6 +434,10 @@ pub mod payload {
             /// Settings → SSH ID, not listed in the Keychain).
             #[serde(default, skip_serializing_if = "std::ops::Not::not")]
             pub ssh_id: bool,
+            /// Stable id assigned by an external system (API Bridge, importers)
+            /// so repeated syncs update instead of duplicating.
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub external_id: Option<String>,
         }
     }
 
@@ -480,6 +488,10 @@ pub mod payload {
             /// Sort order.
             #[serde(default)]
             pub sort_order: i32,
+            /// Stable id assigned by an external system (API Bridge, importers)
+            /// so repeated syncs update instead of duplicating.
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub external_id: Option<String>,
         }
     }
 

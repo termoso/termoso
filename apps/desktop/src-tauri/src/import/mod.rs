@@ -851,6 +851,7 @@ fn import_key(
         // Cannot normalise without the passphrase; store as-is, the
         // connection prompts for it.
         SshKey {
+            external_id: None,
             label,
             private_key: text.trim().to_string(),
             public_key: Some(info.public_key.clone()).filter(|p| !p.is_empty()),
@@ -862,6 +863,7 @@ fn import_key(
     } else {
         let material = keys::import(&text, None)?;
         SshKey {
+            external_id: None,
             label,
             private_key: material.private_key.to_string(),
             public_key: Some(material.public_key.clone()),
@@ -980,6 +982,7 @@ fn ensure_proxy(
         Some(store.insert(
             vault_id,
             &Identity {
+                external_id: None,
                 label: format!("{}:{} proxy", p.host, p.port),
                 username: p.username.trim().to_string(),
                 password: p.password.clone().filter(|s| !s.is_empty()),

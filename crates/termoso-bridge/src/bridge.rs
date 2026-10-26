@@ -9,7 +9,7 @@ use termoso_crypto::keys::KeyPair;
 use termoso_crypto::sealed;
 use termoso_proto::bridge::BridgeSelf;
 use termoso_proto::entities::payload::{
-    Group, Host, Identity, SshConfig, SshKey, Tag, TelnetConfig, WebDavConfig,
+    Group, Host, Identity, Snippet, SshConfig, SshKey, Tag, TelnetConfig, WebDavConfig,
 };
 use termoso_proto::sync::{EntityChange, EntityDelete, PullRequest, PushRequest, PushResult};
 use tokio::sync::Mutex;
@@ -18,8 +18,9 @@ use uuid::Uuid;
 use crate::credentials::Credentials as FileCredentials;
 use crate::error::{BridgeError, Result};
 use crate::model::{
-    BridgeStatus, Credentials, GroupRequest, GroupSummary, HostRequest, HostSummary, SshSection,
-    TelnetSection, VaultSummary,
+    BridgeStatus, Credentials, GroupRequest, GroupSummary, HostRequest, HostSummary,
+    IdentityRequest, IdentitySummary, KeyRequest, KeySummary, SnippetRequest, SnippetSummary,
+    SshSection, TelnetSection, VaultSummary,
 };
 use crate::server::ServerClient;
 use crate::vault::VaultState;
@@ -365,6 +366,9 @@ impl Bridge {
     ) -> Result<Option<Uuid>> {
         let has = |v: &VaultState| match kind {
             "host" => v.host_by_external_id(external_id).is_some(),
+            "snippet" => v.snippet_by_external_id(external_id).is_some(),
+            "identity" => v.identity_by_external_id(external_id).is_some(),
+            "key" => v.key_by_external_id(external_id).is_some(),
             _ => v.group_by_external_id(external_id).is_some(),
         };
         if vault.is_some() {
@@ -477,6 +481,252 @@ impl Bridge {
             .collect();
         out.sort_by(|a, b| (&a.vault, &a.external_id).cmp(&(&b.vault, &b.external_id)));
         Ok(out)
+    }
+
+    // ─────────────────── snippets / identities / keys ───────────────────
+
+    pub async fn upsert_snippet(
+        &self,
+        external_id: &str,
+        req: SnippetRequest,
+    ) -> Result<SnippetSummary> {
+        let external_id = validate_external_id(external_id)?;
+        validate_snippet(&req)?;
+        let mut inner = self.inner.lock().await;
+        self.refresh(&mut inner, false).await?;
+        let vault_id = Self::resolve_vault(&inner, req.vault.as_deref(), None)?;
+        let eid = external_id.clone();
+        self.commit(&mut inner, vault_id, move |v| plan_snippet(v, &eid, &req))
+            .await?;
+        let v = &inner.vaults[&vault_id];
+        let (id, sn) = v
+            .snippet_by_external_id(&external_id)
+            .ok_or_else(|| BridgeError::Conflict(external_id.clone()))?;
+        Ok(snippet_summary(v, id, &sn))
+    }
+
+    pub async fn get_snippet(
+        &self,
+        external_id: &str,
+        vault: Option<&str>,
+    ) -> Result<Option<SnippetSummary>> {
+        let external_id = validate_external_id(external_id)?;
+        let mut inner = self.inner.lock().await;
+        self.refresh(&mut inner, false).await?;
+        let Some(vault_id) = Self::locate(&inner, "snippet", &external_id, vault)? else {
+            return Ok(None);
+        };
+        let v = &inner.vaults[&vault_id];
+        Ok(v.snippet_by_external_id(&external_id)
+            .map(|(id, sn)| snippet_summary(v, id, &sn)))
+    }
+
+    pub async fn list_snippets(&self, vault: Option<&str>) -> Result<Vec<SnippetSummary>> {
+        let mut inner = self.inner.lock().await;
+        self.refresh(&mut inner, false).await?;
+        let only = match vault {
+            Some(_) => Some(Self::resolve_vault(&inner, vault, None)?),
+            None => None,
+        };
+        let mut out: Vec<SnippetSummary> = inner
+            .vaults
+            .values()
+            .filter(|v| only.is_none_or(|id| id == v.id))
+            .flat_map(|v| {
+                v.iter_kind::<Snippet>("snippet")
+                    .filter(|(_, _, s)| s.external_id.is_some())
+                    .map(move |(id, _, s)| snippet_summary(v, id, &s))
+            })
+            .collect();
+        out.sort_by(|a, b| (&a.vault, &a.external_id).cmp(&(&b.vault, &b.external_id)));
+        Ok(out)
+    }
+
+    /// Returns `false` when no such snippet exists.
+    pub async fn delete_snippet(&self, external_id: &str, vault: Option<&str>) -> Result<bool> {
+        let external_id = validate_external_id(external_id)?;
+        let mut inner = self.inner.lock().await;
+        self.refresh(&mut inner, false).await?;
+        let Some(vault_id) = Self::locate(&inner, "snippet", &external_id, vault)? else {
+            return Ok(false);
+        };
+        let eid = external_id.clone();
+        self.commit(&mut inner, vault_id, move |v| {
+            v.require_key()?;
+            let mut plan = Plan::default();
+            if let Some((id, _)) = v.snippet_by_external_id(&eid) {
+                plan.delete(id);
+            }
+            Ok(plan)
+        })
+        .await?;
+        Ok(true)
+    }
+
+    pub async fn upsert_identity(
+        &self,
+        external_id: &str,
+        req: IdentityRequest,
+    ) -> Result<IdentitySummary> {
+        let external_id = validate_external_id(external_id)?;
+        validate_identity(&req)?;
+        let mut inner = self.inner.lock().await;
+        self.refresh(&mut inner, false).await?;
+        let vault_id = Self::resolve_vault(&inner, req.vault.as_deref(), None)?;
+        let eid = external_id.clone();
+        self.commit(&mut inner, vault_id, move |v| {
+            plan_shared_identity(v, &eid, &req)
+        })
+        .await?;
+        let v = &inner.vaults[&vault_id];
+        let (id, i) = v
+            .identity_by_external_id(&external_id)
+            .ok_or_else(|| BridgeError::Conflict(external_id.clone()))?;
+        Ok(identity_summary(v, id, &i))
+    }
+
+    pub async fn get_identity(
+        &self,
+        external_id: &str,
+        vault: Option<&str>,
+    ) -> Result<Option<IdentitySummary>> {
+        let external_id = validate_external_id(external_id)?;
+        let mut inner = self.inner.lock().await;
+        self.refresh(&mut inner, false).await?;
+        let Some(vault_id) = Self::locate(&inner, "identity", &external_id, vault)? else {
+            return Ok(None);
+        };
+        let v = &inner.vaults[&vault_id];
+        Ok(v.identity_by_external_id(&external_id)
+            .map(|(id, i)| identity_summary(v, id, &i)))
+    }
+
+    pub async fn list_identities(&self, vault: Option<&str>) -> Result<Vec<IdentitySummary>> {
+        let mut inner = self.inner.lock().await;
+        self.refresh(&mut inner, false).await?;
+        let only = match vault {
+            Some(_) => Some(Self::resolve_vault(&inner, vault, None)?),
+            None => None,
+        };
+        let mut out: Vec<IdentitySummary> = inner
+            .vaults
+            .values()
+            .filter(|v| only.is_none_or(|id| id == v.id))
+            .flat_map(|v| {
+                v.iter_kind::<Identity>("identity")
+                    .filter(|(_, _, i)| i.external_id.is_some())
+                    .map(move |(id, _, i)| identity_summary(v, id, &i))
+            })
+            .collect();
+        out.sort_by(|a, b| (&a.vault, &a.external_id).cmp(&(&b.vault, &b.external_id)));
+        Ok(out)
+    }
+
+    /// Refuses (`Conflict`) while hosts or groups still use the identity.
+    pub async fn delete_identity(&self, external_id: &str, vault: Option<&str>) -> Result<bool> {
+        let external_id = validate_external_id(external_id)?;
+        let mut inner = self.inner.lock().await;
+        self.refresh(&mut inner, false).await?;
+        let Some(vault_id) = Self::locate(&inner, "identity", &external_id, vault)? else {
+            return Ok(false);
+        };
+        let eid = external_id.clone();
+        self.commit(&mut inner, vault_id, move |v| {
+            v.require_key()?;
+            let mut plan = Plan::default();
+            if let Some((id, _)) = v.identity_by_external_id(&eid) {
+                let users = identity_users(v, id);
+                if users > 0 {
+                    return Err(BridgeError::Conflict(format!(
+                        "identity '{eid}' is used by {users} host(s)/group(s)"
+                    )));
+                }
+                plan.delete(id);
+            }
+            Ok(plan)
+        })
+        .await?;
+        Ok(true)
+    }
+
+    pub async fn upsert_key(&self, external_id: &str, req: KeyRequest) -> Result<KeySummary> {
+        let external_id = validate_external_id(external_id)?;
+        validate_key(&req)?;
+        let mut inner = self.inner.lock().await;
+        self.refresh(&mut inner, false).await?;
+        let vault_id = Self::resolve_vault(&inner, req.vault.as_deref(), None)?;
+        let eid = external_id.clone();
+        self.commit(&mut inner, vault_id, move |v| plan_key(v, &eid, &req))
+            .await?;
+        let v = &inner.vaults[&vault_id];
+        let (id, k) = v
+            .key_by_external_id(&external_id)
+            .ok_or_else(|| BridgeError::Conflict(external_id.clone()))?;
+        Ok(key_summary(v, id, &k))
+    }
+
+    pub async fn get_key(
+        &self,
+        external_id: &str,
+        vault: Option<&str>,
+    ) -> Result<Option<KeySummary>> {
+        let external_id = validate_external_id(external_id)?;
+        let mut inner = self.inner.lock().await;
+        self.refresh(&mut inner, false).await?;
+        let Some(vault_id) = Self::locate(&inner, "key", &external_id, vault)? else {
+            return Ok(None);
+        };
+        let v = &inner.vaults[&vault_id];
+        Ok(v.key_by_external_id(&external_id)
+            .map(|(id, k)| key_summary(v, id, &k)))
+    }
+
+    pub async fn list_keys(&self, vault: Option<&str>) -> Result<Vec<KeySummary>> {
+        let mut inner = self.inner.lock().await;
+        self.refresh(&mut inner, false).await?;
+        let only = match vault {
+            Some(_) => Some(Self::resolve_vault(&inner, vault, None)?),
+            None => None,
+        };
+        let mut out: Vec<KeySummary> = inner
+            .vaults
+            .values()
+            .filter(|v| only.is_none_or(|id| id == v.id))
+            .flat_map(|v| {
+                v.iter_kind::<SshKey>("ssh_key")
+                    .filter(|(_, _, k)| k.external_id.is_some())
+                    .map(move |(id, _, k)| key_summary(v, id, &k))
+            })
+            .collect();
+        out.sort_by(|a, b| (&a.vault, &a.external_id).cmp(&(&b.vault, &b.external_id)));
+        Ok(out)
+    }
+
+    /// Refuses (`Conflict`) while identities still reference the key.
+    pub async fn delete_key(&self, external_id: &str, vault: Option<&str>) -> Result<bool> {
+        let external_id = validate_external_id(external_id)?;
+        let mut inner = self.inner.lock().await;
+        self.refresh(&mut inner, false).await?;
+        let Some(vault_id) = Self::locate(&inner, "key", &external_id, vault)? else {
+            return Ok(false);
+        };
+        let eid = external_id.clone();
+        self.commit(&mut inner, vault_id, move |v| {
+            v.require_key()?;
+            let mut plan = Plan::default();
+            if let Some((id, _)) = v.key_by_external_id(&eid) {
+                let users = key_users(v, id);
+                if users > 0 {
+                    return Err(BridgeError::Conflict(format!(
+                        "key '{eid}' is used by {users} identit(y/ies)"
+                    )));
+                }
+                plan.delete(id);
+            }
+            Ok(plan)
+        })
+        .await?;
+        Ok(true)
     }
 
     // ───────────────────────────── groups ─────────────────────────────
@@ -811,6 +1061,23 @@ fn plan_identity(
     };
     let inline = old.filter(|(_, i)| !i.is_visible);
 
+    // A shared identity by external_id replaces whatever inline one we kept.
+    if let Some(ext) = c
+        .identity
+        .as_deref()
+        .map(str::trim)
+        .filter(|e| !e.is_empty())
+    {
+        let (shared, _) = v.identity_by_external_id(ext).ok_or_else(|| {
+            BridgeError::NotFound(format!("identity '{ext}' not found in vault '{}'", v.name))
+        })?;
+        if let Some((id, i)) = inline {
+            plan_delete_key(v, plan, id, i.ssh_key_id);
+            plan.delete(id);
+        }
+        return Ok(Some(shared));
+    }
+
     let (id, mut ident) = inline.unwrap_or_else(|| (Uuid::new_v4(), Identity::default()));
     ident.label = label.to_string();
     ident.username = c.username.clone().unwrap_or_default().trim().to_string();
@@ -833,6 +1100,7 @@ fn plan_identity(
                 .filter(|p| !p.is_empty())
                 .map(str::to_string);
             let key = SshKey {
+                external_id: None,
                 label: k
                     .label
                     .as_deref()
@@ -938,7 +1206,228 @@ fn infer_key_type(private: &str, public: Option<&str>) -> String {
     .to_string()
 }
 
+fn plan_snippet(v: &VaultState, external_id: &str, req: &SnippetRequest) -> Result<Plan> {
+    v.require_key()?;
+    let mut plan = Plan::default();
+    let existing = v.snippet_by_external_id(external_id);
+    let id = existing
+        .as_ref()
+        .map(|(id, _)| *id)
+        .unwrap_or_else(Uuid::new_v4);
+    let old = existing.map(|(_, s)| s).unwrap_or_default();
+    plan.put(
+        "snippet",
+        id,
+        &Snippet {
+            label: req.label.trim().to_string(),
+            script: req.script.clone(),
+            package_id: old.package_id,
+            close_after_run: req.close_after_run,
+            sort_order: old.sort_order,
+            external_id: Some(external_id.to_string()),
+        },
+    )?;
+    Ok(plan)
+}
+
+/// A keychain-visible identity owned by an external system.
+fn plan_shared_identity(v: &VaultState, external_id: &str, req: &IdentityRequest) -> Result<Plan> {
+    v.require_key()?;
+    let mut plan = Plan::default();
+    let existing = v.identity_by_external_id(external_id);
+    let id = existing
+        .as_ref()
+        .map(|(id, _)| *id)
+        .unwrap_or_else(Uuid::new_v4);
+    let old = existing.map(|(_, i)| i).unwrap_or_default();
+    let ssh_key_id = match req.key.as_deref().map(str::trim).filter(|k| !k.is_empty()) {
+        Some(k) => Some(v.key_by_external_id(k).map(|(id, _)| id).ok_or_else(|| {
+            BridgeError::NotFound(format!("key '{k}' not found in vault '{}'", v.name))
+        })?),
+        None => None,
+    };
+    let username = req.username.as_deref().unwrap_or("").trim().to_string();
+    let label = req
+        .label
+        .as_deref()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| {
+            if username.is_empty() {
+                external_id.to_string()
+            } else {
+                username.clone()
+            }
+        });
+    plan.put(
+        "identity",
+        id,
+        &Identity {
+            label,
+            username,
+            password: req.password.clone().filter(|p| !p.is_empty()),
+            ssh_key_id,
+            ssh_certificate_id: None,
+            is_visible: true,
+            ssh_id: false,
+            ssh_id_key_type: None,
+            bearer_token: old.bearer_token,
+            client_certificate: old.client_certificate,
+            totp_secret: old.totp_secret,
+            external_id: Some(external_id.to_string()),
+        },
+    )?;
+    Ok(plan)
+}
+
+fn plan_key(v: &VaultState, external_id: &str, req: &KeyRequest) -> Result<Plan> {
+    v.require_key()?;
+    let mut plan = Plan::default();
+    let id = v
+        .key_by_external_id(external_id)
+        .map(|(id, _)| id)
+        .unwrap_or_else(Uuid::new_v4);
+    let private = req.private.trim().to_string();
+    let public = req
+        .public
+        .as_deref()
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .map(str::to_string);
+    plan.put(
+        "ssh_key",
+        id,
+        &SshKey {
+            label: req
+                .label
+                .as_deref()
+                .map(str::trim)
+                .filter(|l| !l.is_empty())
+                .unwrap_or(external_id)
+                .to_string(),
+            key_type: infer_key_type(&private, public.as_deref()),
+            private_key: format!("{private}\n"),
+            public_key: public,
+            passphrase: req.passphrase.clone().filter(|p| !p.is_empty()),
+            fido2_credential_id: None,
+            ssh_id: false,
+            external_id: Some(external_id.to_string()),
+        },
+    )?;
+    Ok(plan)
+}
+
+/// SSH/telnet configs (hosts and groups) pointing at `identity_id`.
+fn identity_users(v: &VaultState, identity_id: Uuid) -> usize {
+    v.iter_kind::<SshConfig>("ssh_config")
+        .filter(|(_, _, c)| c.identity_id == Some(identity_id))
+        .count()
+        + v.iter_kind::<TelnetConfig>("telnet_config")
+            .filter(|(_, _, c)| c.identity_id == Some(identity_id))
+            .count()
+}
+
+fn key_users(v: &VaultState, key_id: Uuid) -> usize {
+    v.iter_kind::<Identity>("identity")
+        .filter(|(_, _, i)| i.ssh_key_id == Some(key_id))
+        .count()
+}
+
+fn snippet_summary(v: &VaultState, id: Uuid, s: &Snippet) -> SnippetSummary {
+    SnippetSummary {
+        id,
+        external_id: s.external_id.clone().unwrap_or_default(),
+        vault: v.name.clone(),
+        vault_id: v.id,
+        label: s.label.clone(),
+        script: s.script.clone(),
+        close_after_run: s.close_after_run,
+    }
+}
+
+fn identity_summary(v: &VaultState, id: Uuid, i: &Identity) -> IdentitySummary {
+    IdentitySummary {
+        id,
+        external_id: i.external_id.clone().unwrap_or_default(),
+        vault: v.name.clone(),
+        vault_id: v.id,
+        label: i.label.clone(),
+        username: i.username.clone(),
+        has_password: i.password.as_deref().is_some_and(|p| !p.is_empty()),
+        key: i
+            .ssh_key_id
+            .and_then(|k| v.get::<SshKey>(k, "ssh_key"))
+            .and_then(|k| k.external_id),
+        used_by: identity_users(v, id),
+    }
+}
+
+fn key_summary(v: &VaultState, id: Uuid, k: &SshKey) -> KeySummary {
+    KeySummary {
+        id,
+        external_id: k.external_id.clone().unwrap_or_default(),
+        vault: v.name.clone(),
+        vault_id: v.id,
+        label: k.label.clone(),
+        key_type: k.key_type.clone(),
+        public_key: k.public_key.clone(),
+        has_passphrase: k.passphrase.as_deref().is_some_and(|p| !p.is_empty()),
+        used_by: key_users(v, id),
+    }
+}
+
 // ───────────────────────────── validation ─────────────────────────────
+
+const MAX_SCRIPT_BYTES: usize = 64 * 1024;
+
+fn validate_snippet(req: &SnippetRequest) -> Result<()> {
+    if req.label.trim().is_empty() {
+        return Err(BridgeError::Invalid("snippet label is required".into()));
+    }
+    if req.script.trim().is_empty() {
+        return Err(BridgeError::Invalid("snippet script is required".into()));
+    }
+    if req.script.len() > MAX_SCRIPT_BYTES {
+        return Err(BridgeError::Invalid(format!(
+            "snippet script exceeds {MAX_SCRIPT_BYTES} bytes"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_identity(req: &IdentityRequest) -> Result<()> {
+    let has_user = req
+        .username
+        .as_deref()
+        .is_some_and(|u| !u.trim().is_empty());
+    let has_secret = req.password.as_deref().is_some_and(|p| !p.is_empty())
+        || req.key.as_deref().is_some_and(|k| !k.trim().is_empty());
+    if !has_user && !has_secret {
+        return Err(BridgeError::Invalid(
+            "identity needs a username, a password or a key".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_key(req: &KeyRequest) -> Result<()> {
+    let private = req.private.trim();
+    if private.is_empty() {
+        return Err(BridgeError::Invalid("private key is required".into()));
+    }
+    if !private.starts_with("-----BEGIN ") {
+        return Err(BridgeError::Invalid(
+            "private key must be PEM / OpenSSH format".into(),
+        ));
+    }
+    if private.len() > MAX_KEY_BYTES {
+        return Err(BridgeError::Invalid(format!(
+            "private key exceeds {MAX_KEY_BYTES} bytes"
+        )));
+    }
+    Ok(())
+}
 
 fn validate_external_id(s: &str) -> Result<String> {
     let s = s.trim();
@@ -975,6 +1464,14 @@ fn validate_text(what: &str, s: Option<&str>, max: usize) -> Result<()> {
 }
 
 fn validate_credentials(where_: &str, c: Option<&Credentials>) -> Result<()> {
+    if let Some(c) = c
+        && c.identity.as_deref().is_some_and(|i| !i.trim().is_empty())
+        && (c.username.is_some() || c.password.is_some() || c.key.is_some())
+    {
+        return Err(BridgeError::Invalid(format!(
+            "{where_}: credentials.identity cannot be combined with username/password/key"
+        )));
+    }
     let Some(c) = c else { return Ok(()) };
     validate_text(
         &format!("{where_}.credentials.username"),
@@ -1226,5 +1723,77 @@ mod tests {
         req.tags = (0..33).map(|i| i.to_string()).collect();
         req.ssh = None;
         assert!(validate_host(&req).is_err());
+    }
+
+    #[test]
+    fn shared_entries_are_validated() {
+        let mut req = HostRequest {
+            address: "10.0.0.1".into(),
+            ssh: Some(SshSection {
+                port: None,
+                credentials: Some(Credentials {
+                    identity: Some("ops".into()),
+                    ..Default::default()
+                }),
+            }),
+            ..Default::default()
+        };
+        validate_host(&req).unwrap();
+        req.ssh
+            .as_mut()
+            .unwrap()
+            .credentials
+            .as_mut()
+            .unwrap()
+            .username = Some("root".into());
+        assert!(
+            validate_host(&req).is_err(),
+            "identity excludes inline fields"
+        );
+
+        assert!(validate_snippet(&SnippetRequest::default()).is_err());
+        assert!(
+            validate_snippet(&SnippetRequest {
+                label: "uptime".into(),
+                script: "uptime".into(),
+                ..Default::default()
+            })
+            .is_ok()
+        );
+        assert!(
+            validate_snippet(&SnippetRequest {
+                label: "big".into(),
+                script: "x".repeat(MAX_SCRIPT_BYTES + 1),
+                ..Default::default()
+            })
+            .is_err()
+        );
+
+        assert!(validate_identity(&IdentityRequest::default()).is_err());
+        assert!(
+            validate_identity(&IdentityRequest {
+                key: Some("k1".into()),
+                ..Default::default()
+            })
+            .is_ok()
+        );
+
+        assert!(validate_key(&KeyRequest::default()).is_err());
+        assert!(
+            validate_key(&KeyRequest {
+                private: "not a key".into(),
+                ..Default::default()
+            })
+            .is_err()
+        );
+        assert!(
+            validate_key(&KeyRequest {
+                private:
+                    "-----BEGIN OPENSSH PRIVATE KEY-----\nAAAA\n-----END OPENSSH PRIVATE KEY-----"
+                        .into(),
+                ..Default::default()
+            })
+            .is_ok()
+        );
     }
 }
