@@ -40,6 +40,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EmptyState } from "@/components/EmptyState";
 import { Loading } from "@/components/Loading";
 import { Section } from "@/components/Section";
+import { saveBlob } from "@/components/download";
 import { useSnackbar } from "@/components/Snackbar";
 import { UserCell } from "@/components/UserCell";
 import { formatDateTime, formatRelative } from "@/components/format";
@@ -91,11 +92,7 @@ function AuditSection({ team }: { team: Team }) {
     try {
       const blob = await teamsApi.auditExport(team.id, { format, action: applied || undefined });
       if (!blob) return;
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = `termoso-audit-${team.name.replace(/\W+/g, "-")}.${format}`;
-      a.click();
-      URL.revokeObjectURL(a.href);
+      saveBlob(blob, `termoso-audit-${team.name.replace(/\W+/g, "-")}.${format}`);
     } catch (e) {
       snack.error(errorMessage(e));
     } finally {

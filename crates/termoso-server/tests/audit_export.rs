@@ -170,3 +170,36 @@ async fn audit_export_streams_csv_and_jsonl() {
         .await;
     assert_eq!(p["policies"]["audit_retention_days"], 400);
 }
+
+#[tokio::test]
+async fn export_with_no_matching_rows_completes() {
+    let Some(s) = server().await else { return };
+    let owner = register(s, &unique_email("ax-empty"), "pw-owner-1234567").await;
+    let team: serde_json::Value = s
+        .json(
+            Method::POST,
+            "/teams",
+            Some(owner.token()),
+            Some(&serde_json::json!({ "name": "Empty export" })),
+        )
+        .await;
+    let team_id = team["id"].as_str().unwrap();
+    for format in ["jsonl", "csv"] {
+        let resp = s
+            .call(
+                Method::GET,
+                &format!("/teams/{team_id}/audit/export?format={format}&action=nothing.matches"),
+                Some(owner.token()),
+                NOBODY,
+            )
+            .await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = resp.text().await.unwrap();
+        let rows = body.lines().filter(|l| !l.is_empty()).count();
+        assert_eq!(
+            rows,
+            if format == "csv" { 1 } else { 0 },
+            "{format}: {body}"
+        );
+    }
+}
