@@ -160,6 +160,8 @@ impl Modify for BearerAuth {
         crate::gateway::list,
         crate::gateway::agent_ws,
         crate::gateway::client_ws,
+        crate::routes::logs::blob_put,
+        crate::routes::logs::blob_get,
         crate::digest::get,
         crate::digest::put,
         crate::digest::send_now,

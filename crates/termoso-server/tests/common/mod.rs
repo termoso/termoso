@@ -240,7 +240,11 @@ async fn boot() -> Option<TestServer> {
 
     let s3 = s3_config().await;
     let smtp = smtp_config().await;
-    let storage = s3.is_some();
+    // No object store around: keep session logs on disk (the local backend).
+    let logs_dir = s3
+        .is_none()
+        .then(|| std::env::temp_dir().join(format!("termoso-test-logs-{}", uuid::Uuid::new_v4())));
+    let storage = true;
     let mailpit = smtp.as_ref().map(|(_, api)| api.clone());
 
     let mut sso = std::collections::BTreeMap::new();
@@ -319,6 +323,7 @@ async fn boot() -> Option<TestServer> {
         android_app_links: format!("com.termoso.android.debug={}", ANDROID_DEBUG_FINGERPRINT),
         swagger_ui: true,
         s3,
+        logs_dir,
         smtp: smtp.map(|(cfg, _)| cfg),
         webhooks_allow_private: true,
         webhooks_syslog_ca: Some(syslog_ca_path()),

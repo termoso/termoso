@@ -633,6 +633,7 @@ fn plan_host(v: &VaultState, external_id: &str, req: &HostRequest) -> Result<Pla
     }
 
     let host = Host {
+        mac_address: None,
         label,
         address: req.address.trim().to_string(),
         group_id,

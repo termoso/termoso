@@ -81,3 +81,13 @@ The landing and the docs pages ship with real `<title>`, description, canonical 
 | `TERMOSO_SSHID_URL`        | SSH ID on a dedicated origin                                  |
 | `TERMOSO_METRICS__ENABLED` | Prometheus metrics on a separate, unpublished listener        |
 | `TERMOSO_SWAGGER_UI`       | Swagger UI at `/api/docs`                                     |
+
+## Session logs without S3
+
+Session recordings are client-encrypted blobs. By default they go to S3-compatible storage (`TERMOSO_S3__*`). A single-server install can keep them on disk instead:
+
+```sh
+TERMOSO_LOGS_DIR=/var/lib/termoso/logs
+```
+
+Clients still receive short-lived upload / download URLs — now pointing at `/api/v1/logs/blob/{token}` on the server, the token sealed with the master key for 15 minutes and bound to one object, one direction and (for uploads) a size cap. Quotas, retention and the compliance export work the same. The directory is not shared between replicas: for HA, use S3. `TERMOSO_S3__*` wins when both are set.

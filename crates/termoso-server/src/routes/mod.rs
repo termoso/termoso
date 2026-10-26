@@ -438,6 +438,10 @@ pub fn router(state: AppState) -> Router {
         .nest("/scim/v2", crate::scim::router())
         .route("/ca/{team_id}", get(ca::trusted_keys))
         .route("/audit/key", get(crate::audit_chain::public_key))
+        .route(
+            "/api/v1/logs/blob/{token}",
+            get(logs::blob_get).put(logs::blob_put),
+        )
         .route("/sshid/{handle}", get(sshid::public_default))
         .route("/sshid/{handle}/{type}", get(sshid::public_typed))
         .nest(

@@ -73,13 +73,18 @@ impl Inner {
             .context("connecting to Redis")?;
         cache.ping().await.context("pinging Redis")?;
 
-        let storage = match &cfg.s3 {
-            Some(s3) => {
+        let storage = match (&cfg.s3, &cfg.logs_dir) {
+            (Some(s3), _) => {
                 let s = Storage::new(s3).await?;
                 s.ensure_bucket().await?;
                 Some(s)
             }
-            None => None,
+            (None, Some(dir)) => Some(Storage::local(
+                dir.clone(),
+                &cfg.public_url,
+                master_key.clone(),
+            )?),
+            (None, None) => None,
         };
 
         let mailer = match &cfg.smtp {
