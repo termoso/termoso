@@ -9,9 +9,10 @@ import { tr } from "@/i18n";
 
 const TAIL = 4096;
 const COOLDOWN_MS = 2000;
-// eslint-disable-next-line no-control-regex
+/* eslint-disable no-control-regex */
 const ANSI =
   /\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\)|[PX^_][^\x1b]*\x1b\\|[@-Z\\-_])/g;
+/* eslint-enable no-control-regex */
 
 let triggers: Trigger[] = [];
 const compiled = new Map<string, RegExp | null>();

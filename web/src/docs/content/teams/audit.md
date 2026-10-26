@@ -1,4 +1,7 @@
-# Activity log and tamper evidence
+---
+title: Activity log and tamper evidence
+description: Every team-scoped change is logged, hash-chained and signed by the server; verify the chain from the console or with ssh-keygen.
+---
 
 Every team-scoped change — members, roles, invites, vaults and their access, entities, policies, devices, sign-ins refused by a policy, automations, SSH CA — lands in the team's activity log (`GET /api/v1/teams/{id}/audit`, **Team → Activity** in the apps). The server never sees vault payloads, so an entry names the kind and id of what changed and the client resolves it to a label where it holds the vault key. Members see the log too: the software reports *to* the team, not on it.
 
