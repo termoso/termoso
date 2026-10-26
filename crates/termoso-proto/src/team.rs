@@ -789,6 +789,9 @@ schema! {
         /// Members may sign in only from devices whose key is in hardware (TPM / Secure Enclave / StrongBox).
         #[serde(default)]
         pub posture_secure_key: bool,
+        /// Open an access review every this many days (0 = off, else 7..=365).
+        #[serde(default)]
+        pub access_review_days: i32,
         /// Last change.
         pub updated_at: DateTime<Utc>,
     }
@@ -860,6 +863,9 @@ schema! {
         /// Require a hardware-backed device key.
         #[serde(default)]
         pub posture_secure_key: Option<bool>,
+        /// Access review cadence in days (0 = off, else 7..=365).
+        #[serde(default)]
+        pub access_review_days: Option<i32>,
     }
 }
 
@@ -1528,5 +1534,119 @@ schema! {
     pub struct MyAclResponse {
         /// Rules that apply to the caller across all team vaults.
         pub rules: Vec<MyAclRule>,
+    }
+}
+
+schema! {
+    /// One line of an access review: a team membership or a team-vault access
+    /// an admin confirms (`keep`) or revokes (`remove`).
+    pub struct AccessReviewItem {
+        /// Item id.
+        pub id: Uuid,
+        /// `member` (team membership) or `vault_access` (access to one team vault).
+        pub kind: String,
+        /// Whose access.
+        pub user_id: Uuid,
+        /// Their e-mail at review time.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub email: Option<String>,
+        /// Display name at review time.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub display_name: Option<String>,
+        /// The vault, for `vault_access`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub vault_id: Option<Uuid>,
+        /// Vault name, for `vault_access`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub vault_name: Option<String>,
+        /// Team role (`admin` / `member`) or vault role (`manager` / `editor` / `viewer`) when the review opened.
+        pub role: String,
+        /// When the user was last seen (any device), if ever.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub last_seen_at: Option<DateTime<Utc>>,
+        /// `keep` / `remove`, `None` until decided.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub decision: Option<String>,
+        /// Who decided.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub decided_by: Option<Uuid>,
+        /// When.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub decided_at: Option<DateTime<Utc>>,
+        /// Reviewer's note.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub note: Option<String>,
+    }
+}
+
+schema! {
+    /// A periodic access review (`/teams/{id}/access-reviews`).
+    pub struct AccessReview {
+        /// Review id.
+        pub id: Uuid,
+        /// Team.
+        pub team_id: Uuid,
+        /// `open`, `completed` or `cancelled`.
+        pub status: String,
+        /// Who opened it (`None` = the scheduler).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub opened_by: Option<Uuid>,
+        /// When it opened.
+        pub opened_at: DateTime<Utc>,
+        /// When it should be completed (reminders go out after this).
+        pub due_at: DateTime<Utc>,
+        /// Who completed / cancelled it.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub closed_by: Option<Uuid>,
+        /// When.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub closed_at: Option<DateTime<Utc>>,
+        /// Lines in total.
+        pub items: i64,
+        /// Lines decided so far.
+        pub decided: i64,
+        /// Lines kept (final once completed).
+        pub kept: i32,
+        /// Lines removed (final once completed).
+        pub removed: i32,
+    }
+}
+
+schema! {
+    /// `GET /teams/{id}/access-reviews`.
+    pub struct AccessReviewList {
+        /// Newest first.
+        pub reviews: Vec<AccessReview>,
+    }
+}
+
+schema! {
+    /// `GET /teams/{id}/access-reviews/{rid}`.
+    pub struct AccessReviewDetail {
+        /// The review.
+        pub review: AccessReview,
+        /// Its lines, members first, then vault accesses.
+        pub items: Vec<AccessReviewItem>,
+    }
+}
+
+schema! {
+    /// `POST /teams/{id}/access-reviews/{rid}/items/{iid}`.
+    pub struct DecideAccessReviewItemRequest {
+        /// `keep` or `remove`.
+        pub decision: String,
+        /// Optional note (≤ 500 chars).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub note: Option<String>,
+    }
+}
+
+schema! {
+    /// `POST /teams/{id}/access-reviews/{rid}/complete`.
+    pub struct CompleteAccessReviewRequest {
+        /// What to do with lines nobody decided: `keep` (default) or refuse
+        /// (`None` → 409 while any line is undecided).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub undecided: Option<String>,
     }
 }

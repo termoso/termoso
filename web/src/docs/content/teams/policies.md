@@ -18,6 +18,7 @@ Owners (and holders of `policies.manage`) set team policies in **Team → Polici
 | Session recording | `required` switches recording on in every team vault. |
 | Key / password rotation age | Hosts whose secrets are older than the limit are flagged for rotation. |
 | Device posture: disk encryption, screen lock, hardware-backed key | At sign-in every app reports what it can prove about its device — OS version, encrypted system disk (LUKS / FileVault / BitLocker / Android FBE), screen lock, device key in TPM / Secure Enclave / StrongBox. A team may require any of the three; a device that cannot prove a required fact (including old clients that report nothing) is refused with `device_posture` and the attempt is audited (`login.posture_denied`). Owners are exempt so the team can never lock itself out. The last report is shown in **Account → Devices**. |
+| Access review cadence | Every N days (7–365) the server opens an access review — a snapshot of every non-owner membership and team-vault access — and e-mails owners and admins; completing it applies the removals. See [Access reviews](/docs/teams/teams-and-roles#access-reviews). |
 
 ## Enforced by the apps
 

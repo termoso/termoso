@@ -169,6 +169,14 @@ pub async fn put(
     if let Some(on) = req.posture_secure_key {
         next.posture_secure_key = on;
     }
+    if let Some(days) = req.access_review_days {
+        if days != 0 && !(7..=365).contains(&days) {
+            return Err(Error::bad_request(
+                "access_review_days must be 0 (off) or 7..=365",
+            ));
+        }
+        next.access_review_days = days;
+    }
     let mut tx = state.db.begin().await?;
     sqlx::query(
         "INSERT INTO team_policies (team_id, mfa, local_keys, session_ttl_hours, sso_only, sso_provider,
@@ -176,8 +184,8 @@ pub async fn put(
                                     log_retention_days, key_max_age_days, password_max_age_days, ip_allowlist,
                                     device_admin_approval, auth, jump_host_required, export, forward_ports,
                                     posture_disk_encryption, posture_screen_lock, posture_secure_key,
-                                    updated_by, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $9, now())
+                                    access_review_days, updated_by, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $9, now())
          ON CONFLICT (team_id) DO UPDATE SET mfa = EXCLUDED.mfa, local_keys = EXCLUDED.local_keys,
              session_ttl_hours = EXCLUDED.session_ttl_hours, sso_only = EXCLUDED.sso_only,
              sso_provider = EXCLUDED.sso_provider, sso_domains = EXCLUDED.sso_domains,
@@ -189,6 +197,7 @@ pub async fn put(
              export = EXCLUDED.export, forward_ports = EXCLUDED.forward_ports,
              posture_disk_encryption = EXCLUDED.posture_disk_encryption,
              posture_screen_lock = EXCLUDED.posture_screen_lock, posture_secure_key = EXCLUDED.posture_secure_key,
+             access_review_days = EXCLUDED.access_review_days,
              updated_by = EXCLUDED.updated_by, updated_at = now()",
     )
     .bind(id)
@@ -214,6 +223,7 @@ pub async fn put(
     .bind(next.posture_disk_encryption)
     .bind(next.posture_screen_lock)
     .bind(next.posture_secure_key)
+    .bind(next.access_review_days)
     .execute(&mut *tx)
     .await?;
     if next.session_recording == "required" {

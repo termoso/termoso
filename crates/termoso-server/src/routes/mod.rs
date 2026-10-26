@@ -1,6 +1,7 @@
 //! HTTP routing.
 
 pub mod access;
+pub mod access_reviews;
 pub mod account;
 pub mod acl;
 pub mod admin;
@@ -195,6 +196,23 @@ pub fn router(state: AppState) -> Router {
         .route("/teams/{id}/audit", get(crate::audit::list))
         .route("/teams/{id}/audit/export", get(crate::audit::export))
         .route("/teams/{id}/audit/verify", get(crate::audit_chain::verify))
+        .route(
+            "/teams/{id}/access-reviews",
+            get(access_reviews::list).post(access_reviews::open),
+        )
+        .route("/teams/{id}/access-reviews/{rid}", get(access_reviews::get))
+        .route(
+            "/teams/{id}/access-reviews/{rid}/items/{iid}",
+            post(access_reviews::decide),
+        )
+        .route(
+            "/teams/{id}/access-reviews/{rid}/complete",
+            post(access_reviews::complete),
+        )
+        .route(
+            "/teams/{id}/access-reviews/{rid}/cancel",
+            post(access_reviews::cancel),
+        )
         .route(
             "/teams/{id}/audit/checkpoint",
             post(crate::audit_chain::checkpoint),

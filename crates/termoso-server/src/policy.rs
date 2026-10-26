@@ -84,6 +84,7 @@ struct Row {
     posture_disk_encryption: bool,
     posture_screen_lock: bool,
     posture_secure_key: bool,
+    access_review_days: i32,
     updated_at: DateTime<Utc>,
 }
 
@@ -98,7 +99,7 @@ macro_rules! policy_select {
     ($head:literal, $tail:literal) => {
         concat!(
             $head,
-            "mfa, local_keys, session_ttl_hours, sso_only, sso_provider, sso_domains, device_approval, audit_retention_days, session_recording, log_retention_days, key_max_age_days, password_max_age_days, ip_allowlist, device_admin_approval, auth, jump_host_required, export, forward_ports, posture_disk_encryption, posture_screen_lock, posture_secure_key, updated_at",
+            "mfa, local_keys, session_ttl_hours, sso_only, sso_provider, sso_domains, device_approval, audit_retention_days, session_recording, log_retention_days, key_max_age_days, password_max_age_days, ip_allowlist, device_admin_approval, auth, jump_host_required, export, forward_ports, posture_disk_encryption, posture_screen_lock, posture_secure_key, access_review_days, updated_at",
             $tail
         )
     };
@@ -127,6 +128,7 @@ fn from_row(r: Row) -> TeamPolicies {
         posture_disk_encryption: r.posture_disk_encryption,
         posture_screen_lock: r.posture_screen_lock,
         posture_secure_key: r.posture_secure_key,
+        access_review_days: r.access_review_days,
         updated_at: r.updated_at,
     }
 }
@@ -154,6 +156,7 @@ pub fn defaults() -> TeamPolicies {
         posture_disk_encryption: false,
         posture_screen_lock: false,
         posture_secure_key: false,
+        access_review_days: 0,
         updated_at: Utc::now(),
     }
 }
