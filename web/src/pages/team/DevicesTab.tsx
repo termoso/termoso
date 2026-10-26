@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { tr } from "@/i18n";
 import {
   Alert,
@@ -19,7 +19,7 @@ import { errorMessage } from "@/api/client";
 import { teamsApi } from "@/api/endpoints";
 import { queryKeys } from "@/api/hooks";
 import type { Team, TeamDevice } from "@/api/types";
-import { Paged } from "@/components/Pager";
+import { useServerPager } from "@/components/Pager";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EmptyState } from "@/components/EmptyState";
 import { Loading } from "@/components/Loading";
@@ -31,8 +31,8 @@ export function DevicesTab({ team }: { team: Team }) {
   const qc = useQueryClient();
   const snack = useSnackbar();
   const q = useQuery({
-    queryKey: queryKeys.teamDevices(team.id),
-    queryFn: () => teamsApi.devices(team.id),
+    queryKey: [...queryKeys.teamDevices(team.id), "policy"],
+    queryFn: () => teamsApi.devices(team.id, { limit: 1 }),
   });
   const [rejecting, setRejecting] = useState<TeamDevice | null>(null);
   const refresh = () => qc.invalidateQueries({ queryKey: queryKeys.teamDevices(team.id) });
@@ -55,80 +55,6 @@ export function DevicesTab({ team }: { team: Team }) {
   });
   if (q.isPending) return <Loading />;
   if (q.isError) return <Alert severity="error">{errorMessage(q.error)}</Alert>;
-  const pending = q.data.devices.filter((d) => d.status === "pending");
-  const decided = q.data.devices.filter((d) => d.status !== "pending");
-  const statusChip = (d: TeamDevice) =>
-    d.status === "pending" ? (
-      <Chip size="small" color="warning" label={tr("Pending")} />
-    ) : d.status === "approved" ? (
-      <Chip size="small" color="success" variant="outlined" label={tr("Approved")} />
-    ) : (
-      <Chip size="small" color="error" variant="outlined" label={tr("Rejected")} />
-    );
-  const rows = (list: TeamDevice[], actions: boolean) => (
-    <Paged items={list}>
-      {(page) => (
-        <TableContainer>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>{tr("Member")}</TableCell>
-                <TableCell>{tr("Device")}</TableCell>
-                <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>
-                  {tr("Last IP")}
-                </TableCell>
-                <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>
-                  {tr("Last seen")}
-                </TableCell>
-                <TableCell>{tr("Status")}</TableCell>
-                {actions && <TableCell align="right" />}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {page.map((d) => (
-                <TableRow key={d.device_id} hover>
-                  <TableCell>{d.user_email}</TableCell>
-                  <TableCell>
-                    <Typography variant="body2">{d.name}</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {d.platform}
-                      {d.app_version ? ` · ${d.app_version}` : ""}
-                    </Typography>
-                  </TableCell>
-                  <TableCell
-                    sx={{ display: { xs: "none", md: "table-cell" }, fontFamily: "monospace" }}
-                  >
-                    {d.last_ip ?? "—"}
-                  </TableCell>
-                  <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>
-                    {formatRelative(d.last_seen_at)}
-                  </TableCell>
-                  <TableCell>{statusChip(d)}</TableCell>
-                  {actions && (
-                    <TableCell align="right">
-                      <Stack direction="row" spacing={1} sx={{ justifyContent: "flex-end" }}>
-                        <Button
-                          size="small"
-                          variant="contained"
-                          disabled={approve.isPending}
-                          onClick={() => approve.mutate(d)}
-                        >
-                          {tr("Approve")}
-                        </Button>
-                        <Button size="small" color="error" onClick={() => setRejecting(d)}>
-                          {tr("Reject")}
-                        </Button>
-                      </Stack>
-                    </TableCell>
-                  )}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      )}
-    </Paged>
-  );
   return (
     <Stack spacing={2}>
       {!q.data.admin_approval && (
@@ -138,24 +64,31 @@ export function DevicesTab({ team }: { team: Team }) {
           )}
         </Alert>
       )}
-      <Section
+      <DeviceTable
+        team={team}
+        status="pending"
+        actions
         title={tr("Devices awaiting approval")}
         description={tr(
           "New devices of members sign in only after approval. Rejecting ends the device's sessions; it can sign in again later and will wait here once more.",
         )}
-      >
-        {pending.length === 0 ? (
+        empty={
           <EmptyState
             icon={<DevicesOtherRoundedIcon fontSize="inherit" />}
             title={tr("No pending devices")}
           />
-        ) : (
-          rows(pending, true)
-        )}
-      </Section>
-      {decided.length > 0 && (
-        <Section title={tr("Reviewed devices")}>{rows(decided, false)}</Section>
-      )}
+        }
+        busy={approve.isPending}
+        onApprove={(d) => approve.mutate(d)}
+        onReject={setRejecting}
+      />
+      <DeviceTable
+        team={team}
+        status="decided"
+        actions={false}
+        title={tr("Reviewed devices")}
+        busy={false}
+      />
       <ConfirmDialog
         open={rejecting !== null}
         title={tr("Reject device?")}
@@ -172,5 +105,115 @@ export function DevicesTab({ team }: { team: Team }) {
           })}
       </ConfirmDialog>
     </Stack>
+  );
+}
+const statusChip = (d: TeamDevice) =>
+  d.status === "pending" ? (
+    <Chip size="small" color="warning" label={tr("Pending")} />
+  ) : d.status === "approved" ? (
+    <Chip size="small" color="success" variant="outlined" label={tr("Approved")} />
+  ) : (
+    <Chip size="small" color="error" variant="outlined" label={tr("Rejected")} />
+  );
+
+function DeviceTable({
+  team,
+  status,
+  actions,
+  title,
+  description,
+  empty,
+  busy,
+  onApprove,
+  onReject,
+}: {
+  team: Team;
+  status: "pending" | "decided";
+  actions: boolean;
+  title: string;
+  description?: string;
+  empty?: ReactNode;
+  busy: boolean;
+  onApprove?: (d: TeamDevice) => void;
+  onReject?: (d: TeamDevice) => void;
+}) {
+  const pg = useServerPager();
+  const q = useQuery({
+    queryKey: [...queryKeys.teamDevices(team.id), status, pg.offset, pg.limit],
+    queryFn: () => teamsApi.devices(team.id, { status, ...pg.window }),
+    placeholderData: (prev) => prev,
+  });
+  if (q.isPending) return <Loading minHeight={80} />;
+  if (q.isError) return <Alert severity="error">{errorMessage(q.error)}</Alert>;
+  const rows = q.data.devices;
+  if (q.data.total === 0 && !empty) return null;
+  return (
+    <Section title={title} description={description}>
+      {q.data.total === 0 ? (
+        empty
+      ) : (
+        <>
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>{tr("Member")}</TableCell>
+                  <TableCell>{tr("Device")}</TableCell>
+                  <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>
+                    {tr("Last IP")}
+                  </TableCell>
+                  <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>
+                    {tr("Last seen")}
+                  </TableCell>
+                  <TableCell>{tr("Status")}</TableCell>
+                  {actions && <TableCell align="right" />}
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {rows.map((d) => (
+                  <TableRow key={d.device_id} hover>
+                    <TableCell>{d.user_email}</TableCell>
+                    <TableCell>
+                      <Typography variant="body2">{d.name}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {d.platform}
+                        {d.app_version ? ` · ${d.app_version}` : ""}
+                      </Typography>
+                    </TableCell>
+                    <TableCell
+                      sx={{ display: { xs: "none", md: "table-cell" }, fontFamily: "monospace" }}
+                    >
+                      {d.last_ip ?? "—"}
+                    </TableCell>
+                    <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>
+                      {formatRelative(d.last_seen_at)}
+                    </TableCell>
+                    <TableCell>{statusChip(d)}</TableCell>
+                    {actions && (
+                      <TableCell align="right">
+                        <Stack direction="row" spacing={1} sx={{ justifyContent: "flex-end" }}>
+                          <Button
+                            size="small"
+                            variant="contained"
+                            disabled={busy}
+                            onClick={() => onApprove?.(d)}
+                          >
+                            {tr("Approve")}
+                          </Button>
+                          <Button size="small" color="error" onClick={() => onReject?.(d)}>
+                            {tr("Reject")}
+                          </Button>
+                        </Stack>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          {pg.pager(q.data.total)}
+        </>
+      )}
+    </Section>
   );
 }

@@ -1,7 +1,9 @@
 //! Team-side SCIM administration: bearer tokens, group overview, group → vault grants.
 
 use axum::Json;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
+
+use super::paging::PageQuery;
 use chrono::{DateTime, Utc};
 use termoso_proto::team::{
     CreateScimTokenRequest, CreatedScimToken, ScimGroupInfo, ScimGroupList, ScimGroupVault,
@@ -139,21 +141,33 @@ pub async fn revoke_token(
     Ok(NoContent)
 }
 
-#[utoipa::path(get, path = "/api/v1/teams/{id}/scim/groups", tag = "teams", params(("id" = Uuid, Path)),
+#[utoipa::path(get, path = "/api/v1/teams/{id}/scim/groups", tag = "teams", params(("id" = Uuid, Path), PageQuery),
     responses((status = 200, body = ScimGroupList)))]
 pub async fn list_groups(
     State(state): State<AppState>,
     auth: Auth,
     Path(id): Path<Uuid>,
+    Query(pq): Query<PageQuery>,
 ) -> ApiResult<Json<ScimGroupList>> {
     crate::authz::require(&state, id, auth.user_id(), "scim.manage").await?;
+    let (offset, limit) = pq.window(10_000);
     let rows: Vec<(Uuid, String, Option<String>, i64)> = sqlx::query_as(
         "SELECT g.id, g.display_name, g.external_id, (SELECT count(*) FROM scim_group_members m WHERE m.group_id = g.id)
-         FROM scim_groups g WHERE g.team_id = $1 ORDER BY g.display_name",
+         FROM scim_groups g WHERE g.team_id = $1 ORDER BY g.display_name LIMIT $2 OFFSET $3",
     )
     .bind(id)
+    .bind(limit)
+    .bind(offset)
     .fetch_all(&state.db)
     .await?;
+    let total = pq
+        .total(
+            rows.len(),
+            &state.db,
+            "SELECT count(*) FROM scim_groups WHERE team_id = $1",
+            id,
+        )
+        .await?;
     let grants: Vec<(Uuid, Uuid, String)> = sqlx::query_as(
         "SELECT gv.group_id, gv.vault_id, gv.vault_role FROM scim_group_vaults gv JOIN scim_groups g ON g.id = gv.group_id WHERE g.team_id = $1",
     )
@@ -161,6 +175,7 @@ pub async fn list_groups(
     .fetch_all(&state.db)
     .await?;
     Ok(Json(ScimGroupList {
+        total,
         groups: rows
             .into_iter()
             .map(

@@ -1,7 +1,9 @@
 //! Admin-approved devices of a team (`devices.approve`).
 
 use axum::Json;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
+
+use super::paging::PageQuery;
 use chrono::{DateTime, Utc};
 use termoso_proto::team::{TeamDevice, TeamDeviceList};
 use uuid::Uuid;
@@ -50,24 +52,62 @@ fn to_dev(r: Row) -> TeamDevice {
 }
 
 /// Pending first, then approved/rejected, newest first.
+#[derive(serde::Deserialize, utoipa::IntoParams)]
+pub struct DeviceListQuery {
+    /// `pending` (awaiting a decision) or `decided`; omit for both.
+    pub status: Option<String>,
+    /// Rows to skip.
+    #[serde(default)]
+    pub offset: i64,
+    /// Rows per page; omit for the whole list.
+    pub limit: Option<i64>,
+}
+
 #[utoipa::path(get, path = "/api/v1/teams/{id}/devices", tag = "teams",
-    params(("id" = Uuid, Path)), responses((status = 200, body = TeamDeviceList)))]
+    params(("id" = Uuid, Path), DeviceListQuery), responses((status = 200, body = TeamDeviceList)))]
 pub async fn list(
     State(state): State<AppState>,
     auth: Auth,
     Path(team_id): Path<Uuid>,
+    Query(q): Query<DeviceListQuery>,
 ) -> ApiResult<Json<TeamDeviceList>> {
     crate::authz::require(&state, team_id, auth.user_id(), PERM).await?;
+    let pending: Option<bool> = match q.status.as_deref().map(str::trim) {
+        None | Some("") => None,
+        Some("pending") => Some(true),
+        Some("decided") => Some(false),
+        Some(_) => return Err(Error::bad_request("status must be pending or decided")),
+    };
+    let pq = PageQuery::new(q.offset, q.limit);
+    let (offset, limit) = pq.window(1000);
     let rows: Vec<Row> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
-        "{SELECT} WHERE a.team_id = $1 ORDER BY (a.status = 'pending') DESC, a.created_at DESC LIMIT 1000"
+        "{SELECT} WHERE a.team_id = $1 AND ($2::bool IS NULL OR (a.status = 'pending') = $2)
+         ORDER BY (a.status = 'pending') DESC, a.created_at DESC LIMIT $3 OFFSET $4"
     )))
     .bind(team_id)
+    .bind(pending)
+    .bind(limit)
+    .bind(offset)
     .fetch_all(&state.db)
     .await?;
+    let total = if pq.limit.is_some() {
+        let (n,): (i64,) = sqlx::query_as(
+            "SELECT count(*) FROM team_device_approvals a
+             WHERE a.team_id = $1 AND ($2::bool IS NULL OR (a.status = 'pending') = $2)",
+        )
+        .bind(team_id)
+        .bind(pending)
+        .fetch_one(&state.db)
+        .await?;
+        n
+    } else {
+        offset + rows.len() as i64
+    };
     let p = crate::policy::load(&state.db, team_id).await?;
     Ok(Json(TeamDeviceList {
         admin_approval: p.device_admin_approval,
         devices: rows.into_iter().map(to_dev).collect(),
+        total,
     }))
 }
 

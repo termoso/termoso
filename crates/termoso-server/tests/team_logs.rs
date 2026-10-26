@@ -694,7 +694,7 @@ async fn mandatory_recording_policy_and_team_export() {
     .await;
 
     // Team-wide listing and export.
-    let listed: Vec<SessionLog> = s
+    let listed: LogListResponse = s
         .json(
             Method::GET,
             &format!("/teams/{}/logs", team.id),
@@ -702,7 +702,8 @@ async fn mandatory_recording_policy_and_team_export() {
             NOBODY,
         )
         .await;
-    let ids: Vec<Uuid> = listed.iter().map(|l| l.id).collect();
+    assert_eq!(listed.total, listed.logs.len() as i64);
+    let ids: Vec<Uuid> = listed.logs.iter().map(|l| l.id).collect();
     assert!(ids.contains(&a) && ids.contains(&b), "{ids:?}");
     s.expect_status(
         Method::GET,

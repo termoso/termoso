@@ -1,4 +1,9 @@
 import { useMemo, useState, type ReactNode } from "react";
+
+export interface PageWindow {
+  offset: number;
+  limit: number;
+}
 import { TablePagination } from "@mui/material";
 
 const OPTIONS = [10, 25, 50];
@@ -56,4 +61,35 @@ export function Paged<T>({
       {pager}
     </>
   );
+}
+
+/** Paging done by the server: the hook owns the window, the page returns to
+ *  0 whenever `deps` (filters) change; `pager(total)` draws the controls. */
+export function useServerPager(deps: unknown[] = []) {
+  const key = JSON.stringify(deps);
+  const [st, setSt] = useState({ page: 0, key });
+  const [limit, setLimit] = useState(stored);
+  const page = st.key === key ? st.page : 0;
+  const setPage = (p: number) => setSt({ page: p, key });
+  const pager = (total: number) => {
+    const pages = Math.max(1, Math.ceil(total / limit));
+    return total > MIN || page > 0 ? (
+      <TablePagination
+        component="div"
+        count={total}
+        page={Math.min(page, pages - 1)}
+        onPageChange={(_, p) => setPage(p)}
+        rowsPerPage={limit}
+        onRowsPerPageChange={(e) => {
+          const n = Number(e.target.value);
+          localStorage.setItem(KEY, String(n));
+          setLimit(n);
+          setPage(0);
+        }}
+        rowsPerPageOptions={OPTIONS}
+      />
+    ) : null;
+  };
+  const win: PageWindow = { offset: page * limit, limit };
+  return { ...win, window: win, pager };
 }

@@ -36,7 +36,7 @@ import type {
   Team,
   Vault,
 } from "@/api/types";
-import { Paged } from "@/components/Pager";
+import { useServerPager } from "@/components/Pager";
 import { EmptyState } from "@/components/EmptyState";
 import { Loading } from "@/components/Loading";
 import { Section } from "@/components/Section";
@@ -61,9 +61,11 @@ export function AclSection({ vault, team }: { vault: Vault; team: Team }) {
   const qc = useQueryClient();
   const snack = useSnackbar();
   const manage = can(team, "acl.manage");
+  const pg = useServerPager();
   const q = useQuery({
-    queryKey: queryKeys.vaultAcl(team.id, vault.id),
-    queryFn: () => teamsApi.acl(team.id, vault.id),
+    queryKey: [...queryKeys.vaultAcl(team.id, vault.id), pg.offset, pg.limit],
+    queryFn: () => teamsApi.acl(team.id, vault.id, pg.window),
+    placeholderData: (prev) => prev,
   });
   const [adding, setAdding] = useState(false);
   const refresh = () => qc.invalidateQueries({ queryKey: queryKeys.vaultAcl(team.id, vault.id) });
@@ -127,79 +129,78 @@ export function AclSection({ vault, team }: { vault: Vault; team: Team }) {
           )}
         />
       ) : (
-        <Paged items={rules}>
-          {(page) => (
-            <TableContainer>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>{tr("Who")}</TableCell>
-                    <TableCell>{tr("What")}</TableCell>
-                    <TableCell>{tr("Access")}</TableCell>
-                    {manage && <TableCell align="right" />}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {page.map((r) => (
-                    <TableRow key={r.id} hover>
-                      <TableCell>
-                        <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                          <Chip size="small" variant="outlined" label={principalChip(r)} />
-                          <Typography variant="body2">{r.principal_name}</Typography>
-                        </Stack>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {r.entity_kind === "group" ? tr("Group") : tr("Host")}
-                        </Typography>
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          sx={{ fontFamily: "monospace" }}
+        <>
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>{tr("Who")}</TableCell>
+                  <TableCell>{tr("What")}</TableCell>
+                  <TableCell>{tr("Access")}</TableCell>
+                  {manage && <TableCell align="right" />}
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {rules.map((r) => (
+                  <TableRow key={r.id} hover>
+                    <TableCell>
+                      <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                        <Chip size="small" variant="outlined" label={principalChip(r)} />
+                        <Typography variant="body2">{r.principal_name}</Typography>
+                      </Stack>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2">
+                        {r.entity_kind === "group" ? tr("Group") : tr("Host")}
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ fontFamily: "monospace" }}
+                      >
+                        {r.entity_id}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      {manage ? (
+                        <Select
+                          size="small"
+                          value={r.mode}
+                          disabled={setMode.isPending}
+                          onChange={(e) => setMode.mutate({ r, mode: e.target.value })}
+                          sx={{ minWidth: 150 }}
                         >
-                          {r.entity_id}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        {manage ? (
-                          <Select
-                            size="small"
-                            value={r.mode}
-                            disabled={setMode.isPending}
-                            onChange={(e) => setMode.mutate({ r, mode: e.target.value })}
-                            sx={{ minWidth: 150 }}
-                          >
-                            {MODES.map((m) => (
-                              <MenuItem key={m.value} value={m.value}>
-                                {m.label()}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        ) : (
-                          (MODES.find((m) => m.value === r.mode)?.label() ?? r.mode)
-                        )}
-                      </TableCell>
-                      {manage && (
-                        <TableCell align="right">
-                          <Tooltip title={tr("Remove rule")}>
-                            <IconButton
-                              size="small"
-                              aria-label={tr("Remove rule")}
-                              disabled={del.isPending}
-                              onClick={() => del.mutate(r)}
-                            >
-                              <DeleteOutlineRoundedIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </TableCell>
+                          {MODES.map((m) => (
+                            <MenuItem key={m.value} value={m.value}>
+                              {m.label()}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      ) : (
+                        (MODES.find((m) => m.value === r.mode)?.label() ?? r.mode)
                       )}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </Paged>
+                    </TableCell>
+                    {manage && (
+                      <TableCell align="right">
+                        <Tooltip title={tr("Remove rule")}>
+                          <IconButton
+                            size="small"
+                            aria-label={tr("Remove rule")}
+                            disabled={del.isPending}
+                            onClick={() => del.mutate(r)}
+                          >
+                            <DeleteOutlineRoundedIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          {pg.pager(q.data.total)}
+        </>
       )}
       {manage && (
         <AddRuleDialog

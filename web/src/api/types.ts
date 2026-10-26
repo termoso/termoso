@@ -792,6 +792,22 @@ export interface AdminTeamMember {
   last_seen_at?: string | null;
 }
 
+/** `offset` / `limit` for a server-paged list; omit both for the whole list. */
+export interface PageParams {
+  offset?: number;
+  limit?: number;
+}
+
+export interface AdminTeamMemberList {
+  members: AdminTeamMember[];
+  total: number;
+}
+
+export interface AdminTeamAuditList {
+  events: AuditEvent[];
+  total: number;
+}
+
 export interface AdminTeamDetail {
   team: AdminTeam;
   members: AdminTeamMember[];
@@ -959,6 +975,7 @@ export interface TeamDevice {
 export interface TeamDeviceList {
   admin_approval: boolean;
   devices: TeamDevice[];
+  total: number;
 }
 
 export interface RotationDue {
@@ -994,6 +1011,7 @@ export interface RotationOverview {
   password_max_age_days: number;
   due: RotationDue[];
   jobs: RotationJob[];
+  jobs_total: number;
 }
 
 export type AccessRole = "viewer" | "editor";
@@ -1021,6 +1039,7 @@ export interface AccessRequest {
 export interface AccessRequestList {
   can_approve: boolean;
   requests: AccessRequest[];
+  total: number;
 }
 
 export interface TeamDataStatus {

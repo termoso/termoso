@@ -66,6 +66,9 @@ import type {
   Webhook,
   WebhookDelivery,
   WebhookKind,
+  AdminTeamAuditList,
+  AdminTeamMemberList,
+  PageParams,
 } from "./types";
 import type {
   AccessRequest,
@@ -251,7 +254,8 @@ export const teamsApi = {
   update: (id: string, name: string) => http.patch<Team>(`/teams/${id}`, { name }),
   delete: (id: string) => http.delete<undefined>(`/teams/${id}`),
   leave: (id: string) => http.post<undefined>(`/teams/${id}/leave`),
-  members: (id: string) => http.get<{ members: TeamMember[] }>(`/teams/${id}/members`),
+  members: (id: string, p: PageParams = {}) =>
+    http.get<{ members: TeamMember[]; total: number }>(`/teams/${id}/members`, { query: p }),
   updateMember: (id: string, userId: string, role: TeamRole) =>
     http.patch<TeamMember>(`/teams/${id}/members/${userId}`, { role }),
   removeMember: (id: string, userId: string) =>
@@ -264,7 +268,8 @@ export const teamsApi = {
     http.put<DigestSubscription>(`/teams/${id}/digest`, { cadence }),
   sendDigest: (id: string, cadence: DigestCadence) =>
     http.post<SendDigestResponse>(`/teams/${id}/digest/send`, { cadence }),
-  invites: (id: string) => http.get<{ invites: Invite[] }>(`/teams/${id}/invites`),
+  invites: (id: string, p: PageParams = {}) =>
+    http.get<{ invites: Invite[]; total: number }>(`/teams/${id}/invites`, { query: p }),
   createInvite: (id: string, email: string, role: TeamRole, vault_ids: string[]) =>
     http.post<Invite & { url: string }>(`/teams/${id}/invites`, { email, role, vault_ids }),
   deleteInvite: (id: string, inviteId: string) =>
@@ -301,22 +306,26 @@ export const teamsApi = {
   deleteIdp: (id: string) => http.delete<undefined>(`/teams/${id}/idp`),
   testIdp: (id: string, patch: UpdateTeamIdp) =>
     http.post<TeamIdpResponse>(`/teams/${id}/idp/test`, patch),
-  acl: (id: string, vaultId: string) =>
-    http.get<{ rules: EntityAclRule[] }>(`/teams/${id}/vaults/${vaultId}/acl`),
+  acl: (id: string, vaultId: string, p: PageParams = {}) =>
+    http.get<{ rules: EntityAclRule[]; total: number }>(`/teams/${id}/vaults/${vaultId}/acl`, {
+      query: p,
+    }),
   upsertAcl: (id: string, vaultId: string, rule: UpsertEntityAcl) =>
     http.put<{ rules: EntityAclRule[] }>(`/teams/${id}/vaults/${vaultId}/acl`, rule),
   deleteAcl: (id: string, vaultId: string, ruleId: string) =>
     http.delete<undefined>(`/teams/${id}/vaults/${vaultId}/acl/${ruleId}`),
-  logs: (id: string, q: { vault_id?: string; from?: string; to?: string } = {}) =>
-    http.get<{ logs: SessionLog[] }>(`/teams/${id}/logs`, { query: q }),
+  logs: (id: string, q: { vault_id?: string; from?: string; to?: string } & PageParams = {}) =>
+    http.get<{ logs: SessionLog[]; total: number }>(`/teams/${id}/logs`, { query: q }),
   logsExport: (id: string) => fetchBlob(`/teams/${id}/logs/export`),
-  rotation: (id: string) => http.get<RotationOverview>(`/teams/${id}/rotation`),
+  rotation: (id: string, p: PageParams = {}) =>
+    http.get<RotationOverview>(`/teams/${id}/rotation`, { query: p }),
   createRotationJobs: (
     id: string,
     body: { vault_id: string; entity_ids: string[]; note: string },
   ) => http.post<{ jobs: RotationJob[] }>(`/teams/${id}/rotation/jobs`, body),
   cancelRotationJob: (jobId: string) => http.delete<undefined>(`/rotation/jobs/${jobId}`),
-  accessRequests: (id: string) => http.get<AccessRequestList>(`/teams/${id}/access-requests`),
+  accessRequests: (id: string, q: { status?: "open" | "closed" } & PageParams = {}) =>
+    http.get<AccessRequestList>(`/teams/${id}/access-requests`, { query: q }),
   createAccessRequest: (
     id: string,
     body: { vault_id: string; role: AccessRole; hours: number; reason: string },
@@ -337,7 +346,8 @@ export const teamsApi = {
   scheduleDeletion: (id: string, confirmName: string) =>
     http.post<TeamDataStatus>(`/teams/${id}/deletion`, { confirm_name: confirmName }),
   cancelDeletion: (id: string) => http.delete<TeamDataStatus>(`/teams/${id}/deletion`),
-  devices: (id: string) => http.get<TeamDeviceList>(`/teams/${id}/devices`),
+  devices: (id: string, q: { status?: "pending" | "decided" } & PageParams = {}) =>
+    http.get<TeamDeviceList>(`/teams/${id}/devices`, { query: q }),
   approveDevice: (id: string, deviceId: string) =>
     http.post<undefined>(`/teams/${id}/devices/${deviceId}/approve`),
   rejectDevice: (id: string, deviceId: string) =>
@@ -389,7 +399,8 @@ export const teamsApi = {
     http.post<CreatedScimToken>(`/teams/${id}/scim/tokens`, body),
   revokeScimToken: (id: string, tid: string) =>
     http.delete<undefined>(`/teams/${id}/scim/tokens/${tid}`),
-  scimGroups: (id: string) => http.get<{ groups: ScimGroupInfo[] }>(`/teams/${id}/scim/groups`),
+  scimGroups: (id: string, p: PageParams = {}) =>
+    http.get<{ groups: ScimGroupInfo[]; total: number }>(`/teams/${id}/scim/groups`, { query: p }),
   setScimGroupVaults: (id: string, gid: string, vaults: ScimGroupVault[]) =>
     http.put<ScimGroupInfo>(`/teams/${id}/scim/groups/${gid}/vaults`, { vaults }),
   createVault: (id: string, name: string, members: VaultMemberUpsert[]) =>
@@ -424,7 +435,8 @@ export const vaultsApi = {
   /** Recordings every member of a team vault shares, oldest first from `since`. */
   logs: (id: string, since = 0, limit = 100) =>
     http.get<LogListResponse>(`/vaults/${id}/logs?since=${since}&limit=${limit}`),
-  members: (id: string) => http.get<{ members: VaultMember[] }>(`/vaults/${id}/members`),
+  members: (id: string, p: PageParams = {}) =>
+    http.get<{ members: VaultMember[]; total: number }>(`/vaults/${id}/members`, { query: p }),
   upsertMember: (id: string, userId: string, role: VaultRole, sealed_key: string) =>
     http.put<VaultMember>(`/vaults/${id}/members/${userId}`, { user_id: userId, role, sealed_key }),
   removeMember: (id: string, userId: string) =>
@@ -463,6 +475,10 @@ export const adminApi = {
   },
   deleteTeam: (id: string) => http.delete<undefined>(`/admin/teams/${id}`),
   teamDetail: (id: string) => http.get<AdminTeamDetail>(`/admin/teams/${id}`),
+  teamMembers: (id: string, q: { q?: string } & PageParams = {}) =>
+    http.get<AdminTeamMemberList>(`/admin/teams/${id}/members`, { query: q }),
+  teamAudit: (id: string, p: PageParams = {}) =>
+    http.get<AdminTeamAuditList>(`/admin/teams/${id}/audit`, { query: p }),
   addTeamMember: (id: string, userId: string, role?: string) =>
     http.post<undefined>(`/admin/teams/${id}/members`, { user_id: userId, role }),
   removeTeamMember: (id: string, userId: string) =>

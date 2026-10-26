@@ -226,6 +226,8 @@ impl Modify for BearerAuth {
         crate::routes::admin::put_settings,
         crate::routes::admin::test_email,
         crate::routes::admin::team_detail,
+        crate::routes::admin::team_members,
+        crate::routes::admin::team_audit,
         crate::routes::admin::add_member,
         crate::routes::admin::remove_member,
         crate::routes::admin::jobs,

@@ -4,7 +4,9 @@
 //! and the expiry job removes the membership when the window closes.
 
 use axum::Json;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
+
+use super::paging::PageQuery;
 use chrono::{DateTime, Duration, Utc};
 use termoso_proto::team::{
     AccessRequest, AccessRequestList, CreateAccessRequest, DecideAccessRequest,
@@ -242,13 +244,33 @@ pub async fn create(
 
 /// Requests of the team: everything for `access.approve` holders, your own
 /// otherwise.
+#[derive(serde::Deserialize, utoipa::IntoParams)]
+pub struct AccessListQuery {
+    /// `open` (pending or approved) or `closed`; omit for both.
+    pub status: Option<String>,
+    /// Rows to skip.
+    #[serde(default)]
+    pub offset: i64,
+    /// Rows per page; omit for the whole list.
+    pub limit: Option<i64>,
+}
+
 #[utoipa::path(get, path = "/api/v1/teams/{id}/access-requests", tag = "teams",
-    params(("id" = Uuid, Path)), responses((status = 200, body = AccessRequestList)))]
+    params(("id" = Uuid, Path), AccessListQuery), responses((status = 200, body = AccessRequestList)))]
 pub async fn list(
     State(state): State<AppState>,
     auth: Auth,
     Path(team_id): Path<Uuid>,
+    Query(q): Query<AccessListQuery>,
 ) -> ApiResult<Json<AccessRequestList>> {
+    let open: Option<bool> = match q.status.as_deref().map(str::trim) {
+        None | Some("") => None,
+        Some("open") => Some(true),
+        Some("closed") => Some(false),
+        Some(_) => return Err(Error::bad_request("status must be open or closed")),
+    };
+    let pq = PageQuery::new(q.offset, q.limit);
+    let (offset, limit) = pq.window(500);
     crate::authz::membership(&state.db, team_id, auth.user_id())
         .await
         .map_err(|_| Error::not_found("Team"))?;
@@ -261,16 +283,36 @@ pub async fn list(
     }
     let rows: Vec<Row> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
         "SELECT {COLS} WHERE r.team_id = $1 AND ($2 OR r.user_id = $3)
-         ORDER BY (r.status = 'pending') DESC, r.created_at DESC LIMIT 500"
+           AND ($4::bool IS NULL OR (r.status IN ('pending', 'approved')) = $4)
+         ORDER BY (r.status = 'pending') DESC, r.created_at DESC LIMIT $5 OFFSET $6"
     )))
     .bind(team_id)
     .bind(all)
     .bind(auth.user_id())
+    .bind(open)
+    .bind(limit)
+    .bind(offset)
     .fetch_all(&state.db)
     .await?;
+    let total = if pq.limit.is_some() {
+        let (n,): (i64,) = sqlx::query_as(
+            "SELECT count(*) FROM access_requests r WHERE r.team_id = $1 AND ($2 OR r.user_id = $3)
+               AND ($4::bool IS NULL OR (r.status IN ('pending', 'approved')) = $4)",
+        )
+        .bind(team_id)
+        .bind(all)
+        .bind(auth.user_id())
+        .bind(open)
+        .fetch_one(&state.db)
+        .await?;
+        n
+    } else {
+        offset + rows.len() as i64
+    };
     Ok(Json(AccessRequestList {
         can_approve: all,
         requests: rows.into_iter().map(to_req).collect(),
+        total,
     }))
 }
 
