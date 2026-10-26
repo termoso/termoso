@@ -33,7 +33,7 @@ Work on what you touch; nothing below is needed for everything.
 | Area | Needs |
 |---|---|
 | Rust (all crates) | Rust **1.94+** via `rustup` (the toolchain is `stable`; `rust-version` in `Cargo.toml` is the floor). On Linux the Tauri crate is a workspace member, so `cargo clippy --workspace` also needs `libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev libudev-dev`. `mosh` for the Mosh interop tests. |
-| Server integration tests | Docker or Podman for `deploy/docker-compose.dev.yml` (PostgreSQL, Redis, MinIO, Mailpit). Tests that need a service skip when it is unreachable and `TERMOSO_TEST_REQUIRE_SERVICES` is unset. |
+| Server integration tests | Docker or Podman for `deploy/docker-compose.dev.yml` (PostgreSQL, Redis, RustFS, Mailpit). Tests that need a service skip when it is unreachable and `TERMOSO_TEST_REQUIRE_SERVICES` is unset. |
 | Web cabinet | Node **22.12+** (older Node silently skips the optional Rolldown native binding and `npm run build` fails), `wasm-pack` (`cargo install wasm-pack`) for `npm run wasm`. |
 | Desktop | Node 22 plus the Rust prerequisites; `npm run tauri dev` for a live app. |
 | Android | JDK **17**, Android SDK with platform **36**, build-tools **36.0.0**, NDK **27.2.12479018**, `cargo-ndk` (`cargo install cargo-ndk`) and the `aarch64-linux-android` / `x86_64-linux-android` targets. `ANDROID_HOME` must be set. |
@@ -119,6 +119,19 @@ for everything else.
 * Squash-merge is the default; make the PR title a good commit subject.
 * `.github/CODEOWNERS` assigns reviewers per area automatically.
 
+### AI-assisted contributions
+
+AI assistants are a normal part of the toolbox here, for reading the code,
+drafting a report or writing a patch. What we ask is simple: you remain the
+author.
+
+* Reproduce the bug yourself and describe what you actually saw.
+* Read every line of your patch, run the checks locally, and be ready to
+  explain it in review.
+* If a report or PR turns out to be unverified model output (invented APIs,
+  wrong paths, tests that do not run), we will close it and ask you to come
+  back with a checked version.
+
 ### Rules of the codebase
 
 * **Configuration** is `TERMOSO_*` environment variables parsed in
@@ -134,7 +147,7 @@ for everything else.
   commands; TypeScript, Kotlin and Swift are presentation layers.
 * **Tests** accompany behaviour: Rust unit/integration tests, Vitest for the
   desktop webview, Android unit tests, XCTest for iOS. Server tests run
-  against real PostgreSQL/Redis/MinIO from the dev stack.
+  against real PostgreSQL/Redis/RustFS from the dev stack.
 * **Secrets** never enter the tree or logs: no `.env`, keystores,
   credentials files, or test fixtures with real keys. Log lines must not
   contain passwords, tokens, key material or host addresses.
