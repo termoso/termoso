@@ -2061,7 +2061,7 @@ export interface Listing {
 }
 
 export type SftpTarget =
-  | { kind: "host"; host_id: Uuid; vault_id?: Uuid | null }
+  | { kind: "host"; host_id: Uuid; vault_id?: Uuid | null; sudo_password?: string | null }
   | { kind: "session"; session_id: Uuid }
   | { kind: "webdav"; host_id: Uuid; vault_id?: Uuid | null };
 

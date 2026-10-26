@@ -883,6 +883,36 @@ pub async fn hosts_export_csv(
     backup::export_hosts_csv(&*state.store()?, vault_id, include_passwords, &path)
 }
 
+/// Write SSH hosts as an OpenSSH `ssh_config` fragment or an Ansible INI
+/// inventory (`format`: `ssh_config` | `ansible`). Never includes secrets.
+#[tauri::command]
+pub async fn hosts_export_as(
+    state: State<'_, AppState>,
+    vault_id: Option<Uuid>,
+    format: String,
+    path: String,
+) -> Result<backup::CsvExportReport> {
+    backup::export_hosts_as(&*state.store()?, vault_id, &format, &path)
+}
+
+/// Wake-on-LAN: send the magic packet for the host's MAC (optionally to a
+/// specific broadcast address). Returns how many datagrams went out.
+#[tauri::command]
+pub async fn wake_host(mac: String, broadcast: Option<String>) -> Result<usize> {
+    let target = match broadcast
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        Some(b) => Some(
+            b.parse()
+                .map_err(|_| DesktopError::invalid(format!("not an IP address: {b}")))?,
+        ),
+        None => None,
+    };
+    Ok(termoso_core::wol::wake(&mac, target).await?)
+}
+
 /// Encrypt the given vaults (all unlocked when empty) into a `.termoso` file.
 #[tauri::command]
 pub async fn backup_export(

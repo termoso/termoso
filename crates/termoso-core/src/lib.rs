@@ -63,6 +63,7 @@ pub mod sync;
 pub mod telnet;
 pub mod terminal;
 pub mod webdav;
+pub mod wol;
 
 pub mod charset;
 #[cfg(feature = "local-pty")]

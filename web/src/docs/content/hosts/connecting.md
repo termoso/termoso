@@ -109,3 +109,11 @@ A dropped SSH session shows **Reconnect** in the terminal; the scrollback stays,
 The host list, the details editor and quick connect are the same on the phone, as a full-screen list with search and the **+** menu (**New host**, **Quick Import**, **Discover on local network**).
 
 ![Hosts on Android](/docs/img/android-hosts.png)
+
+## Wake-on-LAN
+
+A host that sleeps can carry its MAC address (`aa:bb:cc:dd:ee:ff`). **Wake** sends the magic packet (6 × `FF` + 16 × MAC, UDP ports 9 and 7) to the broadcast address — optionally a specific one, for a router that forwards directed broadcasts — from the machine running Termoso. Like every Wake-on-LAN, it works on the same network segment: wake first, connect a few seconds later.
+
+## Export to `ssh_config` and Ansible
+
+Besides CSV and the encrypted backup, hosts can be exported as an OpenSSH `ssh_config` fragment (one `Host` block per SSH host with `HostName`, `Port`, `User` and `ProxyJump` through the stored jump chain) or as an Ansible INI inventory (a group per folder and per tag, `ansible_host` / `ansible_port` / `ansible_user`). Neither contains secrets — keys and passwords stay in the vault — and both honour the team's **deny local export** policy.

@@ -89,3 +89,7 @@ The in-app browser has the same transfer queue with pause and resume, **Copy to�
 
 > [!NOTE]
 > SFTP runs over the SSH connection; there is nothing to enable on the server beyond `Subsystem sftp` in `sshd_config`, which every distribution ships with. Servers that only offer SCP are not supported.
+
+## Browsing as root
+
+Files you cannot read as your user — `/etc`, another account's home, a service's data directory — can be opened with **sudo**: Termoso starts `sftp-server` under `sudo -S` with your password instead of asking the SSH server for the `sftp` subsystem, so the whole session (listing, editing, uploads, permissions) runs as root. It needs a sudoers rule that lets you run the `sftp-server` binary (the usual distribution paths are tried: `/usr/lib/openssh/sftp-server`, `/usr/libexec/sftp-server`, `/usr/lib/ssh/sftp-server`, …). The password is sent once, over the SSH channel, and not stored.

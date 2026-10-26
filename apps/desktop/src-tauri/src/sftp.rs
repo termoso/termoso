@@ -40,6 +40,9 @@ pub enum SftpTarget {
         host_id: Uuid,
         #[serde(default)]
         vault_id: Option<Uuid>,
+        /// Run `sftp-server` under `sudo` with this password (root browsing).
+        #[serde(default)]
+        sudo_password: Option<String>,
     },
     /// Reuse the transport of a live terminal session.
     Session { session_id: Uuid },
@@ -414,9 +417,16 @@ async fn connect<R: Runtime>(
 ) -> Result<Connected> {
     let state = app.state::<AppState>();
     match target {
-        SftpTarget::Host { host_id, vault_id } => {
+        SftpTarget::Host {
+            host_id,
+            vault_id,
+            sudo_password,
+        } => {
             let conn = sessions::connect_host(app, id, *host_id, *vault_id).await?;
-            let sftp = Sftp::open(&conn.client).await?;
+            let sftp = match sudo_password.as_deref().filter(|p| !p.is_empty()) {
+                Some(pw) => Sftp::open_sudo(&conn.client, pw).await?,
+                None => Sftp::open(&conn.client).await?,
+            };
             let mut keepalive = conn.jumps;
             keepalive.push(conn.client);
             Ok(Connected {

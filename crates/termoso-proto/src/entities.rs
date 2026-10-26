@@ -139,6 +139,9 @@ pub mod payload {
             pub label: String,
             /// Hostname or IP.
             pub address: String,
+            /// MAC address for Wake-on-LAN (`aa:bb:cc:dd:ee:ff`), if the host sleeps.
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub mac_address: Option<String>,
             /// Group.
             #[serde(default, skip_serializing_if = "Option::is_none")]
             pub group_id: Option<Uuid>,

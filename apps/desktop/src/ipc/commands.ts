@@ -609,6 +609,13 @@ export const tailnetScan = () => invoke<TailnetScan>("tailnet_scan");
 
 export const hostsExportCsv = (vaultId: Uuid | null, includePasswords: boolean, path: string) =>
   invoke<CsvExportReport>("hosts_export_csv", { vaultId, includePasswords, path });
+export const hostsExportAs = (
+  vaultId: Uuid | null,
+  format: "ssh_config" | "ansible",
+  path: string,
+) => invoke<CsvExportReport>("hosts_export_as", { vaultId, format, path });
+export const wakeHost = (mac: string, broadcast: string | null) =>
+  invoke<number>("wake_host", { mac, broadcast });
 export const backupExport = (vaultIds: Uuid[], password: string, path: string) =>
   invoke<BackupSummary>("backup_export", { vaultIds, password, path });
 export const backupInspect = (path: string, password: string) =>
