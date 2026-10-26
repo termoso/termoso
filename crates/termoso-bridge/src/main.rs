@@ -103,6 +103,11 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 if let Err(e) = b.sync().await {
                     tracing::warn!(error = %e, "background sync failed");
                 }
+                match termoso_bridge::automations::pass(&b).await {
+                    Ok(0) => {}
+                    Ok(n) => tracing::info!(runs = n, "automations executed"),
+                    Err(e) => tracing::warn!(error = %e, "automations pass failed"),
+                }
             }
         });
     }

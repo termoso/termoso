@@ -208,6 +208,21 @@ impl Bridge {
         Ok(status_of(self, &inner))
     }
 
+    /// Server client (bridge token).
+    pub fn server(&self) -> &ServerClient {
+        &self.server
+    }
+
+    /// Read access to `/bridge/me` and the mirrored vaults (refreshing first).
+    pub async fn with_inner<R>(
+        &self,
+        f: impl FnOnce(&BridgeSelf, &HashMap<Uuid, VaultState>) -> R,
+    ) -> Result<R> {
+        let mut inner = self.inner.lock().await;
+        self.refresh(&mut inner, false).await?;
+        Ok(f(&inner.me, &inner.vaults))
+    }
+
     pub async fn status(&self) -> BridgeStatus {
         let inner = self.inner.lock().await;
         status_of(self, &inner)

@@ -28,6 +28,10 @@ use termoso_proto::auth::{
     SsoStartResponse, WebauthnChallengeRequest, WebauthnCredentialInfo,
     WebauthnRegisterFinishRequest,
 };
+use termoso_proto::automation::{
+    Automation, AutomationList, AutomationRun, AutomationRunList, ClaimRunsRequest,
+    ClaimRunsResponse, CreateAutomationRequest, FinishRunRequest, UpdateAutomationRequest,
+};
 use termoso_proto::ca::{
     IssueCertificateRequest, IssueCertificateResponse, IssuedCertificate, IssuedCertificateList,
     RotateTeamCaRequest, TeamCa, UpdateTeamCaRequest,
@@ -809,6 +813,73 @@ impl ApiClient {
         req: &RoleMappingList,
     ) -> Result<RoleMappingList> {
         self.put(&format!("teams/{team_id}/role-mappings"), req)
+            .await
+    }
+
+    // ───────────────────────────── automations ─────────────────────────────
+
+    /// `GET /teams/{id}/automations`.
+    pub async fn team_automations(&self, team_id: Uuid) -> Result<AutomationList> {
+        self.get(&format!("teams/{team_id}/automations")).await
+    }
+
+    /// `POST /teams/{id}/automations`.
+    pub async fn create_automation(
+        &self,
+        team_id: Uuid,
+        req: &CreateAutomationRequest,
+    ) -> Result<Automation> {
+        self.post(&format!("teams/{team_id}/automations"), req)
+            .await
+    }
+
+    /// `PUT /teams/{id}/automations/{aid}`.
+    pub async fn update_automation(
+        &self,
+        team_id: Uuid,
+        id: Uuid,
+        req: &UpdateAutomationRequest,
+    ) -> Result<Automation> {
+        self.put(&format!("teams/{team_id}/automations/{id}"), req)
+            .await
+    }
+
+    /// `DELETE /teams/{id}/automations/{aid}`.
+    pub async fn delete_automation(&self, team_id: Uuid, id: Uuid) -> Result<()> {
+        self.delete(&format!("teams/{team_id}/automations/{id}"))
+            .await
+    }
+
+    /// `POST /teams/{id}/automations/{aid}/run` — queue a run now.
+    pub async fn run_automation_now(&self, team_id: Uuid, id: Uuid) -> Result<AutomationRun> {
+        self.post(&format!("teams/{team_id}/automations/{id}/run"), &())
+            .await
+    }
+
+    /// `GET /teams/{id}/automations/{aid}/runs`.
+    pub async fn automation_runs(&self, team_id: Uuid, id: Uuid) -> Result<AutomationRunList> {
+        self.get(&format!("teams/{team_id}/automations/{id}/runs"))
+            .await
+    }
+
+    /// `POST /teams/{id}/automations/runs/claim` — executor side.
+    pub async fn claim_automation_runs(
+        &self,
+        team_id: Uuid,
+        req: &ClaimRunsRequest,
+    ) -> Result<ClaimRunsResponse> {
+        self.post(&format!("teams/{team_id}/automations/runs/claim"), req)
+            .await
+    }
+
+    /// `PATCH /teams/{id}/automations/runs/{rid}` — executor side.
+    pub async fn finish_automation_run(
+        &self,
+        team_id: Uuid,
+        run_id: Uuid,
+        req: &FinishRunRequest,
+    ) -> Result<AutomationRun> {
+        self.patch(&format!("teams/{team_id}/automations/runs/{run_id}"), req)
             .await
     }
 
