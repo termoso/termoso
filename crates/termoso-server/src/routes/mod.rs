@@ -72,6 +72,7 @@ pub fn router(state: AppState) -> Router {
         .route("/auth/password/start", post(auth::password_start))
         .route("/auth/password/finish", post(auth::password_finish))
         .route("/auth/logout", post(auth::logout))
+        .route("/auth/logout/sso", post(auth::logout_sso))
         .route("/auth/reauth/start", post(auth::reauth_start))
         .route("/auth/reauth/finish", post(auth::reauth_finish))
         .route("/auth/start-over/request", post(start_over::request))
@@ -98,6 +99,10 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/auth/sso/saml/post/{flow_id}", get(auth::sso_saml_post))
         .route("/auth/sso/saml/acs", post(auth::sso_saml_acs))
+        .route(
+            "/auth/sso/saml/slo",
+            get(auth::sso_saml_slo_redirect).post(auth::sso_saml_slo_post),
+        )
         // account
         .route(
             "/account",

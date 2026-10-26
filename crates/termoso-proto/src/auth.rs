@@ -684,6 +684,17 @@ schema! {
 }
 
 schema! {
+    /// `POST /auth/logout/sso`
+    pub struct SsoLogoutResponse {
+        /// Open in the browser to end the identity-provider session as well
+        /// (SAML Single Logout). Absent when the session did not come from
+        /// SAML or the IdP has no logout endpoint.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub logout_url: Option<String>,
+    }
+}
+
+schema! {
     /// Result of an SSO round-trip (`GET /auth/sso/flow/{flow_id}` or deep link).
     #[serde(tag = "status", rename_all = "snake_case")]
     pub enum SsoResult {

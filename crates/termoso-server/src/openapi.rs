@@ -42,6 +42,7 @@ impl Modify for BearerAuth {
         crate::routes::auth::password_start,
         crate::routes::auth::password_finish,
         crate::routes::auth::logout,
+        crate::routes::auth::logout_sso,
         crate::routes::auth::reauth_start,
         crate::routes::auth::reauth_finish,
         crate::routes::start_over::request,

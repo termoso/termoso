@@ -345,6 +345,50 @@ pub async fn revoke_session(state: &AppState, session_id: Uuid) -> ApiResult<()>
     Ok(())
 }
 
+/// Remember which IdP session a freshly issued session came from, so a SAML
+/// `LogoutRequest` can find it later.
+pub async fn tag_sso(state: &AppState, token: &str, login: &crate::sso::SsoLogin) -> ApiResult<()> {
+    sqlx::query(
+        "UPDATE sessions SET sso_provider = $2, sso_subject = $3, sso_session_index = $4 WHERE token_hash = $1",
+    )
+    .bind(hash_token(token))
+    .bind(&login.provider)
+    .bind(&login.subject)
+    .bind(&login.session_index)
+    .execute(&state.db)
+    .await?;
+    Ok(())
+}
+
+/// Revoke the live sessions `provider` opened for `subject` — all of them,
+/// or only those from the given IdP `SessionIndex`es. Returns the users
+/// affected.
+pub async fn revoke_sso(
+    state: &AppState,
+    provider: &str,
+    subject: &str,
+    session_indexes: &[String],
+) -> ApiResult<Vec<Uuid>> {
+    let rows: Vec<(Uuid, Uuid)> = sqlx::query_as(
+        "SELECT id, user_id FROM sessions
+         WHERE sso_provider = $1 AND sso_subject = $2 AND revoked_at IS NULL AND expires_at > now()
+           AND (cardinality($3::text[]) = 0 OR sso_session_index = ANY($3))",
+    )
+    .bind(provider)
+    .bind(subject)
+    .bind(session_indexes)
+    .fetch_all(&state.db)
+    .await?;
+    let mut users = Vec::new();
+    for (id, user_id) in rows {
+        revoke_session(state, id).await?;
+        if !users.contains(&user_id) {
+            users.push(user_id);
+        }
+    }
+    Ok(users)
+}
+
 /// Revoke all sessions of a device.
 pub async fn revoke_device(state: &AppState, user_id: Uuid, device_id: Uuid) -> ApiResult<()> {
     let rows: Vec<(Uuid, String)> = sqlx::query_as(

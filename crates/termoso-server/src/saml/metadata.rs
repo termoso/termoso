@@ -19,6 +19,10 @@ pub struct IdpMetadata {
     /// SingleSignOnService for HTTP-Redirect (preferred) and HTTP-POST.
     pub sso_redirect: Option<String>,
     pub sso_post: Option<String>,
+    /// SingleLogoutService for HTTP-Redirect and HTTP-POST; absent when the
+    /// IdP does not do Single Logout.
+    pub slo_redirect: Option<String>,
+    pub slo_post: Option<String>,
     pub want_authn_requests_signed: bool,
     pub signing_keys: Vec<RsaPublicKey>,
     /// DER certificates the keys came from (for diagnostics/expiry logging).
@@ -81,6 +85,19 @@ pub fn parse_idp(xml: &str, entity_id: Option<&str>) -> anyhow::Result<IdpMetada
     if sso_redirect.is_none() && sso_post.is_none() {
         anyhow::bail!("IdP metadata has no HTTP-Redirect or HTTP-POST SingleSignOnService");
     }
+    let mut slo_redirect = None;
+    let mut slo_post = None;
+    for s in elements(idp, NS, "SingleLogoutService") {
+        match (s.attribute("Binding"), s.attribute("Location")) {
+            (Some(BINDING_REDIRECT), Some(loc)) if slo_redirect.is_none() => {
+                slo_redirect = Some(loc.to_string())
+            }
+            (Some(BINDING_POST), Some(loc)) if slo_post.is_none() => {
+                slo_post = Some(loc.to_string())
+            }
+            _ => {}
+        }
+    }
 
     let mut signing_keys = Vec::new();
     let mut signing_certs = Vec::new();
@@ -112,6 +129,8 @@ pub fn parse_idp(xml: &str, entity_id: Option<&str>) -> anyhow::Result<IdpMetada
         entity_id: entity,
         sso_redirect,
         sso_post,
+        slo_redirect,
+        slo_post,
         want_authn_requests_signed: want_signed,
         signing_keys,
         signing_certs,
@@ -135,6 +154,8 @@ fn collect_entities<'a, 'i>(n: Node<'a, 'i>, out: &mut Vec<Node<'a, 'i>>) {
 pub struct SpDescriptor<'a> {
     pub entity_id: &'a str,
     pub acs_url: &'a str,
+    /// Our SingleLogoutService (same URL for both bindings).
+    pub slo_url: &'a str,
     pub cert_der: Option<&'a [u8]>,
     pub sign_requests: bool,
 }
@@ -157,6 +178,8 @@ pub fn render_sp(sp: &SpDescriptor) -> String {
             "{keys}",
             r#"<md:NameIDFormat>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress</md:NameIDFormat>"#,
             r#"<md:NameIDFormat>urn:oasis:names:tc:SAML:2.0:nameid-format:persistent</md:NameIDFormat>"#,
+            r#"<md:SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="{slo}"/>"#,
+            r#"<md:SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="{slo}"/>"#,
             r#"<md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="{acs}" index="0" isDefault="true"/>"#,
             r#"</md:SPSSODescriptor>"#,
             r#"</md:EntityDescriptor>"#
@@ -165,6 +188,7 @@ pub fn render_sp(sp: &SpDescriptor) -> String {
         signed = sp.sign_requests,
         keys = keys,
         acs = xml_attr(sp.acs_url),
+        slo = xml_attr(sp.slo_url),
     )
 }
 
@@ -216,6 +240,7 @@ mod tests {
         let out = render_sp(&SpDescriptor {
             entity_id: "https://t.example/api/v1/auth/sso/corp/saml/metadata",
             acs_url: "https://t.example/api/v1/auth/sso/saml/acs?x=1&y=2",
+            slo_url: "https://t.example/api/v1/auth/sso/saml/slo",
             cert_der: Some(b"\x30\x00"),
             sign_requests: true,
         });

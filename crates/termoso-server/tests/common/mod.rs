@@ -66,6 +66,7 @@ pub const SAML_PROVIDER: &str = "mock-saml";
 pub const SAML_CORP_PROVIDER: &str = "mock-saml-corp";
 pub const SAML_IDP_ENTITY: &str = "https://idp.test/saml";
 pub const SAML_IDP_SSO_URL: &str = "https://idp.test/saml/sso";
+pub const SAML_IDP_SLO_URL: &str = "https://idp.test/saml/slo";
 /// Dedicated SSH ID origin (`TERMOSO_SSHID_URL`) and its `Host` value.
 pub const SSHID_URL: &str = "http://sshid.test:8443";
 pub const SSHID_HOST: &str = "sshid.test:8443";
@@ -279,9 +280,10 @@ async fn boot() -> Option<TestServer> {
         SsoProviderConfig {
             name: Some("Mock SAML".into()),
             kind: SsoKindConfig::Saml,
-            saml_metadata: Some(saml_support::idp_metadata_xml(
+            saml_metadata: Some(saml_support::idp_metadata_xml_slo(
                 SAML_IDP_ENTITY,
                 SAML_IDP_SSO_URL,
+                SAML_IDP_SLO_URL,
             )),
             ..SsoProviderConfig::default()
         },
@@ -438,7 +440,7 @@ fn fake_web_dir(unique: &str) -> String {
     dir.to_string_lossy().into_owned()
 }
 
-fn fake_ip() -> String {
+pub fn fake_ip() -> String {
     static N: AtomicU32 = AtomicU32::new(1);
     let n = N.fetch_add(1, Ordering::Relaxed);
     format!("10.{}.{}.{}", (n >> 16) & 255, (n >> 8) & 255, n & 255)

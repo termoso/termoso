@@ -70,7 +70,7 @@ The landing and the docs pages ship with real `<title>`, description, canonical 
 
 - `TERMOSO_WEBAUTHN__RP_ID` must be the registrable domain of `TERMOSO_PUBLIC_URL`. Keep the `tauri://localhost,http://tauri.localhost` origins so the desktop app can use passkeys.
 - `TERMOSO_ANDROID_APP_LINKS=<package>=<SHA-256>` publishes `/.well-known/assetlinks.json` so invitation and join links open in the Android app.
-- SSO providers are `TERMOSO_SSO__<slug>__*`: OpenID Connect (any discovery URL, presets for Google and Microsoft, GitHub over OAuth2) or SAML 2.0 (`KIND=saml`). The OIDC redirect URI is `<TERMOSO_PUBLIC_URL>/api/v1/auth/sso/callback`.
+- SSO providers are `TERMOSO_SSO__<slug>__*`: OpenID Connect (any discovery URL, presets for Google and Microsoft, GitHub over OAuth2) or SAML 2.0 (`KIND=saml`). The OIDC redirect URI is `<TERMOSO_PUBLIC_URL>/api/v1/auth/sso/callback`. SAML endpoints are published in the SP metadata at `/api/v1/auth/sso/<slug>/saml/metadata`: the ACS (`/api/v1/auth/sso/saml/acs`, HTTP-POST) and the SingleLogoutService (`/api/v1/auth/sso/saml/slo`, HTTP-Redirect and HTTP-POST). When the IdP metadata advertises a SingleLogoutService, signing out of the app offers to end the IdP session too, and a signed `LogoutRequest` from the IdP (the user signed out elsewhere, or an admin killed their IdP session) revokes every Termoso session that IdP session opened — narrowed to the named `SessionIndex` when the IdP sends one. Unsigned logout messages are rejected.
 
 ## Optional features
 

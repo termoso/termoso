@@ -202,6 +202,29 @@ pub struct SsoSession {
     /// Set when the identity came from a team's own IdP (JIT join).
     #[serde(default)]
     pub team_id: Option<Uuid>,
+    /// SAML `SessionIndex` of the IdP session, for Single Logout.
+    #[serde(default)]
+    pub session_index: Option<String>,
+}
+
+/// What a signed-in session owes to an IdP: enough to answer or send a SAML
+/// `LogoutRequest` for it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SsoLogin {
+    pub provider: String,
+    pub subject: String,
+    #[serde(default)]
+    pub session_index: Option<String>,
+}
+
+impl From<&SsoSession> for SsoLogin {
+    fn from(s: &SsoSession) -> Self {
+        Self {
+            provider: s.provider.clone(),
+            subject: s.subject.clone(),
+            session_index: s.session_index.clone(),
+        }
+    }
 }
 
 /// `groups` claim of an already verified ID token. openidconnect's core
@@ -412,6 +435,17 @@ impl SsoRegistry {
         }
     }
 
+    /// Every SAML provider (global and per-team): a Single Logout message
+    /// names its IdP only by issuer, so each candidate gets to verify it.
+    pub fn saml_providers(&self) -> Vec<Arc<Provider>> {
+        let saml = |p: &&Arc<Provider>| matches!(p.backend, Backend::Saml(_));
+        let mut out: Vec<Arc<Provider>> = self.providers.values().filter(saml).cloned().collect();
+        if let Ok(t) = self.teams.read() {
+            out.extend(t.values().filter(saml).cloned());
+        }
+        out
+    }
+
     pub fn is_empty(&self) -> bool {
         self.providers.is_empty()
     }
@@ -550,6 +584,7 @@ async fn build_saml(
         .trim_end_matches("/auth/sso/callback")
         .to_string();
     let acs_url = format!("{api_base}/auth/sso/saml/acs");
+    let slo_url = format!("{api_base}/auth/sso/saml/slo");
     let entity_id = p
         .saml_sp_entity_id
         .clone()
@@ -595,6 +630,7 @@ async fn build_saml(
         saml::SpConfig {
             entity_id,
             acs_url,
+            slo_url,
             key,
             cert_der,
             sign_requests,
@@ -848,6 +884,7 @@ fn consume_saml(
             display_name: identity.name,
             groups: identity.groups,
             team_id: None,
+            session_index: identity.session_index,
         },
     )
 }
@@ -903,6 +940,7 @@ async fn exchange(state: &AppState, flow: &FlowState, code: &str) -> anyhow::Res
                 display_name,
                 groups,
                 team_id: None,
+                session_index: None,
             }
         }
         Backend::GitHub(client) => {
@@ -955,6 +993,7 @@ async fn exchange(state: &AppState, flow: &FlowState, code: &str) -> anyhow::Res
                 display_name: user.name.or(Some(user.login)),
                 groups: Vec::new(),
                 team_id: None,
+                session_index: None,
             }
         }
         Backend::Saml(_) => anyhow::bail!("SAML flows complete on the ACS, not the OAuth callback"),
@@ -1156,6 +1195,157 @@ async fn jit_join(
     crate::authz::apply_group_mappings_scoped(&state.db, user_id, groups, Some(team_id), "idp")
         .await?;
     Ok(())
+}
+
+// ───────────────────────────── SAML Single Logout ─────────────────────────────
+
+/// How long we wait for the IdP to answer a `LogoutRequest` of ours.
+const SLO_REQ_TTL: Duration = Duration::from_secs(600);
+
+fn slo_key(request_id: &str) -> String {
+    format!("sso:slo:{request_id}")
+}
+
+/// A message at our SingleLogoutService endpoint.
+pub enum SloInbound<'a> {
+    /// HTTP-Redirect binding: the raw query string as received.
+    Redirect { raw_query: &'a str },
+    /// HTTP-POST binding: the base64 `SAMLRequest`/`SAMLResponse` form field.
+    Post {
+        message: &'a str,
+        relay_state: Option<&'a str>,
+    },
+}
+
+pub enum SloOutcome {
+    /// Send the browser on to the IdP (our `LogoutResponse`).
+    Redirect(String),
+    /// Nothing more to do; show a "signed out" page.
+    Done,
+}
+
+/// Handle a message at the SLO endpoint. A `LogoutRequest` (IdP-initiated,
+/// or the IdP fanning out a logout another SP started) revokes every
+/// session we issued for that IdP subject — narrowed to the given
+/// `SessionIndex`es when the IdP names them — and is answered with a
+/// `LogoutResponse`. A `LogoutResponse` closes a logout we started.
+pub async fn saml_slo(state: &AppState, inbound: SloInbound<'_>) -> ApiResult<SloOutcome> {
+    let now = chrono::Utc::now();
+    let mut message: Option<(saml::SloMessage, Option<String>)> = None;
+    let mut providers: Vec<Arc<Provider>> = Vec::new();
+    let mut last_err = None;
+    for p in state.sso.saml_providers() {
+        let Backend::Saml(sp) = &p.backend else {
+            continue;
+        };
+        let r = match inbound {
+            SloInbound::Redirect { raw_query } => sp.consume_slo_redirect(raw_query, now),
+            SloInbound::Post {
+                message,
+                relay_state,
+            } => sp
+                .consume_slo_post(message, now)
+                .map(|m| (m, relay_state.map(String::from))),
+        };
+        match r {
+            Ok(m) => {
+                message.get_or_insert(m);
+                providers.push(p.clone());
+            }
+            Err(e) => last_err = Some(e),
+        }
+    }
+    let Some((msg, relay)) = message else {
+        tracing::warn!(error = ?last_err, "saml logout message rejected");
+        return Err(Error::unauthorized());
+    };
+    match msg {
+        saml::SloMessage::Request(req) => {
+            let mut users: Vec<Uuid> = Vec::new();
+            for p in &providers {
+                for u in
+                    crate::session::revoke_sso(state, &p.id, &req.name_id, &req.session_indexes)
+                        .await?
+                {
+                    if !users.contains(&u) {
+                        users.push(u);
+                    }
+                }
+            }
+            for user_id in users {
+                crate::users::security_event(
+                    state,
+                    user_id,
+                    "sso_logout",
+                    None,
+                    None,
+                    None,
+                    Some(serde_json::json!({ "provider": providers[0].id, "sessions": req.session_indexes.len() })),
+                )
+                .await?;
+            }
+            let Backend::Saml(sp) = &providers[0].backend else {
+                unreachable!("only SAML providers verify SLO messages")
+            };
+            Ok(
+                match sp.logout_response_url(&req.id, relay.as_deref(), now)? {
+                    Some(url) => SloOutcome::Redirect(url),
+                    None => SloOutcome::Done,
+                },
+            )
+        }
+        saml::SloMessage::Response { in_response_to, .. } => {
+            let id = in_response_to
+                .ok_or_else(|| Error::bad_request("LogoutResponse without InResponseTo"))?;
+            if state
+                .cache
+                .take_json::<String>(&slo_key(&id))
+                .await?
+                .is_none()
+            {
+                return Err(Error::token_expired());
+            }
+            Ok(SloOutcome::Done)
+        }
+    }
+}
+
+/// SP-initiated logout: the URL that ends the IdP session behind
+/// `session_id` as well. `None` when the session did not come from SAML or
+/// the IdP has no Redirect-binding SLO endpoint. Call before revoking the
+/// session locally.
+pub async fn saml_logout_url(state: &AppState, session_id: Uuid) -> ApiResult<Option<String>> {
+    let row: Option<(Option<String>, Option<String>, Option<String>)> = sqlx::query_as(
+        "SELECT sso_provider, sso_subject, sso_session_index FROM sessions WHERE id = $1",
+    )
+    .bind(session_id)
+    .fetch_optional(&state.db)
+    .await?;
+    let Some((Some(provider), Some(subject), session_index)) = row else {
+        return Ok(None);
+    };
+    let Ok(p) = state.sso.get(&provider) else {
+        return Ok(None);
+    };
+    let Backend::Saml(sp) = &p.backend else {
+        return Ok(None);
+    };
+    let request_id = saml::ServiceProvider::new_request_id();
+    let Some(url) = sp.logout_request_url(
+        &request_id,
+        &subject,
+        session_index.as_deref(),
+        Some(&request_id),
+        chrono::Utc::now(),
+    )?
+    else {
+        return Ok(None);
+    };
+    state
+        .cache
+        .set_json(&slo_key(&request_id), &provider, SLO_REQ_TTL)
+        .await?;
+    Ok(Some(url))
 }
 
 #[cfg(test)]

@@ -7,7 +7,7 @@ mod common;
 use common::*;
 use reqwest::{Method, StatusCode, redirect::Policy};
 use roxmltree::Document;
-use termoso_proto::auth::{AuthResponse, SsoResult, SsoStartResponse};
+use termoso_proto::auth::{AuthResponse, SsoLogoutResponse, SsoResult, SsoStartResponse};
 use termoso_server::saml::test_support::{self as saml_support, ResponseSpec};
 
 const NS_PROTOCOL: &str = "urn:oasis:names:tc:SAML:2.0:protocol";
@@ -40,6 +40,7 @@ async fn acs(s: &TestServer, relay_state: Option<&str>, saml_response: &str) -> 
     }
     browser()
         .post(s.url("/auth/sso/saml/acs"))
+        .header("x-forwarded-for", fake_ip())
         .form(&form)
         .send()
         .await
@@ -595,4 +596,196 @@ async fn acs_honours_the_redirect_chosen_at_start() {
     )
     .await;
     assert_eq!(resp.status(), StatusCode::OK);
+}
+
+/// Status of an authenticated call with `token` (200 while the session lives).
+async fn session_status(s: &TestServer, token: &str) -> StatusCode {
+    s.call(Method::GET, "/account/sso", Some(token), NOBODY)
+        .await
+        .status()
+}
+
+/// `SessionIndex` of the assertion in a response we minted.
+fn session_index_of(response_b64: &str) -> String {
+    let xml = String::from_utf8(
+        base64::Engine::decode(&base64::engine::general_purpose::STANDARD, response_b64).unwrap(),
+    )
+    .unwrap();
+    let marker = r#"SessionIndex=""#;
+    let start = xml.find(marker).unwrap() + marker.len();
+    let end = xml[start..].find('"').unwrap();
+    xml[start..start + end].to_string()
+}
+
+/// Sign in through the IdP and finish with the password; returns the session
+/// token and the IdP `SessionIndex` it is bound to.
+async fn saml_login(s: &TestServer, email: &str, password: &str, dev: &str) -> (String, String) {
+    let flow = start(s, SAML_PROVIDER, None).await;
+    let req = browser_leg(s, &flow).await;
+    let b64 = saml_support::build_response_b64(&spec_for(&req, email));
+    let index = session_index_of(&b64);
+    assert_eq!(
+        acs(s, Some(&req.relay_state), &b64).await.status(),
+        StatusCode::OK
+    );
+    let SsoResult::LoginRequired { sso_session, .. } = poll(s, &flow.flow_id).await else {
+        panic!("expected login_required")
+    };
+    let AuthResponse::Authenticated(sess) =
+        login_raw(s, email, password, device(dev), Some(sso_session))
+            .await
+            .unwrap()
+    else {
+        panic!("expected a session")
+    };
+    (sess.token, index)
+}
+
+async fn slo_get(s: &TestServer, query: &str) -> reqwest::Response {
+    browser()
+        .get(format!("{}?{query}", s.url("/auth/sso/saml/slo")))
+        .header("x-forwarded-for", fake_ip())
+        .send()
+        .await
+        .expect("slo")
+}
+
+#[tokio::test]
+async fn idp_initiated_logout_revokes_saml_sessions() {
+    let Some(s) = server().await else { return };
+    let email = unique_email("slo");
+    let password = "pw-slo-1234567890";
+    let SsoResult::RegistrationRequired { sso_session, .. } =
+        sign_in(s, SAML_PROVIDER, |r| spec_for(r, &email)).await
+    else {
+        panic!("expected registration_required")
+    };
+    let u = register_raw(s, &email, password, None, Some(sso_session)).await;
+    let (phone, phone_index) = saml_login(s, &email, password, "slo phone").await;
+    let (laptop, _) = saml_login(s, &email, password, "slo laptop").await;
+    for t in [u.token(), &phone, &laptop] {
+        assert_eq!(session_status(s, t).await, StatusCode::OK);
+    }
+    let slo_url = s.url("/auth/sso/saml/slo");
+
+    // Unsigned and tampered requests change nothing.
+    let (signed, _) =
+        saml_support::logout_request_query(SAML_IDP_ENTITY, &slo_url, &email, None, None);
+    let unsigned = signed.split("&SigAlg=").next().unwrap().to_string();
+    assert_eq!(
+        slo_get(s, &unsigned).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    let mut tampered = signed.clone();
+    tampered.replace_range(tampered.len() - 6.., "AAAAAA");
+    assert_eq!(
+        slo_get(s, &tampered).await.status(),
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(session_status(s, &phone).await, StatusCode::OK);
+
+    // Narrowed to one IdP session: only the phone goes.
+    let (q, req_id) = saml_support::logout_request_query(
+        SAML_IDP_ENTITY,
+        &slo_url,
+        &email,
+        Some(&phone_index),
+        Some("relay-1"),
+    );
+    let resp = slo_get(s, &q).await;
+    assert!(resp.status().is_redirection(), "{}", resp.status());
+    let location = resp.headers()["location"].to_str().unwrap().to_string();
+    assert!(location.starts_with(SAML_IDP_SLO_URL), "{location}");
+    let (xml, relay) = saml_support::decode_redirect(&location);
+    assert_eq!(relay, "relay-1");
+    let doc = Document::parse(&xml).unwrap();
+    let root = doc.root_element();
+    assert_eq!(root.tag_name().name(), "LogoutResponse");
+    assert_eq!(root.attribute("InResponseTo"), Some(req_id.as_str()));
+    assert_eq!(root.attribute("Destination"), Some(SAML_IDP_SLO_URL));
+    assert!(xml.contains("status:Success"));
+    assert_eq!(session_status(s, &phone).await, StatusCode::UNAUTHORIZED);
+    assert_eq!(session_status(s, &laptop).await, StatusCode::OK);
+    assert_eq!(session_status(s, u.token()).await, StatusCode::OK);
+
+    // No SessionIndex: every session this IdP opened for the subject.
+    let (q, _) = saml_support::logout_request_query(SAML_IDP_ENTITY, &slo_url, &email, None, None);
+    assert!(slo_get(s, &q).await.status().is_redirection());
+    assert_eq!(session_status(s, &laptop).await, StatusCode::UNAUTHORIZED);
+    assert_eq!(session_status(s, u.token()).await, StatusCode::UNAUTHORIZED);
+
+    // A password-only session of the same user is not the IdP's to end.
+    let plain = login(s, &email, password).await;
+    let AuthResponse::Authenticated(plain) = plain else {
+        panic!("expected a session")
+    };
+    let (q, _) = saml_support::logout_request_query(SAML_IDP_ENTITY, &slo_url, &email, None, None);
+    assert!(slo_get(s, &q).await.status().is_redirection());
+    assert_eq!(session_status(s, &plain.token).await, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn sp_initiated_logout_round_trips_through_the_idp() {
+    let Some(s) = server().await else { return };
+    let email = unique_email("slo-sp");
+    let password = "pw-slo-sp-1234567890";
+    let SsoResult::RegistrationRequired { sso_session, .. } =
+        sign_in(s, SAML_PROVIDER, |r| spec_for(r, &email)).await
+    else {
+        panic!("expected registration_required")
+    };
+    let u = register_raw(s, &email, password, None, Some(sso_session)).await;
+    let (token, index) = saml_login(s, &email, password, "slo desktop").await;
+
+    let out: SsoLogoutResponse = s
+        .json(Method::POST, "/auth/logout/sso", Some(&token), NOBODY)
+        .await;
+    let url = out.logout_url.expect("logout_url for a SAML session");
+    assert!(url.starts_with(SAML_IDP_SLO_URL), "{url}");
+    assert_eq!(session_status(s, &token).await, StatusCode::UNAUTHORIZED);
+    let (xml, _) = saml_support::decode_redirect(&url);
+    let doc = Document::parse(&xml).unwrap();
+    let root = doc.root_element();
+    assert_eq!(root.tag_name().namespace(), Some(NS_PROTOCOL));
+    assert_eq!(root.tag_name().name(), "LogoutRequest");
+    assert_eq!(root.attribute("Destination"), Some(SAML_IDP_SLO_URL));
+    let text = |name: &str| {
+        root.descendants()
+            .find(|n| n.tag_name().name() == name)
+            .and_then(|n| n.text())
+            .map(str::to_string)
+    };
+    assert_eq!(text("NameID").as_deref(), Some(email.as_str()));
+    assert_eq!(text("SessionIndex"), Some(index));
+    let req_id = root.attribute("ID").unwrap().to_string();
+
+    // The IdP answers; the answer is accepted once.
+    let q = saml_support::logout_response_query(
+        SAML_IDP_ENTITY,
+        &s.url("/auth/sso/saml/slo"),
+        &req_id,
+        None,
+    );
+    let resp = slo_get(s, &q).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert!(resp.text().await.unwrap().contains("Signed out"));
+    assert_eq!(slo_get(s, &q).await.status(), StatusCode::UNAUTHORIZED);
+
+    // A password-only session did not come from the IdP: nothing to end there.
+    let AuthResponse::Authenticated(plain) = login(s, &email, password).await else {
+        panic!("expected a session")
+    };
+    let out: SsoLogoutResponse = s
+        .json(Method::POST, "/auth/logout/sso", Some(&plain.token), NOBODY)
+        .await;
+    assert!(out.logout_url.is_none());
+    assert_eq!(
+        session_status(s, &plain.token).await,
+        StatusCode::UNAUTHORIZED
+    );
+    // The registration itself was vouched for by the IdP, so that session is SAML-bound.
+    let out: SsoLogoutResponse = s
+        .json(Method::POST, "/auth/logout/sso", Some(u.token()), NOBODY)
+        .await;
+    assert!(out.logout_url.is_some());
 }

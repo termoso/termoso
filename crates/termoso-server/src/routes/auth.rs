@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use axum::Json;
-use axum::extract::{Form, Path, Query, State};
+use axum::extract::{Form, Path, Query, RawQuery, State};
 use axum::http::header;
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use serde::{Deserialize, Serialize};
@@ -410,6 +410,9 @@ pub async fn register_finish(
     let (device_id, _) =
         session::upsert_device(&state.db, user_id, &req.device, client.ip.as_deref()).await?;
     let sess = build_session(&state, &user, device_id).await?;
+    if let Some(l) = &sso_sess {
+        session::tag_sso(&state, &sess.token, &sso::SsoLogin::from(l)).await?;
+    }
     users::security_event(
         &state,
         user_id,
@@ -461,12 +464,17 @@ struct MfaFlow {
     /// Step-up: the session to mark re-authenticated once the factor passes.
     #[serde(default)]
     reauth_session: Option<Uuid>,
+    /// The IdP session behind this sign-in (SAML Single Logout).
+    #[serde(default)]
+    sso: Option<sso::SsoLogin>,
 }
 
 #[derive(Serialize, Deserialize)]
 struct ApprovalFlow {
     user_id: Uuid,
     device_id: Uuid,
+    #[serde(default)]
+    sso: Option<sso::SsoLogin>,
 }
 
 #[utoipa::path(post, path = "/api/v1/auth/login/start", tag = "auth",
@@ -570,6 +578,7 @@ pub async fn login_finish(
         &user,
         flow.device,
         flow.sso_verified,
+        flow.sso.as_ref().map(sso::SsoLogin::from),
         false,
     )
     .await?;
@@ -583,6 +592,7 @@ async fn continue_login(
     user: &UserRow,
     device: DeviceInfo,
     sso_verified: bool,
+    sso: Option<sso::SsoLogin>,
     mfa_done: bool,
 ) -> ApiResult<AuthResponse> {
     crate::enterprise::ensure_home_team(state, user.id).await?;
@@ -596,6 +606,7 @@ async fn continue_login(
                 device: Some(device),
                 sso_verified,
                 reauth_session: None,
+                sso,
             },
             MFA_TTL,
         )
@@ -625,6 +636,7 @@ async fn continue_login(
             &ApprovalFlow {
                 user_id: user.id,
                 device_id,
+                sso,
             },
             APPROVAL_TTL,
         )
@@ -654,6 +666,9 @@ async fn continue_login(
     }
 
     let sess = build_session(state, user, device_id).await?;
+    if let Some(l) = &sso {
+        session::tag_sso(state, &sess.token, l).await?;
+    }
     users::security_event(
         state,
         user.id,
@@ -888,7 +903,16 @@ pub async fn mfa_verify(
     let device = flow
         .device
         .ok_or_else(|| Error::bad_request("Invalid MFA flow"))?;
-    let resp = continue_login(&state, &client, &user, device, flow.sso_verified, true).await?;
+    let resp = continue_login(
+        &state,
+        &client,
+        &user,
+        device,
+        flow.sso_verified,
+        flow.sso,
+        true,
+    )
+    .await?;
     Ok(Json(resp))
 }
 
@@ -1041,6 +1065,7 @@ pub async fn reauth_finish(
                 device: None,
                 sso_verified: false,
                 reauth_session: Some(auth.session.session_id),
+                sso: None,
             },
             MFA_TTL,
         )
@@ -1067,6 +1092,9 @@ pub async fn device_approve(
         return Err(Error::account_disabled());
     }
     let sess = build_session(&state, &user, flow.device_id).await?;
+    if let Some(l) = &flow.sso {
+        session::tag_sso(&state, &sess.token, l).await?;
+    }
     users::security_event(
         &state,
         user.id,
@@ -1306,6 +1334,19 @@ pub async fn logout(State(state): State<AppState>, auth: Auth) -> ApiResult<NoCo
         .map(NoContent::from)
 }
 
+/// Sign out here and, when the session came from a SAML IdP with Single
+/// Logout, hand back the URL that ends the IdP session too.
+#[utoipa::path(post, path = "/api/v1/auth/logout/sso", tag = "auth",
+    responses((status = 200, body = SsoLogoutResponse)))]
+pub async fn logout_sso(
+    State(state): State<AppState>,
+    auth: Auth,
+) -> ApiResult<Json<SsoLogoutResponse>> {
+    let logout_url = sso::saml_logout_url(&state, auth.session.session_id).await?;
+    session::revoke_session(&state, auth.session.session_id).await?;
+    Ok(Json(SsoLogoutResponse { logout_url }))
+}
+
 // ───────────────────────────── SSO ─────────────────────────────
 
 #[utoipa::path(get, path = "/api/v1/auth/sso/providers", tag = "auth", responses((status = 200, body = Vec<SsoProvider>)))]
@@ -1417,6 +1458,68 @@ pub async fn sso_saml_acs(
     Ok(sso_done(&state, redirect, &flow_id))
 }
 
+#[derive(Deserialize)]
+pub struct SamlSloForm {
+    #[serde(rename = "SAMLRequest")]
+    pub saml_request: Option<String>,
+    #[serde(rename = "SAMLResponse")]
+    pub saml_response: Option<String>,
+    #[serde(rename = "RelayState")]
+    pub relay_state: Option<String>,
+}
+
+/// SAML SingleLogoutService, HTTP-Redirect binding.
+pub async fn sso_saml_slo_redirect(
+    State(state): State<AppState>,
+    client: Client,
+    RawQuery(query): RawQuery,
+) -> ApiResult<Response> {
+    ratelimit::check_ip(&state, ratelimit::AUTH_IP, client.ip.as_deref()).await?;
+    let raw_query = query.ok_or_else(|| Error::bad_request("missing SAML message"))?;
+    let outcome = sso::saml_slo(
+        &state,
+        sso::SloInbound::Redirect {
+            raw_query: &raw_query,
+        },
+    )
+    .await?;
+    Ok(slo_done(&state, outcome))
+}
+
+/// SAML SingleLogoutService, HTTP-POST binding.
+pub async fn sso_saml_slo_post(
+    State(state): State<AppState>,
+    client: Client,
+    Form(form): Form<SamlSloForm>,
+) -> ApiResult<Response> {
+    ratelimit::check_ip(&state, ratelimit::AUTH_IP, client.ip.as_deref()).await?;
+    let message = form
+        .saml_request
+        .as_deref()
+        .or(form.saml_response.as_deref())
+        .filter(|m| !m.is_empty())
+        .ok_or_else(|| Error::bad_request("missing SAML message"))?;
+    let outcome = sso::saml_slo(
+        &state,
+        sso::SloInbound::Post {
+            message,
+            relay_state: form.relay_state.as_deref().filter(|r| !r.is_empty()),
+        },
+    )
+    .await?;
+    Ok(slo_done(&state, outcome))
+}
+
+fn slo_done(state: &AppState, outcome: sso::SloOutcome) -> Response {
+    match outcome {
+        sso::SloOutcome::Redirect(url) => Redirect::to(&url).into_response(),
+        sso::SloOutcome::Done => {
+            Html(SLO_DONE_HTML.replace("{name}", &html_escape(&state.cfg.server_name)))
+                .into_response()
+        }
+    }
+}
+
 #[utoipa::path(get, path = "/api/v1/auth/sso/flow/{flow_id}", tag = "auth",
     params(("flow_id" = String, Path)), responses((status = 200, body = SsoResult)))]
 pub async fn sso_poll(
@@ -1449,6 +1552,13 @@ const SSO_DONE_HTML: &str = r#"<!doctype html><html lang="en"><head><meta charse
 .card{background:#1A1E2B;border:1px solid #2D3345;border-radius:12px;padding:32px 40px;text-align:center;max-width:420px}
 h1{font-size:20px;margin:0 0 8px;color:#5FD0A4}p{margin:0;color:#8E93A8}</style></head>
 <body><div class="card"><h1>Signed in</h1><p>You can close this window and return to {name}.</p></div></body></html>"#;
+
+const SLO_DONE_HTML: &str = r#"<!doctype html><html lang="en"><head><meta charset="utf-8"><title>{name}</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#12151F;color:#E6E8F0;font-family:system-ui,sans-serif}
+.card{background:#1A1E2B;border:1px solid #2D3345;border-radius:12px;padding:32px 40px;text-align:center;max-width:420px}
+h1{font-size:20px;margin:0 0 8px;color:#5FD0A4}p{margin:0;color:#8E93A8}</style></head>
+<body><div class="card"><h1>Signed out</h1><p>Your {name} sessions from this identity provider have been ended. You can close this window.</p></div></body></html>"#;
 
 const USERS_INSERT_SQL: &str =
     "INSERT INTO users (id, email, email_verified, display_name, opaque_record, public_key,
