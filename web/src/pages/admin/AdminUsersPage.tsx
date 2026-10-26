@@ -4,6 +4,7 @@ import {
   Alert,
   Box,
   Button,
+  Autocomplete,
   Chip,
   Divider,
   Drawer,
@@ -30,7 +31,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { errorMessage } from "@/api/client";
 import { adminApi } from "@/api/endpoints";
 import { queryKeys } from "@/api/hooks";
-import type { AdminUpdateUserRequest, AdminUser } from "@/api/types";
+import type { AdminTeam, AdminUpdateUserRequest, AdminUser } from "@/api/types";
 import { useAuthState } from "@/auth/store";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EmptyState } from "@/components/EmptyState";
@@ -59,11 +60,16 @@ export function AdminUsersPage() {
   const [page, setPage] = useState(0);
   const [limit, setLimit] = useState(25);
   const [selected, setSelected] = useState<string | null>(null);
-  const [team, setTeam] = useState("");
+  const [teamPick, setTeamPick] = useState<AdminTeam | null>(null);
+  const team = teamPick?.id ?? "";
+  const [teamInput, setTeamInput] = useState("");
+  const teamQ = useDebounced(teamInput.trim());
   const [sort, setSort] = useState("created");
+  // Server-side search: instances with hundreds of teams never load them all.
   const teamList = useQuery({
-    queryKey: ["admin", "teams", "all"],
-    queryFn: () => adminApi.teams({ offset: 0, limit: 200 }),
+    queryKey: ["admin", "teams", "pick", teamQ],
+    queryFn: () => adminApi.teams({ q: teamQ || undefined, offset: 0, limit: 50 }),
+    placeholderData: (prev) => prev,
   });
   const offset = page * limit;
   const users = useQuery({
@@ -102,24 +108,26 @@ export function AdminUsersPage() {
         }
       />
       <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mb: 2 }}>
-        <TextField
-          select
+        <Autocomplete
           size="small"
-          label={tr("Team")}
-          value={team}
-          onChange={(e) => {
-            setTeam(e.target.value);
+          options={teamList.data?.items ?? []}
+          value={teamPick}
+          onChange={(_e, v) => {
+            setTeamPick(v);
             setPage(0);
           }}
-          sx={{ minWidth: 200 }}
-        >
-          <MenuItem value="">{tr("All teams")}</MenuItem>
-          {(teamList.data?.items ?? []).map((t) => (
-            <MenuItem key={t.id} value={t.id}>
-              {t.name}
-            </MenuItem>
-          ))}
-        </TextField>
+          inputValue={teamInput}
+          onInputChange={(_e, v) => setTeamInput(v)}
+          getOptionLabel={(t) => t.name}
+          isOptionEqualToValue={(a, b) => a.id === b.id}
+          filterOptions={(x) => x}
+          loading={teamList.isFetching}
+          noOptionsText={tr("No teams match")}
+          renderInput={(params) => (
+            <TextField {...params} label={tr("Team")} placeholder={tr("All teams")} />
+          )}
+          sx={{ minWidth: 240 }}
+        />
         <TextField
           select
           size="small"
