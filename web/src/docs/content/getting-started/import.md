@@ -23,7 +23,7 @@ Parsing only produces a **preview**: hosts, keys and settings are listed with wh
 ![Import preview](/docs/img/desktop-import-preview.png)
 
 - A `ProxyJump` becomes a **jump host** reference to the imported bastion, so chains keep working.
-- Hosts that are already in the vault (same address, port and user) are recognised, so importing the same file twice does not duplicate them; changed fields are updated.
+- Hosts that are already in the vault (same address, port and user) are recognised, so importing the same file twice does not duplicate them. What the existing host is missing — group, tags, notes, password, key, proxy, jump hosts — is filled in from the import; anything already set is kept. That lets you combine sources in either order, for example the Termius CSV for groups and passwords and `~/.ssh` for keys.
 - Private keys are read from disk only when you confirm, and go into the Keychain encrypted. A key with a passphrase is asked for it on first use, not during import.
 - Passwords found in the source never reach the interface; PuTTY and Termius do not export them anyway, MobaXterm and SecureCRT keep theirs encrypted and the import says so per session.
 

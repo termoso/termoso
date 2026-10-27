@@ -1672,6 +1672,8 @@ export interface ImportApplyReport {
   pfRules: number;
   hostChains: number;
   proxies: number;
+  /** Hosts already in the vault whose empty fields were filled in. */
+  updatedHosts: number;
   skippedHosts: number;
   skippedKeys: number;
   warnings: string[];

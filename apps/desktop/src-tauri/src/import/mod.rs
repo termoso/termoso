@@ -25,9 +25,9 @@ use crate::keychain;
 use crate::state::AppState;
 use crate::trust;
 pub use termoso_core::import::{
-    ImportPreview, ImportSource, ImportedKey, ImportedKnownHost, ImportedProxy, MAX_TEXT_FILE,
-    PfKind, csv, default_ssh_dir, display, expand_tilde, mobaxterm, putty, read_text, securecrt,
-    ssh_config, zoc,
+    ImportPreview, ImportSource, ImportedHost, ImportedKey, ImportedKnownHost, ImportedProxy,
+    MAX_TEXT_FILE, PfKind, csv, default_ssh_dir, display, expand_tilde, mobaxterm, putty,
+    read_text, securecrt, ssh_config, zoc,
 };
 
 const MAX_KEY_FILE: u64 = 64 * 1024;
@@ -89,6 +89,9 @@ pub struct ImportReport {
     pub pf_rules: usize,
     pub host_chains: usize,
     pub proxies: usize,
+    /// Hosts already present in the vault (same address+port+user) whose
+    /// empty fields were filled in from the import.
+    pub updated_hosts: usize,
     /// Hosts / keys already present in the vault (same address+port+user,
     /// same public key) that were left untouched.
     pub skipped_hosts: usize,
@@ -612,22 +615,40 @@ pub fn apply(
         let h = &preview.hosts[i];
         let port = h.port.unwrap_or_else(|| default_port(&h.protocol));
         let key = host_key(&h.address, port, &h.username);
-        if existing
+        if let Some(host_id) = existing
             .hosts
             .iter()
-            .any(|c| host_key(&c.address, c.port, &c.username) == key)
+            .find(|c| host_key(&c.address, c.port, &c.username) == key)
+            .map(|c| c.id)
         {
-            report.skipped_hosts += 1;
-            if !h.jump_hosts.is_empty() || h.proxy.is_some() {
-                // Still let tunnels / chains resolve to the existing host.
-                if let Some(c) = existing
-                    .hosts
-                    .iter()
-                    .find(|c| host_key(&c.address, c.port, &c.username) == key)
-                {
-                    imported.entry(h.label.clone()).or_insert(c.id);
+            match fill_existing(
+                store,
+                vault_id,
+                host_id,
+                h,
+                &key_by_path,
+                &mut existing,
+                &mut report,
+            ) {
+                Ok(Filled {
+                    changed,
+                    needs_chain,
+                }) => {
+                    if changed || needs_chain {
+                        report.updated_hosts += 1;
+                    } else {
+                        report.skipped_hosts += 1;
+                    }
+                    if needs_chain {
+                        pending_chains.push((host_id, h.jump_hosts.clone()));
+                    }
                 }
+                Err(e) => report
+                    .warnings
+                    .push(format!("Host {}: {}", h.label, e.message)),
             }
+            // Let tunnels / chains / forwarding rules resolve to the existing host.
+            imported.entry(h.label.clone()).or_insert(host_id);
             continue;
         }
         let group_id =
@@ -820,6 +841,75 @@ pub fn apply(
     }
 
     Ok(report)
+}
+
+struct Filled {
+    changed: bool,
+    /// The import has jump hosts and the existing host no chain yet.
+    needs_chain: bool,
+}
+
+/// Merge an imported entry into the host already in the vault: fill in what
+/// the host leaves empty (group, tags, notes, password, key, proxy) and never
+/// overwrite a value the user set. Credentials are only filled on an inline
+/// SSH login; a host that references a shared identity or SSH ID keeps it.
+fn fill_existing(
+    store: &Store,
+    vault_id: Uuid,
+    host_id: Uuid,
+    h: &ImportedHost,
+    key_by_path: &HashMap<String, Uuid>,
+    existing: &mut Existing,
+    report: &mut ImportReport,
+) -> Result<Filled> {
+    let mut form = hosts::form(store, host_id)?;
+    let mut changed = false;
+    if form.group_id.is_none() && !h.group_path.is_empty() {
+        form.group_id = ensure_group_path(store, vault_id, &h.group_path, existing, report)?;
+        changed |= form.group_id.is_some();
+    }
+    for id in ensure_tags(store, vault_id, &h.tags, existing, report)? {
+        if !form.tag_ids.contains(&id) {
+            form.tag_ids.push(id);
+            changed = true;
+        }
+    }
+    if form.notes.trim().is_empty() && !h.notes.trim().is_empty() {
+        form.notes = h.notes.clone();
+        changed = true;
+    }
+    let ssh = form.ssh && h.protocol != "telnet";
+    if ssh && form.identity_id.is_none() && !form.ssh_id {
+        if !form.has_password
+            && let Some(p) = h.password.as_deref().filter(|p| !p.is_empty())
+        {
+            form.password = Some(p.to_string());
+            changed = true;
+        }
+        if form.ssh_key_id.is_none()
+            && let Some(id) = h
+                .key_path
+                .as_deref()
+                .and_then(|p| resolve_key(p, key_by_path))
+        {
+            form.ssh_key_id = Some(id);
+            changed = true;
+        }
+    }
+    if ssh
+        && form.proxy_id.is_none()
+        && let Some(p) = &h.proxy
+    {
+        form.proxy_id = Some(ensure_proxy(store, vault_id, p, existing, report)?);
+        changed = true;
+    }
+    if changed {
+        hosts::save(store, &form)?;
+    }
+    Ok(Filled {
+        changed,
+        needs_chain: ssh && form.host_chain_id.is_none() && !h.jump_hosts.is_empty(),
+    })
 }
 
 /// Store the key file at `k.path`; returns `(id, freshly_inserted)`.
@@ -1352,5 +1442,71 @@ broken line
         .unwrap();
         assert_eq!((again.keys, again.skipped_keys), (0, 2));
         assert_eq!(store.list::<SshKey>(Some(vault)).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn reimport_fills_missing_fields_and_keeps_the_rest() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = AppState::in_memory(dir.path().join("profile"));
+        let store = &*state.store().unwrap();
+        let vault = store.local_vault().unwrap().id;
+        let every_host = |p: &ImportPreview| ImportSelection {
+            hosts: (0..p.hosts.len()).collect(),
+            ..ImportSelection::default()
+        };
+        const HEADER: &str = "Groups,Label,Tags,Hostname/IP,Protocol,Port,Username,Password\n";
+
+        // First source knows only address and user, like an ssh_config.
+        let mut bare = ImportPreview::new(ImportSource::SshConfig, "config");
+        bare.hosts.push(ImportedHost {
+            label: "web".into(),
+            address: "web.example.com".into(),
+            protocol: "ssh".into(),
+            username: "deploy".into(),
+            ..ImportedHost::default()
+        });
+        assert_eq!(
+            apply(&state, vault, &bare, &every_host(&bare))
+                .unwrap()
+                .hosts,
+            1
+        );
+
+        // Second source for the same host brings group, tag and password.
+        let csv = parse_csv_text(&format!(
+            "{HEADER}Prod/Web,web,nginx,web.example.com,ssh,,deploy,first-secret\n"
+        ))
+        .unwrap();
+        let report = apply(&state, vault, &csv, &every_host(&csv)).unwrap();
+        assert_eq!(
+            (report.hosts, report.updated_hosts, report.skipped_hosts),
+            (0, 1, 0)
+        );
+        let cards = hosts::cards(store, Some(vault)).unwrap();
+        assert_eq!(cards.len(), 1, "no duplicate host");
+        let id = cards[0].id;
+        assert_eq!(cards[0].group_path, ["Prod", "Web"]);
+        assert_eq!(cards[0].tags, ["nginx"]);
+        let password = || {
+            store
+                .resolve_host(id)
+                .unwrap()
+                .identity
+                .and_then(|i| i.data.password)
+        };
+        assert_eq!(password().as_deref(), Some("first-secret"));
+
+        // A third source with different values changes nothing already set.
+        let other = parse_csv_text(&format!(
+            "{HEADER}Staging,web,nginx,web.example.com,ssh,,deploy,second-secret\n"
+        ))
+        .unwrap();
+        let report = apply(&state, vault, &other, &every_host(&other)).unwrap();
+        assert_eq!((report.updated_hosts, report.skipped_hosts), (0, 1));
+        assert_eq!(
+            hosts::cards(store, Some(vault)).unwrap()[0].group_path,
+            ["Prod", "Web"]
+        );
+        assert_eq!(password().as_deref(), Some("first-secret"));
     }
 }
