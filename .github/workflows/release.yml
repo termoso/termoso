@@ -54,8 +54,11 @@ jobs:
   version:
     name: version consistency
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
       version: ${{ steps.v.outputs.version }}
+      release_id: ${{ steps.draft.outputs.id }}
     steps:
       - uses: actions/checkout@v7
       - id: v
@@ -71,6 +74,25 @@ jobs:
             [ "$GITHUB_REF_NAME" = "v$pkg" ] || { echo "::error::tag $GITHUB_REF_NAME does not match version $pkg"; exit 1; }
           fi
           echo "version=$pkg" >> "$GITHUB_OUTPUT"
+      # One draft per tag, created here before the platform matrix fans out.
+      # Letting every bundle job create it on demand raced on v0.11.1: two
+      # drafts appeared in the same second and the assets were split between them.
+      - name: Create the draft release
+        id: draft
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          id=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=50" \
+            --jq ".[] | select(.tag_name == \"$GITHUB_REF_NAME\") | .id" | head -1)
+          if [ -z "$id" ]; then
+            id=$(gh api --method POST "repos/$GITHUB_REPOSITORY/releases" \
+              -f tag_name="$GITHUB_REF_NAME" -f name="Termoso $GITHUB_REF_NAME" \
+              -F draft=true -F prerelease=${{ contains(github.ref_name, '-') }} \
+              -f body="Signed desktop builds of Termoso ${{ steps.v.outputs.version }}." --jq .id)
+          fi
+          echo "draft release id=$id"
+          echo "id=$id" >> "$GITHUB_OUTPUT"
 
   bundle:
     name: ${{ matrix.name }}
@@ -189,6 +211,7 @@ jobs:
           projectPath: apps/desktop
           args: --bundles ${{ matrix.bundles }} ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
           # Only publish from a tag; a manual run just produces artifacts below.
+          releaseId: ${{ github.ref_type == 'tag' && needs.version.outputs.release_id || '' }}
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
           releaseName: ${{ github.ref_type == 'tag' && format('Termoso {0}', github.ref_name) || '' }}
           releaseDraft: true
@@ -386,7 +409,8 @@ jobs:
       - name: Locate the draft release
         id: rel
         run: |
-          id=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=50" \
+          id="${{ needs.version.outputs.release_id }}"
+          [ -n "$id" ] || id=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=50" \
             --jq ".[] | select(.tag_name == \"$GITHUB_REF_NAME\") | .id" | head -1)
           [ -n "$id" ] || { echo "::error::no release for $GITHUB_REF_NAME"; exit 1; }
           echo "id=$id" >> "$GITHUB_OUTPUT"
