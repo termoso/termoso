@@ -526,3 +526,23 @@ schema! {
         pub audit_retention_days_max: u32,
     }
 }
+
+schema! {
+    /// `GET /admin/teams/{id}/members`
+    pub struct AdminTeamMemberList {
+        /// One page of members.
+        pub members: Vec<AdminTeamMember>,
+        /// Members matching the filter.
+        pub total: i64,
+    }
+}
+
+schema! {
+    /// `GET /admin/teams/{id}/audit`
+    pub struct AdminTeamAuditList {
+        /// One page of events (same shape as the team audit log).
+        pub events: serde_json::Value,
+        /// Events in the team.
+        pub total: i64,
+    }
+}

@@ -26,6 +26,7 @@ import { logsApi, teamsApi, vaultsApi } from "@/api/endpoints";
 import { queryKeys } from "@/api/hooks";
 import type { LogMeta, SessionLog, Team, Vault } from "@/api/types";
 import { useAuthState } from "@/auth/store";
+import { useServerPager } from "@/components/Pager";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EmptyState } from "@/components/EmptyState";
 import { Loading } from "@/components/Loading";
@@ -58,10 +59,13 @@ export function RecordingsTab({ team }: { team: Team }) {
     }),
     [vaultId, from, to],
   );
+  const pg = useServerPager([filters]);
   const logs = useQuery({
-    queryKey: queryKeys.teamLogs(team.id, filters),
-    queryFn: () => teamsApi.logs(team.id, filters),
+    queryKey: queryKeys.teamLogs(team.id, { ...filters, ...pg.window }),
+    queryFn: () => teamsApi.logs(team.id, { ...filters, ...pg.window }),
+    placeholderData: (prev) => prev,
   });
+  const total = logs.data?.total ?? 0;
   const vaults = useQuery({ queryKey: queryKeys.vaults, queryFn: vaultsApi.list });
   const policies = useQuery({
     queryKey: queryKeys.teamPolicies(team.id),
@@ -211,7 +215,7 @@ export function RecordingsTab({ team }: { team: Team }) {
             color="text.secondary"
             sx={{ alignSelf: "center", ml: { sm: "auto" } }}
           >
-            {tr("{v1} recordings · {v2}", { v1: list.length, v2: formatBytes(totalBytes) })}
+            {tr("{v1} recordings · {v2} on this page", { v1: total, v2: formatBytes(totalBytes) })}
           </Typography>
         </Stack>
         {list.length === 0 ? (
@@ -220,94 +224,97 @@ export function RecordingsTab({ team }: { team: Team }) {
             title={tr("No recordings")}
           />
         ) : (
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>{tr("Member")}</TableCell>
-                  <TableCell>{tr("Session")}</TableCell>
-                  <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>
-                    {tr("Vault")}
-                  </TableCell>
-                  <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }} align="right">
-                    {tr("Size")}
-                  </TableCell>
-                  <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>
-                    {tr("Recorded")}
-                  </TableCell>
-                  {canDelete && <TableCell align="right" />}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {list.map((l) => {
-                  const meta = metas[l.id];
-                  return (
-                    <TableRow key={l.id} hover>
-                      <TableCell sx={{ minWidth: 180 }}>
-                        <UserCell
-                          userId={l.user_id}
-                          email={l.author?.email ?? tr("Former member")}
-                          displayName={l.author?.display_name}
-                          avatar={l.author?.avatar_tag}
-                          you={l.user_id === me}
-                        />
-                      </TableCell>
-                      <TableCell sx={{ minWidth: 200 }}>
-                        <Stack direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
-                          {l.pinned && (
-                            <Tooltip title={tr("Pinned")}>
-                              <PushPinRoundedIcon color="primary" sx={{ fontSize: 16 }} />
-                            </Tooltip>
-                          )}
-                          <Typography variant="body2" noWrap sx={{ fontWeight: 500 }}>
-                            {meta ? meta.label : tr("Encrypted recording")}
-                          </Typography>
-                          {!l.completed && (
-                            <Chip size="small" variant="outlined" label={tr("Uploading")} />
-                          )}
-                        </Stack>
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          noWrap
-                          sx={{ display: "block" }}
-                        >
-                          {meta
-                            ? `${meta.protocol} · ${meta.target} · ${durationOf(meta)}`
-                            : keys[l.vault_id] === undefined &&
-                                vaultById.get(l.vault_id)?.sealed_key
-                              ? tr("Decrypting…")
-                              : tr("No key for this vault in this browser")}
-                        </Typography>
-                      </TableCell>
-                      <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>
-                        {vaultById.get(l.vault_id)?.name ?? "—"}
-                      </TableCell>
-                      <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }} align="right">
-                        {formatBytes(l.size_bytes)}
-                      </TableCell>
-                      <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>
-                        {formatDateTime(l.created_at)}
-                      </TableCell>
-                      {canDelete && (
-                        <TableCell align="right">
-                          <Tooltip title={tr("Delete recording")}>
-                            <IconButton
-                              size="small"
-                              onClick={() => setDeleting(l)}
-                              aria-label={tr("Delete recording")}
-                            >
-                              <DeleteOutlineRoundedIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
+          <>
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>{tr("Member")}</TableCell>
+                    <TableCell>{tr("Session")}</TableCell>
+                    <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>
+                      {tr("Vault")}
+                    </TableCell>
+                    <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }} align="right">
+                      {tr("Size")}
+                    </TableCell>
+                    <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>
+                      {tr("Recorded")}
+                    </TableCell>
+                    {canDelete && <TableCell align="right" />}
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {list.map((l) => {
+                    const meta = metas[l.id];
+                    return (
+                      <TableRow key={l.id} hover>
+                        <TableCell sx={{ minWidth: 180 }}>
+                          <UserCell
+                            userId={l.user_id}
+                            email={l.author?.email ?? tr("Former member")}
+                            displayName={l.author?.display_name}
+                            avatar={l.author?.avatar_tag}
+                            you={l.user_id === me}
+                          />
                         </TableCell>
-                      )}
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                        <TableCell sx={{ minWidth: 200 }}>
+                          <Stack direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
+                            {l.pinned && (
+                              <Tooltip title={tr("Pinned")}>
+                                <PushPinRoundedIcon color="primary" sx={{ fontSize: 16 }} />
+                              </Tooltip>
+                            )}
+                            <Typography variant="body2" noWrap sx={{ fontWeight: 500 }}>
+                              {meta ? meta.label : tr("Encrypted recording")}
+                            </Typography>
+                            {!l.completed && (
+                              <Chip size="small" variant="outlined" label={tr("Uploading")} />
+                            )}
+                          </Stack>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            noWrap
+                            sx={{ display: "block" }}
+                          >
+                            {meta
+                              ? `${meta.protocol} · ${meta.target} · ${durationOf(meta)}`
+                              : keys[l.vault_id] === undefined &&
+                                  vaultById.get(l.vault_id)?.sealed_key
+                                ? tr("Decrypting…")
+                                : tr("No key for this vault in this browser")}
+                          </Typography>
+                        </TableCell>
+                        <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>
+                          {vaultById.get(l.vault_id)?.name ?? "—"}
+                        </TableCell>
+                        <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }} align="right">
+                          {formatBytes(l.size_bytes)}
+                        </TableCell>
+                        <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>
+                          {formatDateTime(l.created_at)}
+                        </TableCell>
+                        {canDelete && (
+                          <TableCell align="right">
+                            <Tooltip title={tr("Delete recording")}>
+                              <IconButton
+                                size="small"
+                                onClick={() => setDeleting(l)}
+                                aria-label={tr("Delete recording")}
+                              >
+                                <DeleteOutlineRoundedIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+            {pg.pager(total)}
+          </>
         )}
       </Section>
       <ConfirmDialog

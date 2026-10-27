@@ -2,7 +2,9 @@
 //! stores each member's *sealed* copy of the vault key and never the key itself.
 
 use axum::Json;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
+
+use super::paging::PageQuery;
 use chrono::{DateTime, Utc};
 use sqlx::PgExecutor;
 use termoso_crypto::encoding::unb64;
@@ -447,14 +449,16 @@ pub async fn delete(
 
 // ───────────────────────────── members ─────────────────────────────
 
-#[utoipa::path(get, path = "/api/v1/vaults/{id}/members", tag = "vaults", params(("id" = Uuid, Path)),
+#[utoipa::path(get, path = "/api/v1/vaults/{id}/members", tag = "vaults", params(("id" = Uuid, Path), PageQuery),
     responses((status = 200, body = VaultMemberList)))]
 pub async fn members(
     State(state): State<AppState>,
     auth: Auth,
     Path(id): Path<Uuid>,
+    Query(pq): Query<PageQuery>,
 ) -> ApiResult<Json<VaultMemberList>> {
     access(&state.db, id, auth.user_id()).await?;
+    let (offset, limit) = pq.window(10_000);
     type Row = (
         Uuid,
         String,
@@ -468,12 +472,24 @@ pub async fn members(
     );
     let rows: Vec<Row> = sqlx::query_as(
         "SELECT u.id, u.email, u.display_name, u.avatar_tag, vm.role, vm.key_version, vm.sealed_key IS NULL, u.public_key, vm.added_at
-         FROM vault_members vm JOIN users u ON u.id = vm.user_id WHERE vm.vault_id = $1 ORDER BY vm.added_at",
+         FROM vault_members vm JOIN users u ON u.id = vm.user_id WHERE vm.vault_id = $1
+         ORDER BY vm.added_at LIMIT $2 OFFSET $3",
     )
     .bind(id)
+    .bind(limit)
+    .bind(offset)
     .fetch_all(&state.db)
     .await?;
+    let total = pq
+        .total(
+            rows.len(),
+            &state.db,
+            "SELECT count(*) FROM vault_members WHERE vault_id = $1",
+            id,
+        )
+        .await?;
     Ok(Json(VaultMemberList {
+        total,
         members: rows
             .into_iter()
             .map(

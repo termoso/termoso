@@ -147,8 +147,11 @@ schema! {
 schema! {
     /// `GET /vaults/{id}/members`
     pub struct VaultMemberList {
-        /// Members.
+        /// Members (one page when `limit` was given).
         pub members: Vec<VaultMember>,
+        /// Members of the vault.
+        #[serde(default)]
+        pub total: i64,
     }
 }
 

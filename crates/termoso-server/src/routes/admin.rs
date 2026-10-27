@@ -2,6 +2,8 @@
 
 use axum::Json;
 use axum::extract::{Path, Query, State};
+
+use super::paging::PageQuery;
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use sqlx::AssertSqlSafe;
@@ -504,6 +506,130 @@ pub async fn team_detail(
         policies,
         audit,
     }))
+}
+
+#[derive(Deserialize, utoipa::IntoParams)]
+pub struct TeamMembersQuery {
+    /// Substring match on e-mail / display name.
+    pub q: Option<String>,
+    /// Rows to skip.
+    #[serde(default)]
+    pub offset: i64,
+    /// Rows per page; omit for the whole list.
+    pub limit: Option<i64>,
+}
+
+async fn team_exists(state: &AppState, id: Uuid) -> ApiResult<()> {
+    let (ok,): (bool,) = sqlx::query_as("SELECT EXISTS (SELECT 1 FROM teams WHERE id = $1)")
+        .bind(id)
+        .fetch_one(&state.db)
+        .await?;
+    if ok {
+        Ok(())
+    } else {
+        Err(Error::not_found("Team"))
+    }
+}
+
+/// One page of a team's members, owner and admins first.
+#[utoipa::path(get, path = "/api/v1/admin/teams/{id}/members", tag = "admin",
+    params(("id" = Uuid, Path), TeamMembersQuery), responses((status = 200, body = AdminTeamMemberList)))]
+pub async fn team_members(
+    State(state): State<AppState>,
+    _admin: Admin,
+    Path(id): Path<Uuid>,
+    Query(q): Query<TeamMembersQuery>,
+) -> ApiResult<Json<AdminTeamMemberList>> {
+    team_exists(&state, id).await?;
+    let needle = q.q.as_deref().map(str::trim).filter(|s| !s.is_empty());
+    let pq = PageQuery::new(q.offset, q.limit);
+    let (offset, limit) = pq.window(10_000);
+    const WHERE: &str = "WHERE m.team_id = $1
+           AND ($2::text IS NULL OR u.email ILIKE '%' || $2 || '%' OR u.display_name ILIKE '%' || $2 || '%')";
+    let rows: Vec<(
+        Uuid,
+        String,
+        String,
+        String,
+        String,
+        DateTime<Utc>,
+        Option<DateTime<Utc>>,
+    )> = sqlx::query_as(AssertSqlSafe(format!(
+        "SELECT m.user_id, u.email, m.role, r.slug, m.role_source, m.joined_at, u.last_seen_at
+         FROM team_members m JOIN users u ON u.id = m.user_id JOIN team_roles r ON r.id = m.role_id
+         {WHERE} ORDER BY m.role = 'owner' DESC, m.role = 'admin' DESC, u.email LIMIT $3 OFFSET $4"
+    )))
+    .bind(id)
+    .bind(needle)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(&state.db)
+    .await?;
+    let total = if pq.limit.is_some() {
+        let (n,): (i64,) = sqlx::query_as(AssertSqlSafe(format!(
+            "SELECT count(*) FROM team_members m JOIN users u ON u.id = m.user_id {WHERE}"
+        )))
+        .bind(id)
+        .bind(needle)
+        .fetch_one(&state.db)
+        .await?;
+        n
+    } else {
+        offset + rows.len() as i64
+    };
+    Ok(Json(AdminTeamMemberList {
+        members: rows
+            .into_iter()
+            .map(
+                |(user_id, email, level, role, role_source, joined_at, last_seen_at)| {
+                    AdminTeamMember {
+                        user_id,
+                        email,
+                        level,
+                        role,
+                        role_source,
+                        joined_at,
+                        last_seen_at,
+                    }
+                },
+            )
+            .collect(),
+        total,
+    }))
+}
+
+/// One page of a team's audit log, newest first.
+#[utoipa::path(get, path = "/api/v1/admin/teams/{id}/audit", tag = "admin",
+    params(("id" = Uuid, Path), PageQuery), responses((status = 200, body = AdminTeamAuditList)))]
+pub async fn team_audit(
+    State(state): State<AppState>,
+    _admin: Admin,
+    Path(id): Path<Uuid>,
+    Query(pq): Query<PageQuery>,
+) -> ApiResult<Json<AdminTeamAuditList>> {
+    team_exists(&state, id).await?;
+    let (offset, limit) = pq.window(200);
+    let (events,): (serde_json::Value,) = sqlx::query_as(
+        "SELECT COALESCE(json_agg(row_to_json(x)), '[]'::json) FROM (
+            SELECT e.id, e.action, e.actor_id, u.email AS actor_email, e.device_id, e.vault_id, e.target_user, e.details, e.created_at
+            FROM team_audit_events e LEFT JOIN users u ON u.id = e.actor_id
+            WHERE e.team_id = $1 ORDER BY e.created_at DESC LIMIT $2 OFFSET $3) x",
+    )
+    .bind(id)
+    .bind(limit)
+    .bind(offset)
+    .fetch_one(&state.db)
+    .await?;
+    let got = events.as_array().map_or(0, Vec::len);
+    let total = pq
+        .total(
+            got,
+            &state.db,
+            "SELECT count(*) FROM team_audit_events WHERE team_id = $1",
+            id,
+        )
+        .await?;
+    Ok(Json(AdminTeamAuditList { events, total }))
 }
 
 /// Add an existing account to a team (default role unless `role` is given).

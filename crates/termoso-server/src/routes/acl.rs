@@ -7,7 +7,9 @@ use crate::error::{ApiResult, Error};
 use crate::extract::{Auth, Json as Body};
 use crate::state::AppState;
 use axum::Json;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
+
+use super::paging::PageQuery;
 use termoso_proto::team::{
     EntityAclResponse, EntityAclRule, MyAclResponse, MyAclRule, UpsertEntityAclRequest,
 };
@@ -82,27 +84,46 @@ async fn team_vault(state: &AppState, team_id: Uuid, vault_id: Uuid) -> ApiResul
     }
 }
 
-async fn list_rules(state: &AppState, vault_id: Uuid) -> ApiResult<Json<EntityAclResponse>> {
-    let rows: Vec<Row> = sqlx::query_as(SELECT_BY_VAULT)
-        .bind(vault_id)
-        .fetch_all(&state.db)
+async fn list_rules(
+    state: &AppState,
+    vault_id: Uuid,
+    pq: &PageQuery,
+) -> ApiResult<Json<EntityAclResponse>> {
+    let (offset, limit) = pq.window(10_000);
+    let rows: Vec<Row> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "{SELECT_BY_VAULT} LIMIT $2 OFFSET $3"
+    )))
+    .bind(vault_id)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(&state.db)
+    .await?;
+    let total = pq
+        .total(
+            rows.len(),
+            &state.db,
+            "SELECT count(*) FROM entity_acl WHERE vault_id = $1",
+            vault_id,
+        )
         .await?;
     Ok(Json(EntityAclResponse {
         rules: rows.into_iter().map(to_rule).collect(),
+        total,
     }))
 }
 
 #[utoipa::path(get, path = "/api/v1/teams/{id}/vaults/{vault_id}/acl", tag = "teams",
-    params(("id" = Uuid, Path), ("vault_id" = Uuid, Path)),
+    params(("id" = Uuid, Path), ("vault_id" = Uuid, Path), PageQuery),
     responses((status = 200, body = EntityAclResponse)))]
 pub async fn list(
     State(state): State<AppState>,
     auth: Auth,
     Path((id, vault_id)): Path<(Uuid, Uuid)>,
+    Query(pq): Query<PageQuery>,
 ) -> ApiResult<Json<EntityAclResponse>> {
     crate::authz::require(&state, id, auth.user_id(), "acl.manage").await?;
     team_vault(&state, id, vault_id).await?;
-    list_rules(&state, vault_id).await
+    list_rules(&state, vault_id, &pq).await
 }
 
 #[utoipa::path(put, path = "/api/v1/teams/{id}/vaults/{vault_id}/acl", tag = "teams",
@@ -216,7 +237,7 @@ pub async fn upsert(
             })),
     )
     .await;
-    list_rules(&state, vault_id).await
+    list_rules(&state, vault_id, &PageQuery::default()).await
 }
 
 #[utoipa::path(delete, path = "/api/v1/teams/{id}/vaults/{vault_id}/acl/{rule_id}", tag = "teams",
@@ -246,7 +267,7 @@ pub async fn delete(
             .details(serde_json::json!({ "rule_id": rule_id })),
     )
     .await;
-    list_rules(&state, vault_id).await
+    list_rules(&state, vault_id, &PageQuery::default()).await
 }
 
 /// Rules that apply to the caller across all team vaults.

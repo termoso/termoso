@@ -132,5 +132,8 @@ schema! {
         pub since: i64,
         /// More available.
         pub has_more: bool,
+        /// Logs matching the filter (team listing only; 0 elsewhere).
+        #[serde(default)]
+        pub total: i64,
     }
 }

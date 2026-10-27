@@ -1,7 +1,9 @@
 //! Teams: membership, roles, invitations and pending vault-key requests.
 
 use axum::Json;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
+
+use super::paging::PageQuery;
 use chrono::{DateTime, Utc};
 use sqlx::{PgExecutor, Postgres, Transaction};
 use termoso_proto::team::*;
@@ -410,14 +412,16 @@ pub async fn delete(
 
 // ───────────────────────────── members ─────────────────────────────
 
-#[utoipa::path(get, path = "/api/v1/teams/{id}/members", tag = "teams", params(("id" = Uuid, Path)),
+#[utoipa::path(get, path = "/api/v1/teams/{id}/members", tag = "teams", params(("id" = Uuid, Path), PageQuery),
     responses((status = 200, body = TeamMemberList)))]
 pub async fn members(
     State(state): State<AppState>,
     auth: Auth,
     Path(id): Path<Uuid>,
+    Query(pq): Query<PageQuery>,
 ) -> ApiResult<Json<TeamMemberList>> {
     let me = crate::authz::membership(&state.db, id, auth.user_id()).await?;
+    let (offset, limit) = pq.window(10_000);
     // Whether a member has a second factor is visible to roles holding
     // `members.view_mfa` (they enforce `require_mfa`) and to the member
     // themself; other members do not learn each other's security posture.
@@ -445,12 +449,23 @@ pub async fn members(
                 u.managed_by_team_id IS NOT DISTINCT FROM m.team_id
          FROM team_members m JOIN users u ON u.id = m.user_id
          JOIN team_roles r ON r.id = m.role_id
-         WHERE m.team_id = $1 ORDER BY m.joined_at",
+         WHERE m.team_id = $1 ORDER BY m.joined_at LIMIT $2 OFFSET $3",
     )
     .bind(id)
+    .bind(limit)
+    .bind(offset)
     .fetch_all(&state.db)
     .await?;
+    let total = pq
+        .total(
+            rows.len(),
+            &state.db,
+            "SELECT count(*) FROM team_members WHERE team_id = $1",
+            id,
+        )
+        .await?;
     Ok(Json(TeamMemberList {
+        total,
         members: rows
             .into_iter()
             .map(
@@ -829,23 +844,37 @@ pub async fn get_presence(
 
 // ───────────────────────────── invites ─────────────────────────────
 
-#[utoipa::path(get, path = "/api/v1/teams/{id}/invites", tag = "teams", params(("id" = Uuid, Path)),
+#[utoipa::path(get, path = "/api/v1/teams/{id}/invites", tag = "teams", params(("id" = Uuid, Path), PageQuery),
     responses((status = 200, body = InviteList)))]
 pub async fn invites(
     State(state): State<AppState>,
     auth: Auth,
     Path(id): Path<Uuid>,
+    Query(pq): Query<PageQuery>,
 ) -> ApiResult<Json<InviteList>> {
     crate::authz::require(&state, id, auth.user_id(), "members.invite").await?;
+    let (offset, limit) = pq.window(10_000);
     let rows: Vec<(Uuid, String, String, Uuid, DateTime<Utc>, DateTime<Utc>, Option<Uuid>, Option<String>, Option<String>)> = sqlx::query_as(
         "SELECT i.id, i.email, i.role, i.invited_by, i.created_at, i.expires_at, r.id, r.slug, r.name
          FROM team_invites i LEFT JOIN team_roles r ON r.id = i.role_id
-         WHERE i.team_id = $1 AND i.accepted_at IS NULL AND i.expires_at > now() ORDER BY i.created_at",
+         WHERE i.team_id = $1 AND i.accepted_at IS NULL AND i.expires_at > now()
+         ORDER BY i.created_at LIMIT $2 OFFSET $3",
     )
     .bind(id)
+    .bind(limit)
+    .bind(offset)
     .fetch_all(&state.db)
     .await?;
+    let total = pq
+        .total(
+            rows.len(),
+            &state.db,
+            "SELECT count(*) FROM team_invites WHERE team_id = $1 AND accepted_at IS NULL AND expires_at > now()",
+            id,
+        )
+        .await?;
     Ok(Json(InviteList {
+        total,
         invites: rows
             .into_iter()
             .map(
@@ -1193,29 +1222,46 @@ pub async fn accept_invite(
 
 /// Members of team vaults who still need the vault key sealed to their public
 /// key. Only vault managers (or team admins) get to see them.
-#[utoipa::path(get, path = "/api/v1/teams/{id}/pending-keys", tag = "teams", params(("id" = Uuid, Path)),
+#[utoipa::path(get, path = "/api/v1/teams/{id}/pending-keys", tag = "teams", params(("id" = Uuid, Path), PageQuery),
     responses((status = 200, body = PendingVaultKeys)))]
 pub async fn pending_keys(
     State(state): State<AppState>,
     auth: Auth,
     Path(id): Path<Uuid>,
+    Query(pq): Query<PageQuery>,
 ) -> ApiResult<Json<PendingVaultKeys>> {
     let me = crate::authz::membership(&state.db, id, auth.user_id()).await?;
-    let rows: Vec<(Uuid, Uuid, String, String)> = sqlx::query_as(
-        "SELECT vm.vault_id, vm.user_id, u.public_key, vm.role
-         FROM vault_members vm
+    let (offset, limit) = pq.window(10_000);
+    const FROM: &str = "FROM vault_members vm
          JOIN vaults v ON v.id = vm.vault_id
          JOIN users u ON u.id = vm.user_id
          WHERE v.team_id = $1 AND v.deleted_at IS NULL AND vm.sealed_key IS NULL
            AND ($3 OR EXISTS (SELECT 1 FROM vault_members me WHERE me.vault_id = v.id AND me.user_id = $2
-                              AND me.role = 'manager' AND me.sealed_key IS NOT NULL))",
-    )
+                              AND me.role = 'manager' AND me.sealed_key IS NOT NULL))";
+    let rows: Vec<(Uuid, Uuid, String, String)> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
+        "SELECT vm.vault_id, vm.user_id, u.public_key, vm.role {FROM}
+         ORDER BY vm.vault_id, vm.user_id LIMIT $4 OFFSET $5"
+    )))
     .bind(id)
     .bind(auth.user_id())
     .bind(me.has("vaults.members"))
+    .bind(limit)
+    .bind(offset)
     .fetch_all(&state.db)
     .await?;
+    let total = if pq.limit.is_some() {
+        let (n,): (i64,) = sqlx::query_as(sqlx::AssertSqlSafe(format!("SELECT count(*) {FROM}")))
+            .bind(id)
+            .bind(auth.user_id())
+            .bind(me.has("vaults.members"))
+            .fetch_one(&state.db)
+            .await?;
+        n
+    } else {
+        offset + rows.len() as i64
+    };
     Ok(Json(PendingVaultKeys {
+        total,
         items: rows
             .into_iter()
             .map(|(vault_id, user_id, public_key, role)| PendingVaultKey {

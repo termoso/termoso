@@ -31,14 +31,19 @@ export const IOS_SIDELOAD = `${REPO}/blob/main/docs/IOS_SIDELOAD.md`;
 
 export const HEADER = 60;
 
-/** Button that points into the cabinet; on a landing-only host it links to the cabinet origin. */
+const origin = (u: string) => u.replace(/\/+$/, "");
+
+/** Button that points into the cabinet; on a landing-only or dedicated docs
+ *  host it links to the cabinet origin (the SPA there has no session, and a
+ *  client-side `/login` would render on the wrong origin). */
 export function CabinetButton({
   to,
   ...props
 }: Pick<ButtonProps, "variant" | "size" | "sx" | "endIcon" | "children"> & { to: string }) {
   const info = useServerInfo().data;
-  if (info?.landing_only && info.web_url) {
-    return <Button {...props} href={`${info.web_url.replace(/\/+$/, "")}${to}`} />;
+  const docsHost = !!info?.docs_url && origin(info.docs_url) === window.location.origin;
+  if (info?.web_url && (info.landing_only || docsHost)) {
+    return <Button {...props} href={`${origin(info.web_url)}${to}`} />;
   }
   return <Button {...props} component={RouterLink} to={to} />;
 }

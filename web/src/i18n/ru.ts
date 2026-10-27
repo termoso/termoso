@@ -287,6 +287,7 @@ export const ru: Readonly<Record<string, string>> = {
   "No security keys": "Ключей безопасности нет",
   "No team vaults yet": "Хранилищ команды пока нет",
   "No teams match": "Команд не найдено",
+  "Start typing a team name": "Начните вводить название команды",
   "No users match": "Пользователей не найдено",
   "No vaults": "Хранилищ нет",
   "No webhooks": "Вебхуков нет",
@@ -755,6 +756,7 @@ export const ru: Readonly<Record<string, string>> = {
   From: "С",
   To: "По",
   "{v1} recordings · {v2}": "Записей: {v1} · {v2}",
+  "{v1} recordings · {v2} on this page": "Записей: {v1} · {v2} на этой странице",
   "No recordings": "Записей нет",
   Recorded: "Записано",
   "Team policy requires recording: every session in a team vault is recorded and members cannot turn it off.":

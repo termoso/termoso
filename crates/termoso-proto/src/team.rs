@@ -140,8 +140,11 @@ schema! {
 schema! {
     /// `GET /teams/{id}/members`
     pub struct TeamMemberList {
-        /// Members.
+        /// Members (one page when `limit` was given).
         pub members: Vec<TeamMember>,
+        /// Members in the team.
+        #[serde(default)]
+        pub total: i64,
     }
 }
 
@@ -261,8 +264,11 @@ schema! {
 schema! {
     /// `GET /teams/{id}/invites`
     pub struct InviteList {
-        /// Invites.
+        /// Invites (one page when `limit` was given).
         pub invites: Vec<Invite>,
+        /// Open invites in the team.
+        #[serde(default)]
+        pub total: i64,
     }
 }
 
@@ -285,8 +291,11 @@ schema! {
 schema! {
     /// Members whose vault keys still need to be sealed (`GET /teams/{id}/pending-keys`).
     pub struct PendingVaultKeys {
-        /// Items.
+        /// Items (one page when `limit` was given).
         pub items: Vec<PendingVaultKey>,
+        /// Pending keys the caller may grant.
+        #[serde(default)]
+        pub total: i64,
     }
 }
 
@@ -904,8 +913,11 @@ schema! {
     pub struct TeamDeviceList {
         /// Whether the policy currently requires admin approval.
         pub admin_approval: bool,
-        /// Devices, pending first.
+        /// Devices, pending first (one page when `limit` was given).
         pub devices: Vec<TeamDevice>,
+        /// Devices matching the filter.
+        #[serde(default)]
+        pub total: i64,
     }
 }
 
@@ -970,8 +982,11 @@ schema! {
         pub password_max_age_days: i32,
         /// Secrets past their max age.
         pub due: Vec<RotationDue>,
-        /// Jobs, newest first.
+        /// Jobs, newest first (one page when `limit` was given).
         pub jobs: Vec<RotationJob>,
+        /// Jobs in the team.
+        #[serde(default)]
+        pub jobs_total: i64,
     }
 }
 
@@ -1037,8 +1052,11 @@ schema! {
     pub struct AccessRequestList {
         /// Whether the caller may approve/deny/revoke.
         pub can_approve: bool,
-        /// Requests, pending first.
+        /// Requests, pending first (one page when `limit` was given).
         pub requests: Vec<AccessRequest>,
+        /// Requests matching the filter.
+        #[serde(default)]
+        pub total: i64,
     }
 }
 
@@ -1346,8 +1364,11 @@ schema! {
 schema! {
     /// `GET /teams/{id}/scim/groups`
     pub struct ScimGroupList {
-        /// Groups.
+        /// Groups (one page when `limit` was given).
         pub groups: Vec<ScimGroupInfo>,
+        /// Groups in the team.
+        #[serde(default)]
+        pub total: i64,
     }
 }
 
@@ -1508,8 +1529,11 @@ schema! {
 schema! {
     /// Rules of one team vault.
     pub struct EntityAclResponse {
-        /// All rules, most recent last.
+        /// Rules, most recent last (one page when `limit` was given).
         pub rules: Vec<EntityAclRule>,
+        /// Rules in the vault.
+        #[serde(default)]
+        pub total: i64,
     }
 }
 

@@ -29,6 +29,7 @@ import { errorMessage } from "@/api/client";
 import { adminApi } from "@/api/endpoints";
 import { queryKeys } from "@/api/hooks";
 import type { AdminTeamMember, AdminUser } from "@/api/types";
+import { useServerPager } from "@/components/Pager";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Loading } from "@/components/Loading";
 import { PageHeader } from "@/components/PageHeader";
@@ -41,6 +42,18 @@ export function AdminTeamPage() {
   const qc = useQueryClient();
   const snack = useSnackbar();
   const q = useQuery({ queryKey: queryKeys.adminTeam(id), queryFn: () => adminApi.teamDetail(id) });
+  const mp = useServerPager();
+  const am = useQuery({
+    queryKey: [...queryKeys.adminTeam(id), "members", mp.offset, mp.limit],
+    queryFn: () => adminApi.teamMembers(id, mp.window),
+    placeholderData: (prev) => prev,
+  });
+  const ap = useServerPager();
+  const au = useQuery({
+    queryKey: [...queryKeys.adminTeam(id), "audit", ap.offset, ap.limit],
+    queryFn: () => adminApi.teamAudit(id, ap.window),
+    placeholderData: (prev) => prev,
+  });
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<AdminTeamMember | null>(null);
   const refresh = () => qc.invalidateQueries({ queryKey: queryKeys.adminTeam(id) });
@@ -55,7 +68,9 @@ export function AdminTeamPage() {
   });
   if (q.isPending) return <Loading />;
   if (q.isError) return <Alert severity="error">{errorMessage(q.error)}</Alert>;
-  const { team, members, policies, audit } = q.data;
+  const { team, policies } = q.data;
+  const members = am.data?.members ?? [];
+  const audit = au.data?.events ?? [];
   const yes = (v: boolean | undefined) => (v ? tr("Yes") : tr("No"));
   return (
     <>
@@ -123,52 +138,55 @@ export function AdminTeamPage() {
             </Button>
           }
         >
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>{tr("E-mail")}</TableCell>
-                  <TableCell>{tr("Role")}</TableCell>
-                  <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>
-                    {tr("Source")}
-                  </TableCell>
-                  <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>
-                    {tr("Last seen")}
-                  </TableCell>
-                  <TableCell align="right" />
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {members.map((m) => (
-                  <TableRow key={m.user_id} hover>
-                    <TableCell>{m.email}</TableCell>
-                    <TableCell>
-                      <Chip size="small" variant="outlined" label={tr(m.role)} />
-                    </TableCell>
+          <>
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>{tr("E-mail")}</TableCell>
+                    <TableCell>{tr("Role")}</TableCell>
                     <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>
-                      {m.role_source}
+                      {tr("Source")}
                     </TableCell>
                     <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>
-                      {m.last_seen_at ? formatRelative(m.last_seen_at) : "—"}
+                      {tr("Last seen")}
                     </TableCell>
-                    <TableCell align="right">
-                      {m.level !== "owner" && (
-                        <Tooltip title={tr("Remove from team")}>
-                          <IconButton
-                            size="small"
-                            aria-label={tr("Remove from team")}
-                            onClick={() => setRemoving(m)}
-                          >
-                            <PersonRemoveOutlinedIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      )}
-                    </TableCell>
+                    <TableCell align="right" />
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                </TableHead>
+                <TableBody>
+                  {members.map((m) => (
+                    <TableRow key={m.user_id} hover>
+                      <TableCell>{m.email}</TableCell>
+                      <TableCell>
+                        <Chip size="small" variant="outlined" label={tr(m.role)} />
+                      </TableCell>
+                      <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>
+                        {m.role_source}
+                      </TableCell>
+                      <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>
+                        {m.last_seen_at ? formatRelative(m.last_seen_at) : "—"}
+                      </TableCell>
+                      <TableCell align="right">
+                        {m.level !== "owner" && (
+                          <Tooltip title={tr("Remove from team")}>
+                            <IconButton
+                              size="small"
+                              aria-label={tr("Remove from team")}
+                              onClick={() => setRemoving(m)}
+                            >
+                              <PersonRemoveOutlinedIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+            {mp.pager(am.data?.total ?? 0)}
+          </>
         </Section>
         <Section
           title={tr("Policies")}
@@ -212,23 +230,26 @@ export function AdminTeamPage() {
             }
           />
         </Section>
-        {audit.length > 0 && (
+        {(au.data?.total ?? 0) > 0 && (
           <Section title={tr("Recent activity")} disablePadding>
-            <TableContainer>
-              <Table size="small">
-                <TableBody>
-                  {audit.map((e) => (
-                    <TableRow key={e.id} hover>
-                      <TableCell sx={{ whiteSpace: "nowrap" }}>
-                        {formatDateTime(e.created_at)}
-                      </TableCell>
-                      <TableCell sx={{ fontFamily: "monospace" }}>{e.action}</TableCell>
-                      <TableCell>{e.actor_email ?? "—"}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+            <>
+              <TableContainer>
+                <Table size="small">
+                  <TableBody>
+                    {audit.map((e) => (
+                      <TableRow key={e.id} hover>
+                        <TableCell sx={{ whiteSpace: "nowrap" }}>
+                          {formatDateTime(e.created_at)}
+                        </TableCell>
+                        <TableCell sx={{ fontFamily: "monospace" }}>{e.action}</TableCell>
+                        <TableCell>{e.actor_email ?? "—"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              {ap.pager(au.data?.total ?? 0)}
+            </>
           </Section>
         )}
       </Stack>

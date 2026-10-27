@@ -4,7 +4,9 @@
 //! rotation jobs that a client holding the vault key executes.
 
 use axum::Json;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
+
+use super::paging::PageQuery;
 use chrono::{DateTime, Utc};
 use termoso_proto::team::{
     CreateRotationJobsRequest, RotationDue, RotationJob, RotationJobList, RotationOverview,
@@ -46,6 +48,12 @@ const JOBS_BY_TEAM: &str =
         j.requested_by, u.email, j.claimed_by, j.created_at, j.updated_at, j.finished_at
     FROM rotation_jobs j JOIN users u ON u.id = j.requested_by
     WHERE j.team_id = $1 ORDER BY j.created_at DESC LIMIT 500";
+
+const JOBS_PAGE: &str =
+    "SELECT j.id, j.team_id, j.vault_id, j.entity_id, j.entity_kind, j.status, j.note, j.error,
+        j.requested_by, u.email, j.claimed_by, j.created_at, j.updated_at, j.finished_at
+    FROM rotation_jobs j JOIN users u ON u.id = j.requested_by
+    WHERE j.team_id = $1 ORDER BY j.created_at DESC LIMIT $2 OFFSET $3";
 
 const JOBS_BY_ID: &str =
     "SELECT j.id, j.team_id, j.vault_id, j.entity_id, j.entity_kind, j.status, j.note, j.error,
@@ -135,13 +143,15 @@ pub async fn due(
 
 /// Max-age policy, overdue secrets and recent jobs of a team (`rotation.manage`).
 #[utoipa::path(get, path = "/api/v1/teams/{id}/rotation", tag = "teams",
-    params(("id" = Uuid, Path)), responses((status = 200, body = RotationOverview)))]
+    params(("id" = Uuid, Path), PageQuery), responses((status = 200, body = RotationOverview)))]
 pub async fn overview(
     State(state): State<AppState>,
     auth: Auth,
     Path(team_id): Path<Uuid>,
+    Query(pq): Query<PageQuery>,
 ) -> ApiResult<Json<RotationOverview>> {
     crate::authz::require(&state, team_id, auth.user_id(), "rotation.manage").await?;
+    let (offset, limit) = pq.window(500);
     let p = crate::policy::load(&state.db, team_id).await?;
     let due = due(
         &state.db,
@@ -150,11 +160,22 @@ pub async fn overview(
         p.password_max_age_days,
     )
     .await?;
-    let jobs: Vec<JobRow> = sqlx::query_as(JOBS_BY_TEAM)
+    let jobs: Vec<JobRow> = sqlx::query_as(JOBS_PAGE)
         .bind(team_id)
+        .bind(limit)
+        .bind(offset)
         .fetch_all(&state.db)
         .await?;
+    let jobs_total = pq
+        .total(
+            jobs.len(),
+            &state.db,
+            "SELECT count(*) FROM rotation_jobs WHERE team_id = $1",
+            team_id,
+        )
+        .await?;
     Ok(Json(RotationOverview {
+        jobs_total,
         key_max_age_days: p.key_max_age_days,
         password_max_age_days: p.password_max_age_days,
         due,

@@ -538,6 +538,7 @@ fn page(rows: Vec<Row>, limit: usize, since: i64, cursor: Cursor) -> LogListResp
         .collect();
     let since = logs.last().map(|l| l.seq).unwrap_or(since);
     LogListResponse {
+        total: 0,
         logs,
         since,
         has_more,
@@ -670,7 +671,11 @@ pub struct TeamLogsQuery {
     pub to: Option<DateTime<Utc>>,
     /// Restrict to one team vault.
     pub vault_id: Option<Uuid>,
+    /// Rows per page (the whole list when omitted; capped).
     pub limit: Option<u32>,
+    /// Rows to skip.
+    #[serde(default)]
+    pub offset: i64,
 }
 
 const TEAM_LIMIT_MAX: i64 = 10_000;
@@ -687,29 +692,58 @@ async fn team_rows(
             AND ($2::uuid IS NULL OR s.vault_id = $2)
             AND ($3::timestamptz IS NULL OR s.created_at >= $3)
             AND ($4::timestamptz IS NULL OR s.created_at < $4)
-         ORDER BY s.created_at DESC LIMIT $5"
+         ORDER BY s.created_at DESC LIMIT $5 OFFSET $6"
     )))
     .bind(team_id)
     .bind(q.vault_id)
     .bind(q.from)
     .bind(q.to)
     .bind(limit)
+    .bind(q.offset.max(0))
     .fetch_all(&state.db)
     .await?)
 }
 
+/// Recordings matching the same filter, regardless of `limit`/`offset`.
+async fn team_total(state: &AppState, team_id: Uuid, q: &TeamLogsQuery) -> ApiResult<i64> {
+    let (n,): (i64,) = sqlx::query_as(
+        "SELECT count(*) FROM session_logs s JOIN users u ON u.id = s.user_id JOIN vaults v ON v.id = s.vault_id WHERE v.team_id = $1 AND v.kind = 'team' AND s.deleted = false
+            AND ($2::uuid IS NULL OR s.vault_id = $2)
+            AND ($3::timestamptz IS NULL OR s.created_at >= $3)
+            AND ($4::timestamptz IS NULL OR s.created_at < $4)",
+    )
+    .bind(team_id)
+    .bind(q.vault_id)
+    .bind(q.from)
+    .bind(q.to)
+    .fetch_one(&state.db)
+    .await?;
+    Ok(n)
+}
+
 /// Every recording in the team's vaults, newest first (`logs.view_team`).
+/// Same envelope as the vault listing (that is what the clients parse);
+/// `total` counts every recording matching the filter, `offset`/`limit`
+/// pick the page.
 #[utoipa::path(get, path = "/api/v1/teams/{id}/logs", tag = "logs",
-    params(("id" = Uuid, Path), TeamLogsQuery), responses((status = 200, body = Vec<SessionLog>)))]
+    params(("id" = Uuid, Path), TeamLogsQuery), responses((status = 200, body = LogListResponse)))]
 pub async fn team_list(
     State(state): State<AppState>,
     auth: Auth,
     Path(team_id): Path<Uuid>,
     Query(q): Query<TeamLogsQuery>,
-) -> ApiResult<Json<Vec<SessionLog>>> {
+) -> ApiResult<Json<LogListResponse>> {
     crate::authz::require(&state, team_id, auth.user_id(), "logs.view_team").await?;
     let rows = team_rows(&state, team_id, &q, MAX_BATCH as i64).await?;
-    Ok(Json(rows.into_iter().map(|r| stored(r).log).collect()))
+    let total = team_total(&state, team_id, &q).await?;
+    let logs: Vec<SessionLog> = rows.into_iter().map(|r| stored(r).log).collect();
+    let has_more = q.offset.max(0) + (logs.len() as i64) < total;
+    Ok(Json(LogListResponse {
+        since: 0,
+        has_more,
+        total,
+        logs,
+    }))
 }
 
 /// Compliance export: one JSON object per recording (metadata as stored,

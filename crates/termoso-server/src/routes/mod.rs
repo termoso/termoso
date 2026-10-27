@@ -17,6 +17,7 @@ pub mod history;
 pub mod idp;
 pub mod logs;
 pub mod mfa;
+pub mod paging;
 pub mod policies;
 pub mod roles;
 pub mod rotation;
@@ -422,7 +423,11 @@ pub fn router(state: AppState) -> Router {
             "/admin/teams/{id}",
             get(admin::team_detail).delete(admin::delete_team),
         )
-        .route("/admin/teams/{id}/members", post(admin::add_member))
+        .route(
+            "/admin/teams/{id}/members",
+            get(admin::team_members).post(admin::add_member),
+        )
+        .route("/admin/teams/{id}/audit", get(admin::team_audit))
         .route(
             "/admin/teams/{id}/members/{user_id}",
             delete(admin::remove_member),

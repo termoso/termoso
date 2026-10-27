@@ -515,7 +515,11 @@ pub async fn export(
             format!("attachment; filename=\"termoso-audit-{team_id}-{stamp}.{ext}\""),
         )
         .header(axum::http::header::CACHE_CONTROL, "no-store")
-        .body(axum::body::Body::from_stream(stream))
+        // hyper may poll the body once more after the final chunk; a bare
+        // `unfold` panics on that, which killed the response mid-stream.
+        .body(axum::body::Body::from_stream(futures::StreamExt::fuse(
+            stream,
+        )))
         .map_err(|e| anyhow::anyhow!("response: {e}"))?;
     Ok(resp)
 }
