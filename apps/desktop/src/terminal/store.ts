@@ -50,6 +50,7 @@ import {
   feedCwd,
   feedMark,
   integratedShell,
+  looksLikeShellPrompt,
   integrationCommand,
   looksLikePasswordPrompt,
   looksLikeSecret,
@@ -869,16 +870,19 @@ export function writeSystemLine(paneId: Uuid, text: string, color = "90") {
 
 const INJECT_IDLE_MS = 250;
 const INJECT_MAX_WAIT_MS = 8000;
-const PROMPT_TAIL = /[$#%>❯➜›λ]\s?$/;
 
 // The shell is ready for typed input when the cursor sits right after a
-// prompt-looking line; a login banner still scrolling by does not qualify.
+// prompt-looking line on the normal screen; a login banner still scrolling
+// by, a TUI, or a REPL in front of the shell does not qualify.
 function atPromptLine(term: Terminal): boolean {
   const buf = term.buffer.active;
   const line = buf.getLine(buf.baseY + buf.cursorY);
   if (!line) return false;
-  const text = line.translateToString(true);
-  return text.length > 0 && text.length <= buf.cursorX && PROMPT_TAIL.test(text);
+  return looksLikeShellPrompt({
+    line: line.translateToString(true),
+    cursorX: buf.cursorX,
+    alternateScreen: buf.type === "alternate",
+  });
 }
 
 function cursorMark(term: Terminal): Mark {
@@ -1057,11 +1061,13 @@ function applyRestore(paneId: Uuid) {
 }
 
 /**
- * Run `ready` once the shell's first prompt has settled (or the wait runs
- * out): output has been idle for a moment and the cursor sits after a
- * prompt-looking line. Gives up when the pane stops being connected.
+ * Run `ready` once the shell's first prompt has settled: output has been
+ * idle for a moment and the cursor sits after a prompt-looking line. When
+ * the wait runs out without one, `ready` still runs with `settled = false`
+ * so the caller can decide what is safe to type. Gives up when the pane
+ * stops being connected.
  */
-function whenPromptReady(paneId: Uuid, ready: (rt: Runtime) => void) {
+function whenPromptReady(paneId: Uuid, ready: (rt: Runtime, settled: boolean) => void) {
   const startedAt = Date.now();
   const tick = () => {
     const r = runtimes.get(paneId);
@@ -1079,7 +1085,7 @@ function whenPromptReady(paneId: Uuid, ready: (rt: Runtime) => void) {
       r.injectTimer = setTimeout(tick, INJECT_IDLE_MS - Math.min(idle, INJECT_IDLE_MS) + 10);
       return;
     }
-    ready(r);
+    ready(r, settled);
   };
   const r = runtimes.get(paneId);
   if (r) r.injectTimer = setTimeout(tick, INJECT_IDLE_MS);
@@ -1092,8 +1098,11 @@ const MARKS_WAIT_MS = 3000;
 /**
  * Type the OSC 133 hooks into the shell once its first prompt has settled.
  * Only for shells we have a script for, only when the setting allows it,
- * and only into this pane (never broadcast). Shells that get no hooks (or
- * ignore them) still receive the workspace's saved directory / command.
+ * only into this pane (never broadcast), and never on a timeout alone: a
+ * session that lands in a REPL, a TUI or `ssh host -t cmd` shows no shell
+ * prompt, and the script must not arrive there as input. Shells that get
+ * no hooks (or ignore them) still receive the workspace's saved directory /
+ * command.
  */
 function scheduleIntegration(paneId: Uuid, shell: string) {
   const rt = runtimes.get(paneId);
@@ -1104,8 +1113,13 @@ function scheduleIntegration(paneId: Uuid, shell: string) {
     if (rt.restore) whenPromptReady(paneId, () => applyRestore(paneId));
     return;
   }
-  whenPromptReady(paneId, (r) => {
+  whenPromptReady(paneId, (r, settled) => {
     if (r.integration !== "pending") return;
+    if (!settled) {
+      r.integration = "none";
+      if (r.restore) applyRestore(paneId);
+      return;
+    }
     r.integration = "sent";
     if (r.shell.active) return;
     const script = integrationCommand(kind, r.term.buffer.active.cursorX, r.term.cols);

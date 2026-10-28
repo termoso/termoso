@@ -70,6 +70,34 @@ const fishScript = (rows: number) =>
  * afterwards. The leading space keeps it out of history in shells that
  * ignore space-prefixed lines.
  */
+/**
+ * Prompt tails of the shells we integrate: `$ # %` and the common zsh/fish
+ * theme glyphs. `>` is deliberately absent: it is what Python (`>>>`),
+ * mysql, RouterOS and most chat-style CLIs draw, and typing the hooks into
+ * those is exactly the failure this guards against.
+ */
+const PROMPT_TAIL = /[$#%❯➜›λ]\s?$/;
+
+export interface PromptProbe {
+  /** The cursor row's text, trailing blanks trimmed. */
+  line: string;
+  cursorX: number;
+  /** A full-screen program owns the terminal (vim, htop, a TUI). */
+  alternateScreen: boolean;
+}
+
+/**
+ * Whether what is on the cursor row plausibly is a shell prompt waiting for
+ * input, as opposed to a banner still printing, a TUI, or a REPL / CLI in
+ * front of the shell. Deciding this from the configured login shell alone
+ * is not enough: `ssh host -t app` never reaches it. Bracketed paste is
+ * no signal either way: bash, zsh and fish all switch it on at the prompt.
+ */
+export function looksLikeShellPrompt(p: PromptProbe): boolean {
+  if (p.alternateScreen) return false;
+  return p.line.length > 0 && p.line.length <= p.cursorX && PROMPT_TAIL.test(p.line);
+}
+
 export function integrationCommand(shell: IntegratedShell, cursorX: number, cols: number): string {
   const build = shell === "bash" ? bashScript : shell === "zsh" ? zshScript : fishScript;
   // Row count depends on the length, which depends on the row count; a couple of passes settle it.
