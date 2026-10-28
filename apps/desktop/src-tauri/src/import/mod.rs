@@ -725,6 +725,7 @@ pub fn apply(
             color_scheme: None,
             has_password: false,
             files_provider: false,
+            shell_integration: None,
             totp_secret: None,
             has_totp: false,
         };
@@ -1183,6 +1184,7 @@ fn build_chain(
                     color_scheme: None,
                     has_password: false,
                     files_provider: false,
+                    shell_integration: None,
                     totp_secret: None,
                     has_totp: false,
                 };

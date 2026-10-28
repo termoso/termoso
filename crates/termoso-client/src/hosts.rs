@@ -152,6 +152,9 @@ pub struct HostForm {
     /// Expose the SFTP / WebDAV share to the system file picker (Android SAF).
     #[serde(default)]
     pub files_provider: bool,
+    /// Shell integration override: `None` follows the app setting.
+    #[serde(default)]
+    pub shell_integration: Option<bool>,
 }
 
 fn default_true() -> bool {
@@ -883,6 +886,7 @@ pub fn form(store: &Store, id: Uuid) -> Result<HostForm> {
         has_password: ssh_login.has_password,
         has_totp: ssh_login.has_totp,
         files_provider: host.data.files_provider,
+        shell_integration: host.data.shell_integration,
     })
 }
 
@@ -1144,6 +1148,7 @@ pub fn save(store: &Store, f: &HostForm) -> Result<HostCard> {
     host.tag_ids = f.tag_ids.clone();
     host.notes = f.notes.clone();
     host.files_provider = f.files_provider;
+    host.shell_integration = f.shell_integration;
     // Detection owns `os_name`; a form loaded before a connection must not
     // erase what the session learned meanwhile.
     if existing.is_none() {
@@ -2116,8 +2121,36 @@ mod tests {
             has_password: false,
             has_totp: false,
             files_provider: false,
+            shell_integration: None,
             totp_secret: None,
         }
+    }
+
+    #[test]
+    fn shell_integration_override_round_trips_and_defaults_to_follow() {
+        let s = store();
+        let vault = s.local_vault().unwrap().id;
+        let card = save(&s, &new_form(vault)).unwrap();
+        assert_eq!(form(&s, card.id).unwrap().shell_integration, None);
+
+        let mut f = form(&s, card.id).unwrap();
+        f.shell_integration = Some(false);
+        save(&s, &f).unwrap();
+        assert_eq!(form(&s, card.id).unwrap().shell_integration, Some(false));
+
+        // Hosts serialized before the field existed follow the setting, and
+        // a host that follows it does not carry the key.
+        let stored = s.require::<Host>(card.id).unwrap();
+        let mut json = serde_json::to_value(&stored.data).unwrap();
+        assert_eq!(json["shell_integration"], serde_json::Value::Bool(false));
+        json.as_object_mut().unwrap().remove("shell_integration");
+        let legacy: Host = serde_json::from_value(json).unwrap();
+        assert_eq!(legacy.shell_integration, None);
+        assert!(
+            !serde_json::to_string(&legacy)
+                .unwrap()
+                .contains("shell_integration")
+        );
     }
 
     #[test]

@@ -7,6 +7,8 @@ description: Suggestions from your own history and snippets, saved passwords off
 
 Termoso understands the OSC 133 prompt markers that modern shells can emit (and injects a small script for `bash`, `zsh` and `fish` to emit them when a host allows it). With them it knows where each prompt, command and output starts, which powers autocomplete, the per-session command history in the side panel and the "which command printed this" context for Ask AI. Nothing has to be installed on the server for basic suggestions; the markers make them precise.
 
+The script is typed only once a real shell prompt is on screen, never into a program that opened instead of one (a REPL, a TUI, `ssh host -t cmd`). Turn it off globally with **Settings → Terminal → Shell integration**, or for one host under **Advanced → Shell integration** in the host form: useful for routers, jump hosts and hosts whose session is a program rather than a shell.
+
 ## Autocomplete
 
 As you type at a prompt, a popup suggests completions from:
