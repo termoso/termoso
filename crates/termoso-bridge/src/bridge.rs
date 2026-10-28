@@ -908,6 +908,7 @@ fn plan_host(v: &VaultState, external_id: &str, req: &HostRequest) -> Result<Pla
         sort_order: old.sort_order,
         external_id: Some(external_id.to_string()),
         files_provider: old.files_provider,
+        shell_integration: old.shell_integration,
     };
     plan.put("host", host_id, &host)?;
     Ok(plan)

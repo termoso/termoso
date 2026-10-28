@@ -1337,6 +1337,10 @@
     <string name="files_show_sftp_hosts_in_files_summary">Browse, open and save files on your SSH hosts from the system Files app and any app that opens documents. Only hosts with “Show in Files” turned on are listed; the home directory of the local terminal is always there. Hosts that need a password or a new host key must be connected from Termoso first.</string>
     <string name="show_in_files">Show in Files</string>
     <string name="show_in_files_summary">List this host’s SFTP and WebDAV shares in the system Files app and other apps that open documents</string>
+    <string name="host_shell_integration">Shell integration</string>
+    <string name="host_shell_integration_follow">Follow the app setting</string>
+    <string name="host_shell_integration_on">On</string>
+    <string name="host_shell_integration_off">Off for this host</string>
     <string name="show_in_files_disabled_summary">Files integration is turned off in Settings; this host stays hidden until it is enabled</string>
     <string name="asked_on_connect">Asked on connect</string>
     <string name="files_locked_root_summary">Unlock Termoso to browse SFTP hosts</string>

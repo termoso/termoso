@@ -365,6 +365,7 @@ pub(crate) async fn join<R: Runtime>(app: &AppHandle<R>, id: Uuid, link: &str) -
         startup: String::new(),
         color_scheme: None,
         shell: None,
+        shell_integration: None,
     })
 }
 

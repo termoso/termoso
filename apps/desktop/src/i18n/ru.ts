@@ -1956,6 +1956,10 @@ export const ru: Readonly<Record<string, string>> = {
   "Shell History": "История shell",
   "Shell history cleared": "История shell очищена",
   "Shell integration": "Интеграция с shell",
+  "Prompt marks for history and autocomplete. Turn off for routers, jump hosts and hosts that open a program instead of a shell.":
+    "Метки промпта для истории и автодополнения. Выключите для роутеров, jump-хостов и хостов, где вместо shell открывается программа.",
+  "Follow the app setting": "Как в настройках приложения",
+  "Off for this host": "Выключено для этого хоста",
   Show: "Показать",
   "Show Hidden Files": "Показать скрытые файлы",
   "Show as list": "Показать списком",

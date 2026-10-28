@@ -469,6 +469,8 @@ export interface HostForm {
   /** Trusted X11 forwarding to the local display. */
   forwardX11: boolean;
   startupSnippetId: Uuid | null;
+  /** Shell integration override; null follows Settings → Terminal → Shell integration. */
+  shellIntegration: boolean | null;
   hostChainId: Uuid | null;
   proxyId: Uuid | null;
   /** Gateway (API bridge in `termoso-bridge gateway` mode) to tunnel through; null = direct. */
@@ -718,6 +720,7 @@ export function emptyHostForm(vaultId: Uuid, groupId: Uuid | null): HostForm {
     agentForwarding: false,
     forwardX11: false,
     startupSnippetId: null,
+    shellIntegration: null,
     hostChainId: null,
     proxyId: null,
     gatewayId: null,
@@ -1936,6 +1939,8 @@ export interface SessionInfo {
   colorScheme: string | null;
   /** Base name of the user's shell (`bash`, `zsh`, …) once known. */
   shell: string | null;
+  /** The host's shell integration override; null follows the app setting. */
+  shellIntegration: boolean | null;
 }
 
 export interface SshAlgorithms {

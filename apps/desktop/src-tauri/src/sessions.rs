@@ -246,6 +246,8 @@ pub struct SessionInfo {
     /// Local shells know it at once; SSH sessions learn it from a probe and
     /// report it through [`SessionEvent::Shell`].
     pub shell: Option<String>,
+    /// The host's shell integration override (`None` follows the setting).
+    pub shell_integration: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -536,6 +538,7 @@ pub async fn open<R: Runtime>(
         via: opened.jumps.iter().map(|j| j.target().display()).collect(),
         color_scheme: opened.color_scheme,
         shell: opened.shell,
+        shell_integration: opened.shell_integration,
     };
     let viewer = info.protocol == crate::multiplayer::PROTOCOL;
     let history_id = if viewer {
@@ -823,6 +826,7 @@ pub(crate) struct Opened {
     pub(crate) startup: String,
     pub(crate) color_scheme: Option<String>,
     pub(crate) shell: Option<String>,
+    pub(crate) shell_integration: Option<bool>,
 }
 
 async fn connect<R: Runtime>(
@@ -858,6 +862,7 @@ async fn connect<R: Runtime>(
                 startup: String::new(),
                 color_scheme: None,
                 shell,
+                shell_integration: None,
             })
         }
         OpenTarget::Quick {
@@ -903,6 +908,7 @@ async fn connect<R: Runtime>(
                     startup: String::new(),
                     color_scheme: None,
                     shell: None,
+                    shell_integration: None,
                 });
             }
             let target = SshTarget {
@@ -927,6 +933,7 @@ async fn connect<R: Runtime>(
                 startup: String::new(),
                 color_scheme: None,
                 shell: None,
+                shell_integration: None,
             })
         }
         OpenTarget::Serial { path, line } => {
@@ -959,6 +966,7 @@ async fn connect<R: Runtime>(
                 startup: String::new(),
                 color_scheme: None,
                 shell: None,
+                shell_integration: None,
             })
         }
         OpenTarget::Host {
@@ -1008,6 +1016,7 @@ async fn connect<R: Runtime>(
                     startup: startup_script(&state, &resolved),
                     color_scheme: scheme,
                     shell: None,
+                    shell_integration: resolved.host.data.shell_integration,
                 });
             }
             let target = ssh_target(&resolved);
@@ -1041,6 +1050,7 @@ async fn connect<R: Runtime>(
                 startup: startup_script(&state, &resolved),
                 color_scheme: scheme,
                 shell: None,
+                shell_integration: resolved.host.data.shell_integration,
             })
         }
     }
@@ -1129,6 +1139,7 @@ async fn open_mosh<R: Runtime>(
         startup: startup_script(&state, resolved),
         color_scheme: scheme,
         shell: None,
+        shell_integration: resolved.host.data.shell_integration,
     })
 }
 
@@ -1414,6 +1425,7 @@ fn emit_connecting<R: Runtime>(
                 via: Vec::new(),
                 color_scheme,
                 shell: None,
+                shell_integration: None,
             },
         },
     );
