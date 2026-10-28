@@ -84,18 +84,17 @@ export interface PromptProbe {
   cursorX: number;
   /** A full-screen program owns the terminal (vim, htop, a TUI). */
   alternateScreen: boolean;
-  /** The foreground program asked for bracketed paste: an editor line, not a bare shell. */
-  bracketedPaste: boolean;
 }
 
 /**
  * Whether what is on the cursor row plausibly is a shell prompt waiting for
  * input, as opposed to a banner still printing, a TUI, or a REPL / CLI in
  * front of the shell. Deciding this from the configured login shell alone
- * is not enough: `ssh host -t app` never reaches it.
+ * is not enough: `ssh host -t app` never reaches it. Bracketed paste is
+ * no signal either way: bash, zsh and fish all switch it on at the prompt.
  */
 export function looksLikeShellPrompt(p: PromptProbe): boolean {
-  if (p.alternateScreen || p.bracketedPaste) return false;
+  if (p.alternateScreen) return false;
   return p.line.length > 0 && p.line.length <= p.cursorX && PROMPT_TAIL.test(p.line);
 }
 

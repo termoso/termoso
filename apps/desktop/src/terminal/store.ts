@@ -882,7 +882,6 @@ function atPromptLine(term: Terminal): boolean {
     line: line.translateToString(true),
     cursorX: buf.cursorX,
     alternateScreen: buf.type === "alternate",
-    bracketedPaste: term.modes.bracketedPasteMode,
   });
 }
 

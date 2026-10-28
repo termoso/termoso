@@ -7,7 +7,6 @@ const at = (line: string, extra: Partial<Parameters<typeof looksLikeShellPrompt>
     line,
     cursorX: line.length,
     alternateScreen: false,
-    bracketedPaste: false,
     ...extra,
   });
 
@@ -29,8 +28,7 @@ describe("looksLikeShellPrompt", () => {
     expect(at("Last login: Mon$ ", { cursorX: 3 })).toBe(false);
   });
 
-  it("never fires inside a TUI or a program that set bracketed paste", () => {
+  it("never fires inside a TUI on the alternate screen", () => {
     expect(at("user@host:~$ ", { alternateScreen: true })).toBe(false);
-    expect(at("user@host:~$ ", { bracketedPaste: true })).toBe(false);
   });
 });
