@@ -197,6 +197,13 @@ pub mod payload {
             /// never shows up in other apps unless the user opts in.
             #[serde(default, skip_serializing_if = "std::ops::Not::not")]
             pub files_provider: bool,
+            /// Per-host override of the app's shell integration setting
+            /// (typing the OSC 133 hooks into the shell after login):
+            /// `None` follows the setting, `Some(false)` never types them
+            /// (routers, jump hosts, hosts whose session is a program rather
+            /// than a shell), `Some(true)` always does.
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub shell_integration: Option<bool>,
         }
     }
 

@@ -682,6 +682,10 @@ private fun SshSection(
             }
         }
         RowDivider()
+        Box(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            ShellIntegrationRow(draft.shellIntegration) { v -> vm.update { it.copy(shellIntegration = v) } }
+        }
+        RowDivider()
         ServerKeySection(state, draft, vm, inherited)
     }
 }
@@ -856,7 +860,8 @@ private fun webdavLink(address: String, w: WebDavDraft): String {
 
 private fun hasAdvanced(d: HostDraft) =
     d.envVariables.isNotEmpty() || d.keepAliveInterval != null || d.timeout != null || d.notes.isNotBlank() || d.ipVersion != "auto" ||
-        d.hostChainId != null || d.proxyId != null || d.colorScheme != null || d.charset != null || d.backspace != null
+        d.hostChainId != null || d.proxyId != null || d.colorScheme != null || d.charset != null || d.backspace != null ||
+        d.shellIntegration != null
 
 private fun tagSummary(draft: HostDraft, tags: List<TagItem>): String {
     val labels = draft.tagIds.mapNotNull { id -> tags.firstOrNull { it.id == id }?.label }
@@ -1146,6 +1151,29 @@ private fun IpVersionRow(value: String, onPick: (String) -> Unit) {
         options = options.map { it.first to it.second },
         selected = value,
         onPick = { onPick(it ?: "auto") },
+        empty = null,
+    )
+}
+
+/**
+ * Per-host override of the desktop's shell integration (OSC 133 hooks typed
+ * after login): follow the app setting, always on, or off for routers, jump
+ * hosts and hosts whose session is a program rather than a shell.
+ */
+@Composable
+private fun ShellIntegrationRow(value: Boolean?, onPick: (Boolean?) -> Unit) {
+    val options = listOf(
+        "follow" to stringResource(R.string.host_shell_integration_follow),
+        "on" to stringResource(R.string.host_shell_integration_on),
+        "off" to stringResource(R.string.host_shell_integration_off),
+    )
+    val key = when (value) { null -> "follow"; true -> "on"; false -> "off" }
+    PickerRow(
+        label = stringResource(R.string.host_shell_integration),
+        value = options.first { it.first == key }.second,
+        options = options,
+        selected = key,
+        onPick = { onPick(when (it) { "on" -> true; "off" -> false; else -> null }) },
         empty = null,
     )
 }

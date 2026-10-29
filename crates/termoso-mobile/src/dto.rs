@@ -217,6 +217,9 @@ pub struct HostDraft {
     pub webdav: Option<WebDavDraft>,
     /// Expose the SFTP / WebDAV share to the system file picker (SAF).
     pub files_provider: bool,
+    /// Shell integration override: `None` follows the app setting,
+    /// `Some(false)` never types the hooks into this host.
+    pub shell_integration: Option<bool>,
 }
 
 /// WebDAV section of the host editor. Credentials are the share's own,
@@ -348,6 +351,7 @@ impl HostDraft {
             telnet: None,
             webdav: None,
             files_provider: false,
+            shell_integration: None,
             totp_secret: None,
         }
     }
@@ -399,6 +403,7 @@ impl From<hosts::HostForm> for HostDraft {
             telnet: f.telnet.map(Into::into),
             webdav: f.webdav.map(Into::into),
             files_provider: f.files_provider,
+            shell_integration: f.shell_integration,
         }
     }
 }
@@ -452,6 +457,7 @@ impl HostDraft {
         base.charset = self.charset;
         base.backspace = self.backspace;
         base.files_provider = self.files_provider;
+        base.shell_integration = self.shell_integration;
         base.telnet = match self.telnet {
             None => None,
             Some(t) => {
@@ -543,6 +549,7 @@ pub(crate) fn blank_form(vault_id: Uuid) -> hosts::HostForm {
         backspace: None,
         has_password: false,
         files_provider: false,
+        shell_integration: None,
         totp_secret: None,
         has_totp: false,
     }

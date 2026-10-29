@@ -1363,6 +1363,10 @@
     <string name="files_show_sftp_hosts_in_files_summary">Просматривайте, открывайте и сохраняйте файлы на своих SSH-хостах из системного приложения «Файлы» и любого приложения, работающего с документами. Показываются только хосты с включённым «Показывать в Файлах»; домашняя папка локального терминала есть всегда. К хостам, которым нужен пароль или подтверждение нового ключа, сначала подключитесь из Termoso.</string>
     <string name="show_in_files">Показывать в Файлах</string>
     <string name="show_in_files_summary">Показывать SFTP- и WebDAV-ресурсы этого хоста в системном приложении «Файлы» и других приложениях, работающих с документами</string>
+    <string name="host_shell_integration">Интеграция с shell</string>
+    <string name="host_shell_integration_follow">Как в настройках приложения</string>
+    <string name="host_shell_integration_on">Включено</string>
+    <string name="host_shell_integration_off">Выключено для этого хоста</string>
     <string name="show_in_files_disabled_summary">Интеграция с Файлами выключена в настройках; хост останется скрыт, пока её не включить</string>
     <string name="asked_on_connect">Спрашивается при подключении</string>
     <string name="files_locked_root_summary">Разблокируйте Termoso, чтобы открыть SFTP-хосты</string>

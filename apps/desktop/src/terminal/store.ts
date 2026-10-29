@@ -108,6 +108,8 @@ export interface Pane {
   log: ConnectLogLine[];
   /** Base name of the shell (`bash`, `zsh`, …) once the session reports it. */
   shell: string | null;
+  /** The host's shell integration override; null follows the app setting. */
+  shellIntegration: boolean | null;
   /** The shell is emitting prompt marks (OSC 133) — history and suggestions work. */
   integration: boolean;
   /** Working directory reported by the shell (OSC 7). */
@@ -1108,7 +1110,9 @@ function scheduleIntegration(paneId: Uuid, shell: string) {
   const rt = runtimes.get(paneId);
   if (rt?.integration !== "pending") return;
   const kind = integratedShell(shell);
-  if (!kind || currentSettings?.shellIntegration === false) {
+  const pane = terminalStore.get().panes[paneId];
+  const enabled = pane?.shellIntegration ?? currentSettings?.shellIntegration !== false;
+  if (!kind || !enabled) {
     rt.integration = "none";
     if (rt.restore) whenPromptReady(paneId, () => applyRestore(paneId));
     return;
@@ -1574,6 +1578,7 @@ function startSession(paneId: Uuid, target: OpenTarget) {
         message: null,
         progress: null,
         shell: info.shell,
+        shellIntegration: info.shellIntegration,
         reconnecting: false,
         zmodem: null,
       });
@@ -1643,6 +1648,7 @@ function newPane(paneId: Uuid, target: OpenTarget): Pane {
     progress: null,
     log: [],
     shell: null,
+    shellIntegration: null,
     integration: false,
     cwd: null,
     command: null,
@@ -2034,6 +2040,7 @@ export async function reconnectPane(paneId: Uuid) {
     command: null,
     lastExit: null,
     shell: null,
+    shellIntegration: null,
     reconnecting: pane.startedAt !== null || pane.reconnecting,
   });
   writeSystemLine(paneId, tr("Reconnecting…"));

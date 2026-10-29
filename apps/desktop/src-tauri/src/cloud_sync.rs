@@ -1315,6 +1315,7 @@ mod tests {
                 color_scheme: None,
                 has_password: false,
                 files_provider: false,
+                shell_integration: None,
                 has_totp: false,
                 totp_secret: None,
             },

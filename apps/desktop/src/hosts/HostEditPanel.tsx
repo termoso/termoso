@@ -237,6 +237,7 @@ function HostEditor({
     initial.hostChainId !== null ||
       initial.proxyId !== null ||
       initial.startupSnippetId !== null ||
+      initial.shellIntegration !== null ||
       initial.envVariables.length > 0 ||
       initial.agentForwarding ||
       initial.forwardX11 ||
@@ -695,6 +696,31 @@ function HostEditor({
                           {s.label}
                         </MenuItem>
                       ))}
+                    </TextField>
+                  </Field>
+                  <Field
+                    label={tr("Shell integration")}
+                    hint={tr(
+                      "Prompt marks for history and autocomplete. Turn off for routers, jump hosts and hosts that open a program instead of a shell.",
+                    )}
+                  >
+                    <TextField
+                      select
+                      value={
+                        form.shellIntegration === null ? "" : form.shellIntegration ? "on" : "off"
+                      }
+                      onChange={(e) =>
+                        set(
+                          "shellIntegration",
+                          e.target.value === "" ? null : e.target.value === "on",
+                        )
+                      }
+                    >
+                      <MenuItem value="">
+                        <em>{tr("Follow the app setting")}</em>
+                      </MenuItem>
+                      <MenuItem value="on">{tr("On")}</MenuItem>
+                      <MenuItem value="off">{tr("Off for this host")}</MenuItem>
                     </TextField>
                   </Field>
                   <Field label={tr("Host Chaining")}>
