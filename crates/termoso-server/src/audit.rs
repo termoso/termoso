@@ -177,6 +177,9 @@ pub struct AuditQuery {
     pub actor: Option<Uuid>,
     /// Only this vault.
     pub vault: Option<Uuid>,
+    /// Rows to skip (offset paging, newest first); when set the response
+    /// also carries `total` for the same filter.
+    pub offset: Option<i64>,
 }
 
 type Row = (
@@ -238,15 +241,16 @@ pub async fn list(
            AND ($4::text IS NULL OR e.action LIKE $4)
            AND ($5::uuid IS NULL OR e.actor_id = $5)
            AND ($6::uuid IS NULL OR e.vault_id = $6)
-         ORDER BY e.id DESC LIMIT $7",
+         ORDER BY e.id DESC LIMIT $7 OFFSET $8",
     )
     .bind(team_id)
     .bind(q.before)
     .bind(action_exact)
-    .bind(action_prefix)
+    .bind(action_prefix.as_deref())
     .bind(q.actor)
     .bind(q.vault)
     .bind((limit + 1) as i64)
+    .bind(q.offset.unwrap_or(0).max(0))
     .fetch_all(&state.db)
     .await?;
     let has_more = rows.len() > limit;
@@ -295,9 +299,31 @@ pub async fn list(
     } else {
         None
     };
+    let total = match q.offset {
+        Some(_) => {
+            let (n,): (i64,) = sqlx::query_as(
+                "SELECT count(*) FROM team_audit_events e
+                 WHERE e.team_id = $1
+                   AND ($2::text IS NULL OR e.action = $2)
+                   AND ($3::text IS NULL OR e.action LIKE $3)
+                   AND ($4::uuid IS NULL OR e.actor_id = $4)
+                   AND ($5::uuid IS NULL OR e.vault_id = $5)",
+            )
+            .bind(team_id)
+            .bind(action_exact)
+            .bind(action_prefix.as_deref())
+            .bind(q.actor)
+            .bind(q.vault)
+            .fetch_one(&state.db)
+            .await?;
+            Some(n)
+        }
+        None => None,
+    };
     Ok(Json(AuditEventList {
         events,
         next_before,
+        total,
     }))
 }
 

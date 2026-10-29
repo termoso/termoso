@@ -46,6 +46,7 @@ import { useSnackbar } from "@/components/Snackbar";
 import { UserCell } from "@/components/UserCell";
 import { formatBytes, formatDateTime } from "@/components/format";
 import { loadCrypto } from "@/crypto";
+import { usePager } from "@/components/Pager";
 import { openMyVaultKey } from "@/vaults/keys";
 import { authorsOf, decryptMeta, durationOf, sortLogs } from "./logs";
 
@@ -141,6 +142,7 @@ export function SessionLogsSection({ vault, manager }: { vault: Vault; manager: 
     () => sortLogs(authorId ? all.filter((l) => l.user_id === authorId) : all),
     [all, authorId],
   );
+  const { rows: pageRows, pager } = usePager(list);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: queryKeys.vaultLogs(vault.id) });
   const annotate = useMutation({
@@ -262,7 +264,7 @@ export function SessionLogsSection({ vault, manager }: { vault: Vault; manager: 
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {list.map((l) => {
+                  {pageRows.map((l) => {
                     const meta = metas[l.id];
                     const canDelete = manager || l.user_id === me;
                     return (
@@ -358,6 +360,7 @@ export function SessionLogsSection({ vault, manager }: { vault: Vault; manager: 
                 </TableBody>
               </Table>
             </TableContainer>
+            {pager}
             {logs.hasNextPage && (
               <Box>
                 <Button

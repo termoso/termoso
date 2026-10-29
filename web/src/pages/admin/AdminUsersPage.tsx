@@ -218,6 +218,22 @@ export function AdminUsersPage() {
                           {u.mfa_enabled && (
                             <Chip size="small" variant="outlined" label={tr("MFA")} />
                           )}
+                          {u.source && u.source !== "password" && (
+                            <Tooltip
+                              title={
+                                u.source === "scim"
+                                  ? tr("Account provisioned through SCIM")
+                                  : tr("Account created through SSO sign-in")
+                              }
+                            >
+                              <Chip
+                                size="small"
+                                color="info"
+                                variant="outlined"
+                                label={u.source.toUpperCase()}
+                              />
+                            </Tooltip>
+                          )}
                         </Stack>
                       </TableCell>
                       <TableCell sx={{ display: { xs: "none", md: "table-cell" } }}>
@@ -254,14 +270,6 @@ export function AdminUsersPage() {
                                 })}
                               />
                             </Tooltip>
-                          )}
-                          {u.source && u.source !== "password" && (
-                            <Chip
-                              size="small"
-                              color="info"
-                              variant="outlined"
-                              label={u.source.toUpperCase()}
-                            />
                           )}
                         </Stack>
                       </TableCell>

@@ -446,6 +446,8 @@ export interface AuditEvent {
 export interface AuditEventList {
   events: AuditEvent[];
   next_before?: number;
+  /** Rows matching the filter; present only with offset paging. */
+  total?: number;
 }
 
 /** How often an admin receives the team activity digest by e-mail. */

@@ -978,6 +978,27 @@ async fn teams_vaults_invites_and_sharing() {
         .await;
     assert!(page2.events.iter().all(|e| e.id < before));
     assert_eq!(page1.events[1].id, before);
+    assert!(page1.total.is_none());
+
+    // Offset paging (the web cabinet) walks the same order and reports the total.
+    let off: AuditEventList = s
+        .json(
+            Method::GET,
+            &format!("{audit_path}?limit=2&offset=2"),
+            Some(owner.token()),
+            NOBODY,
+        )
+        .await;
+    assert_eq!(
+        off.events.iter().map(|e| e.id).collect::<Vec<_>>(),
+        page2
+            .events
+            .iter()
+            .take(2)
+            .map(|e| e.id)
+            .collect::<Vec<_>>()
+    );
+    assert!(off.total.is_some_and(|t| t >= 3));
 
     // Bob (member) cannot delete the team; owner can, and the vault disappears.
     s.expect_status(
