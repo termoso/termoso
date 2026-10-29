@@ -379,6 +379,9 @@ schema! {
         /// Pass as `before` to fetch the next (older) page.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         pub next_before: Option<i64>,
+        /// Rows matching the filter; present only with offset paging.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub total: Option<i64>,
     }
 }
 

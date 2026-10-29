@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { msg, tr, trn, trx } from "@/i18n";
 import {
   Alert,
@@ -9,6 +9,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Drawer,
   FormControl,
   IconButton,
   InputLabel,
@@ -27,11 +28,12 @@ import {
   Typography,
 } from "@mui/material";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
+import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import DownloadRoundedIcon from "@mui/icons-material/DownloadRounded";
 import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
 import SendRoundedIcon from "@mui/icons-material/SendRounded";
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { errorMessage } from "@/api/client";
 import { teamsApi } from "@/api/endpoints";
 import { queryKeys } from "@/api/hooks";
@@ -39,6 +41,7 @@ import type { AuditEvent, Team, Webhook, WebhookKind } from "@/api/types";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EmptyState } from "@/components/EmptyState";
 import { Loading } from "@/components/Loading";
+import { useServerPager } from "@/components/Pager";
 import { Section } from "@/components/Section";
 import { saveBlob } from "@/components/download";
 import { useSnackbar } from "@/components/Snackbar";
@@ -78,13 +81,12 @@ const KINDS: { value: WebhookKind; label: string; hint: string }[] = [
 function AuditSection({ team }: { team: Team }) {
   const [action, setAction] = useState("");
   const [applied, setApplied] = useState("");
+  const [open, setOpen] = useState<AuditEvent | null>(null);
   const snack = useSnackbar();
-  const q = useInfiniteQuery({
-    queryKey: queryKeys.teamAudit(team.id, applied),
-    queryFn: ({ pageParam }) =>
-      teamsApi.audit(team.id, { before: pageParam, limit: 100, action: applied || undefined }),
-    initialPageParam: undefined as number | undefined,
-    getNextPageParam: (last) => last.next_before ?? undefined,
+  const pg = useServerPager([team.id, applied]);
+  const q = useQuery({
+    queryKey: queryKeys.teamAudit(team.id, { action: applied, ...pg.window }),
+    queryFn: () => teamsApi.audit(team.id, { ...pg.window, action: applied || undefined }),
   });
   const [exporting, setExporting] = useState<"csv" | "jsonl" | null>(null);
   const exportAs = async (format: "csv" | "jsonl") => {
@@ -99,7 +101,7 @@ function AuditSection({ team }: { team: Team }) {
       setExporting(null);
     }
   };
-  const events = q.data?.pages.flatMap((p) => p.events) ?? [];
+  const events = q.data?.events ?? [];
   return (
     <Section
       title={tr("Audit log")}
@@ -154,65 +156,150 @@ function AuditSection({ team }: { team: Team }) {
         <Box sx={{ p: 3 }}>
           <Alert severity="error">{errorMessage(q.error)}</Alert>
         </Box>
-      ) : events.length === 0 ? (
-        <EmptyState title={tr("No events")} />
       ) : (
         <>
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>{tr("When")}</TableCell>
-                  <TableCell>{tr("Actor")}</TableCell>
-                  <TableCell>{tr("Action")}</TableCell>
-                  <TableCell>{tr("Details")}</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {events.map((e) => (
-                  <EventRow key={e.id} e={e} />
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-          {q.hasNextPage && (
-            <Box sx={{ p: 2, textAlign: "center" }}>
-              <Button disabled={q.isFetchingNextPage} onClick={() => q.fetchNextPage()}>
-                {tr("Load older")}
-              </Button>
-            </Box>
+          {events.length === 0 ? (
+            <EmptyState title={tr("No events")} />
+          ) : (
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>{tr("When")}</TableCell>
+                    <TableCell>{tr("Actor")}</TableCell>
+                    <TableCell>{tr("Action")}</TableCell>
+                    <TableCell>{tr("Details")}</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {events.map((e) => (
+                    <EventRow key={e.id} e={e} onOpen={() => setOpen(e)} />
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
           )}
+          {pg.pager(q.data.total ?? events.length)}
         </>
       )}
+      <EventDrawer event={open} onClose={() => setOpen(null)} />
     </Section>
   );
 }
 
-function EventRow({ e }: { e: AuditEvent }) {
-  const details =
-    e.details && typeof e.details === "object" && Object.keys(e.details).length > 0
-      ? JSON.stringify(e.details)
-      : "";
+function detailsText(e: AuditEvent): string {
+  return e.details && typeof e.details === "object" && Object.keys(e.details).length > 0
+    ? JSON.stringify(e.details)
+    : "";
+}
+
+function ActorCell({ e }: { e: AuditEvent }) {
+  return e.actor_id ? (
+    <UserCell
+      userId={e.actor_id}
+      email={e.actor_email ?? ""}
+      displayName={e.actor_name}
+      avatar={e.actor_avatar}
+    />
+  ) : (
+    <Typography variant="body2" color="text.secondary">
+      {tr("system")}
+    </Typography>
+  );
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <TableRow hover>
+    <Box>
+      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
+        {label}
+      </Typography>
+      <Typography variant="body2" component="div" sx={{ wordBreak: "break-all" }}>
+        {children}
+      </Typography>
+    </Box>
+  );
+}
+
+/** The full record of one event; the table keeps a one-line preview. */
+function EventDrawer({ event: e, onClose }: { event: AuditEvent | null; onClose: () => void }) {
+  const json = e && detailsText(e) ? JSON.stringify(e.details, null, 2) : "";
+  return (
+    <Drawer
+      anchor="right"
+      open={e !== null}
+      onClose={onClose}
+      slotProps={{ paper: { sx: { width: { xs: "100%", sm: 480 }, p: 3 } } }}
+    >
+      <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+        <Typography variant="h6">{tr("Event")}</Typography>
+        <IconButton onClick={onClose} aria-label={tr("Close")}>
+          <CloseRoundedIcon />
+        </IconButton>
+      </Stack>
+      {e && (
+        <Stack spacing={2}>
+          <Field label={tr("When")}>{formatDateTime(e.created_at)}</Field>
+          <Field label={tr("Actor")}>
+            <ActorCell e={e} />
+          </Field>
+          <Field label={tr("Action")}>
+            <Chip size="small" label={e.action} sx={{ fontFamily: "monospace" }} />
+          </Field>
+          {e.target_email && <Field label={tr("Target")}>{e.target_email}</Field>}
+          {e.vault_id && (
+            <Field label={tr("Vault")}>
+              <code>{e.vault_id}</code>
+            </Field>
+          )}
+          {e.device_id && (
+            <Field label={tr("Device")}>
+              <code>{e.device_id}</code>
+            </Field>
+          )}
+          <Field label={tr("Details")}>
+            {json ? (
+              <Box
+                component="pre"
+                sx={{
+                  m: 0,
+                  p: 1.5,
+                  borderRadius: 2,
+                  bgcolor: "surface.high",
+                  fontFamily: "monospace",
+                  fontSize: 12,
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-all",
+                  maxHeight: "60vh",
+                  overflow: "auto",
+                }}
+              >
+                {json}
+              </Box>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                {tr("No details")}
+              </Typography>
+            )}
+          </Field>
+          <Field label={tr("Event id")}>{e.id}</Field>
+        </Stack>
+      )}
+    </Drawer>
+  );
+}
+
+function EventRow({ e, onOpen }: { e: AuditEvent; onOpen: () => void }) {
+  const details = detailsText(e);
+  return (
+    <TableRow hover onClick={onOpen} sx={{ cursor: "pointer" }}>
       <TableCell sx={{ whiteSpace: "nowrap" }}>
         <Tooltip title={formatDateTime(e.created_at)}>
           <span>{formatRelative(e.created_at)}</span>
         </Tooltip>
       </TableCell>
       <TableCell>
-        {e.actor_id ? (
-          <UserCell
-            userId={e.actor_id}
-            email={e.actor_email ?? ""}
-            displayName={e.actor_name}
-            avatar={e.actor_avatar}
-          />
-        ) : (
-          <Typography variant="body2" color="text.secondary">
-            {tr("system")}
-          </Typography>
-        )}
+        <ActorCell e={e} />
       </TableCell>
       <TableCell>
         <Chip size="small" label={e.action} sx={{ fontFamily: "monospace" }} />
@@ -226,7 +313,9 @@ function EventRow({ e }: { e: AuditEvent }) {
         <Typography
           variant="caption"
           color="text.secondary"
-          sx={{ fontFamily: "monospace", wordBreak: "break-all" }}
+          component="div"
+          noWrap
+          sx={{ fontFamily: "monospace" }}
         >
           {details}
         </Typography>

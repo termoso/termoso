@@ -46,6 +46,7 @@ import { Loading } from "@/components/Loading";
 import { PageHeader } from "@/components/PageHeader";
 import { RoleChip } from "@/components/RoleChip";
 import { Section } from "@/components/Section";
+import { Paged } from "@/components/Pager";
 import { useSnackbar } from "@/components/Snackbar";
 import { formatDateTime, formatRelative } from "@/components/format";
 import { generateKeyPair, loadCrypto } from "@/crypto";
@@ -456,105 +457,114 @@ export function BridgesPage() {
             }
           />
         ) : (
-          <List disablePadding>
-            {list.map((b) => {
-              const pending = b.vaults.filter(isPending);
-              return (
-                <ListItem
-                  key={b.id}
-                  divider
-                  alignItems="flex-start"
-                  secondaryAction={
-                    <Stack direction="row" spacing={0.5}>
-                      <Tooltip title={tr("Vaults")}>
-                        <IconButton onClick={() => setEditing(b)} aria-label={tr("Edit vaults")}>
-                          <KeyRoundedIcon />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title={tr("Revoke bridge")}>
-                        <IconButton
-                          edge="end"
-                          color="error"
-                          onClick={() => setRevoking(b)}
-                          aria-label={tr("Revoke bridge")}
-                        >
-                          <DeleteOutlineRoundedIcon />
-                        </IconButton>
-                      </Tooltip>
-                    </Stack>
-                  }
-                >
-                  <ListItemAvatar>
-                    <Avatar
-                      variant="rounded"
-                      sx={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 2,
-                        bgcolor: "surface.highest",
-                        color: pending.length ? "warning.main" : "primary.main",
-                        "& svg": { fontSize: 20 },
-                      }}
+          <Paged items={list}>
+            {(rows) => (
+              <List disablePadding>
+                {rows.map((b) => {
+                  const pending = b.vaults.filter(isPending);
+                  return (
+                    <ListItem
+                      key={b.id}
+                      divider
+                      alignItems="flex-start"
+                      secondaryAction={
+                        <Stack direction="row" spacing={0.5}>
+                          <Tooltip title={tr("Vaults")}>
+                            <IconButton
+                              onClick={() => setEditing(b)}
+                              aria-label={tr("Edit vaults")}
+                            >
+                              <KeyRoundedIcon />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title={tr("Revoke bridge")}>
+                            <IconButton
+                              edge="end"
+                              color="error"
+                              onClick={() => setRevoking(b)}
+                              aria-label={tr("Revoke bridge")}
+                            >
+                              <DeleteOutlineRoundedIcon />
+                            </IconButton>
+                          </Tooltip>
+                        </Stack>
+                      }
                     >
-                      <HubOutlinedIcon />
-                    </Avatar>
-                  </ListItemAvatar>
-                  <ListItemText
-                    disableTypography
-                    primary={
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-                        <Typography variant="body1">{b.name}</Typography>
-                        {pending.length > 0 && (
-                          <Chip
-                            size="small"
-                            color="warning"
-                            label={tr("{length} {v1} rotated — re-seal", {
-                              length: pending.length,
-                              v1: pending.length === 1 ? "key" : "keys",
-                            })}
-                            onClick={() => setEditing(b)}
-                          />
-                        )}
-                      </Box>
-                    }
-                    secondary={
-                      <Box sx={{ mt: 0.5, pr: 10 }}>
-                        <Typography variant="body2" color="text.secondary">
-                          {trx("{v1} {v2}Created {v3}", {
-                            v1: b.last_used_at
-                              ? b.last_ip
-                                ? tr("Last used {v1} from {v2}", {
-                                    v1: formatRelative(b.last_used_at),
-                                    v2: b.last_ip,
-                                  })
-                                : tr("Last used {v1}", { v1: formatRelative(b.last_used_at) })
-                              : tr("Never used"),
-                            v2: " · ",
-                            v3: formatDateTime(b.created_at),
-                          })}
-                        </Typography>
-                        <Box sx={{ display: "flex", gap: 0.75, flexWrap: "wrap", mt: 1 }}>
-                          {b.vaults.length === 0 && (
-                            <Chip size="small" variant="outlined" label={tr("No vaults")} />
-                          )}
-                          {b.vaults.map((v) => (
-                            <Chip
-                              key={v.vault_id}
-                              size="small"
-                              variant="outlined"
-                              color={isPending(v) ? "warning" : "default"}
-                              icon={<LockOutlinedIcon />}
-                              label={`${v.name} · ${v.role}${isPending(v) ? tr(" · pending") : ""}`}
-                            />
-                          ))}
-                        </Box>
-                      </Box>
-                    }
-                  />
-                </ListItem>
-              );
-            })}
-          </List>
+                      <ListItemAvatar>
+                        <Avatar
+                          variant="rounded"
+                          sx={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 2,
+                            bgcolor: "surface.highest",
+                            color: pending.length ? "warning.main" : "primary.main",
+                            "& svg": { fontSize: 20 },
+                          }}
+                        >
+                          <HubOutlinedIcon />
+                        </Avatar>
+                      </ListItemAvatar>
+                      <ListItemText
+                        disableTypography
+                        primary={
+                          <Box
+                            sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}
+                          >
+                            <Typography variant="body1">{b.name}</Typography>
+                            {pending.length > 0 && (
+                              <Chip
+                                size="small"
+                                color="warning"
+                                label={tr("{length} {v1} rotated — re-seal", {
+                                  length: pending.length,
+                                  v1: pending.length === 1 ? "key" : "keys",
+                                })}
+                                onClick={() => setEditing(b)}
+                              />
+                            )}
+                          </Box>
+                        }
+                        secondary={
+                          <Box sx={{ mt: 0.5, pr: 10 }}>
+                            <Typography variant="body2" color="text.secondary">
+                              {trx("{v1} {v2}Created {v3}", {
+                                v1: b.last_used_at
+                                  ? b.last_ip
+                                    ? tr("Last used {v1} from {v2}", {
+                                        v1: formatRelative(b.last_used_at),
+                                        v2: b.last_ip,
+                                      })
+                                    : tr("Last used {v1}", { v1: formatRelative(b.last_used_at) })
+                                  : tr("Never used"),
+                                v2: " · ",
+                                v3: formatDateTime(b.created_at),
+                              })}
+                            </Typography>
+                            <Box sx={{ display: "flex", gap: 0.75, flexWrap: "wrap", mt: 1 }}>
+                              {b.vaults.length === 0 && (
+                                <Chip size="small" variant="outlined" label={tr("No vaults")} />
+                              )}
+                              {b.vaults.map((v) => (
+                                <Chip
+                                  key={v.vault_id}
+                                  size="small"
+                                  variant="outlined"
+                                  color={isPending(v) ? "warning" : "default"}
+                                  icon={<LockOutlinedIcon />}
+                                  label={`${v.name} · ${v.role}${isPending(v) ? tr(" · pending") : ""}`}
+                                />
+                              ))}
+                            </Box>
+                          </Box>
+                        }
+                      />
+                    </ListItem>
+                  );
+                })}
+              </List>
+            )}
+          </Paged>
         )}
       </Section>
 

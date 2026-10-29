@@ -29,6 +29,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EmptyState } from "@/components/EmptyState";
 import { Loading } from "@/components/Loading";
 import { PageHeader } from "@/components/PageHeader";
+import { Paged } from "@/components/Pager";
 import { Section } from "@/components/Section";
 import { useSnackbar } from "@/components/Snackbar";
 import { formatDateTime, formatRelative } from "@/components/format";
@@ -113,58 +114,66 @@ export function DevicesPage() {
         {list.length === 0 ? (
           <EmptyState title={tr("No devices")} />
         ) : (
-          <List disablePadding>
-            {list.map((d) => (
-              <ListItem
-                key={d.id}
-                divider
-                secondaryAction={
-                  !d.current && (
-                    <Tooltip title={tr("Sign out this device")}>
-                      <IconButton
-                        edge="end"
-                        onClick={() => setTarget(d)}
-                        aria-label={tr("Sign out device")}
-                      >
-                        <LogoutRoundedIcon />
-                      </IconButton>
-                    </Tooltip>
-                  )
-                }
-              >
-                <ListItemAvatar>
-                  <Avatar
-                    variant="rounded"
-                    sx={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 2,
-                      bgcolor: "surface.highest",
-                      color: d.current ? "primary.main" : "text.secondary",
-                      "& svg": { fontSize: 20 },
-                    }}
+          <Paged items={list}>
+            {(rows) => (
+              <List disablePadding>
+                {rows.map((d) => (
+                  <ListItem
+                    key={d.id}
+                    divider
+                    secondaryAction={
+                      !d.current && (
+                        <Tooltip title={tr("Sign out this device")}>
+                          <IconButton
+                            edge="end"
+                            onClick={() => setTarget(d)}
+                            aria-label={tr("Sign out device")}
+                          >
+                            <LogoutRoundedIcon />
+                          </IconButton>
+                        </Tooltip>
+                      )
+                    }
                   >
-                    {platformIcon(d.platform)}
-                  </Avatar>
-                </ListItemAvatar>
-                <ListItemText
-                  primary={
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-                      {d.name}
-                      {d.current && <Chip size="small" color="primary" label={tr("This device")} />}
-                    </Box>
-                  }
-                  secondary={tr("{v1} · v{app_version} · {v2} · Active {v3} · Added {v4}", {
-                    v1: platformLabel[d.platform],
-                    app_version: d.app_version,
-                    v2: d.last_ip ?? tr("unknown IP"),
-                    v3: formatRelative(d.last_seen_at),
-                    v4: formatDateTime(d.created_at),
-                  })}
-                />
-              </ListItem>
-            ))}
-          </List>
+                    <ListItemAvatar>
+                      <Avatar
+                        variant="rounded"
+                        sx={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: 2,
+                          bgcolor: "surface.highest",
+                          color: d.current ? "primary.main" : "text.secondary",
+                          "& svg": { fontSize: 20 },
+                        }}
+                      >
+                        {platformIcon(d.platform)}
+                      </Avatar>
+                    </ListItemAvatar>
+                    <ListItemText
+                      primary={
+                        <Box
+                          sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}
+                        >
+                          {d.name}
+                          {d.current && (
+                            <Chip size="small" color="primary" label={tr("This device")} />
+                          )}
+                        </Box>
+                      }
+                      secondary={tr("{v1} · v{app_version} · {v2} · Active {v3} · Added {v4}", {
+                        v1: platformLabel[d.platform],
+                        app_version: d.app_version,
+                        v2: d.last_ip ?? tr("unknown IP"),
+                        v3: formatRelative(d.last_seen_at),
+                        v4: formatDateTime(d.created_at),
+                      })}
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            )}
+          </Paged>
         )}
       </Section>
 

@@ -359,7 +359,14 @@ export const teamsApi = {
   // ── audit ──
   audit: (
     id: string,
-    q: { before?: number; limit?: number; action?: string; actor?: string; vault?: string },
+    q: {
+      before?: number;
+      offset?: number;
+      limit?: number;
+      action?: string;
+      actor?: string;
+      vault?: string;
+    },
   ) => http.get<AuditEventList>(`/teams/${id}/audit`, { query: q }),
   auditExport: (
     id: string,
