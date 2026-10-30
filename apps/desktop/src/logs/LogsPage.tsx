@@ -429,6 +429,7 @@ export function Viewer({
                     size="small"
                     className="bm-del"
                     sx={{ opacity: 0 }}
+                    aria-label={tr("Remove bookmark")}
                     onClick={(e) => {
                       e.stopPropagation();
                       op.mutate(async () => {

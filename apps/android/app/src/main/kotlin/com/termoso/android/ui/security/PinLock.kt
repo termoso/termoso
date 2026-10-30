@@ -142,7 +142,7 @@ private fun PinPad(enabled: Boolean, onSubmit: (String) -> Unit) {
                     when (ch) {
                         ' ' -> Spacer(Modifier.size(72.dp))
                         '<' -> IconButton(onClick = { code = code.dropLast(1) }, enabled = enabled, modifier = Modifier.size(72.dp)) {
-                            Icon(Icons.AutoMirrored.Filled.Backspace, contentDescription = null)
+                            Icon(Icons.AutoMirrored.Filled.Backspace, contentDescription = stringResource(R.string.backspace))
                         }
                         else -> TextButton(onClick = { if (code.length < 6) code += ch }, enabled = enabled, modifier = Modifier.size(72.dp)) {
                             Text(ch.toString(), style = MaterialTheme.typography.headlineSmall)
