@@ -12,7 +12,7 @@ import {
 } from "@mui/material";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
-import { Mono, SectionCard } from "@/components/ui";
+import { Mono, SectionCard, SettingRow } from "@/components/ui";
 import { useAppInfo } from "@/ipc/hooks";
 import type { Settings } from "@/ipc/types";
 import { appSuggestions } from "@/sftp/OpenWithDialog";
@@ -64,6 +64,26 @@ export function SftpPage({ s, update }: Props) {
 
   return (
     <>
+      <SectionCard title={tr("Transfers")}>
+        <SettingRow
+          label={tr("Transfer speed limit")}
+          hint={tr("KiB/s per file, for the queue, watch & upload and edits. 0 is unlimited.")}
+          last
+          control={
+            <TextField
+              type="number"
+              size="small"
+              value={s.sftpRateLimitKib}
+              onChange={(e) => {
+                const n = Math.max(0, Math.min(1_048_576, Math.floor(Number(e.target.value) || 0)));
+                update({ sftpRateLimitKib: n });
+              }}
+              slotProps={{ htmlInput: { min: 0, max: 1_048_576, step: 64 } }}
+              sx={{ width: 140 }}
+            />
+          }
+        />
+      </SectionCard>
       <SectionCard title={tr("File associations")}>
         <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1.5 }}>
           {tr(

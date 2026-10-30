@@ -40,6 +40,7 @@ export function SyncDialog({
   const [ignore, setIgnore] = useState(DEFAULT_IGNORE);
   const [deleteRemote, setDeleteRemote] = useState(false);
   const [uploadExisting, setUploadExisting] = useState(true);
+  const [twoWay, setTwoWay] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,6 +60,7 @@ export function SyncDialog({
         ignore: ignore.split(/[\s,]+/).filter((s) => s !== ""),
         deleteRemote,
         uploadExisting,
+        twoWay,
       });
       onClose();
     } catch (e) {
@@ -75,7 +77,7 @@ export function SyncDialog({
         <Stack spacing={2} sx={{ mt: 0.5 }}>
           <Typography variant="body2" color="text.secondary">
             {tr(
-              "Every file saved under the local folder is uploaded to the same place under the remote folder, until you stop. One way: local → server.",
+              "Every file saved under the local folder is uploaded to the same place under the remote folder, until you stop. Local → server; turn on two-way to also pull what changes on the server.",
             )}
           </Typography>
           <Stack direction="row" spacing={1} sx={{ alignItems: "flex-start" }}>
@@ -121,6 +123,12 @@ export function SyncDialog({
               <Switch checked={deleteRemote} onChange={(e) => setDeleteRemote(e.target.checked)} />
             }
             label={tr("Delete on the server what is deleted locally")}
+          />
+          <FormControlLabel
+            control={<Switch checked={twoWay} onChange={(e) => setTwoWay(e.target.checked)} />}
+            label={tr(
+              "Two-way: download files that change on the server (checked every 15 s, newest wins, deletions are not pulled)",
+            )}
           />
           {error && (
             <Typography variant="body2" color="error">

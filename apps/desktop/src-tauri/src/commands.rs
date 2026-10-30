@@ -600,6 +600,15 @@ pub async fn sftp_stat(state: State<'_, AppState>, id: Uuid, path: String) -> Re
 }
 
 #[tauri::command]
+pub async fn sftp_diff(
+    state: State<'_, AppState>,
+    left: sftp::DiffSide,
+    right: sftp::DiffSide,
+) -> Result<sftp::DiffResult> {
+    sftp::diff(&state, left, right).await
+}
+
+#[tauri::command]
 pub async fn sftp_mkdir(state: State<'_, AppState>, id: Uuid, path: String) -> Result<()> {
     sftp::remote_mkdir(&state, id, path).await
 }
@@ -792,6 +801,7 @@ pub async fn sync_start<R: Runtime>(
     ignore: Vec<String>,
     delete_remote: bool,
     upload_existing: bool,
+    two_way: bool,
 ) -> Result<crate::sync::SyncInfo> {
     crate::sync::start(
         app,
@@ -801,6 +811,7 @@ pub async fn sync_start<R: Runtime>(
         ignore,
         delete_remote,
         upload_existing,
+        two_way,
     )
     .await
 }

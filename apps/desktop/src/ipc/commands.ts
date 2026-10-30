@@ -153,6 +153,8 @@ import type {
   AccessReviewList,
   AuditVerification,
   BreakGlass,
+  DiffResult,
+  DiffSide,
 } from "./types";
 import type {
   AccessRequest,
@@ -394,7 +396,10 @@ export const syncStart = (args: {
   ignore: string[];
   deleteRemote: boolean;
   uploadExisting: boolean;
+  twoWay: boolean;
 }) => invoke<SyncInfo>("sync_start", args);
+export const sftpDiff = (left: DiffSide, right: DiffSide) =>
+  invoke<DiffResult>("sftp_diff", { left, right });
 export const syncStop = (id: Uuid) => invoke<null>("sync_stop", { id });
 export const onSyncEvent = (cb: (e: SyncEvent) => void): Promise<UnlistenFn> =>
   listen<SyncEvent>("sftp_sync", (ev) => cb(ev.payload));

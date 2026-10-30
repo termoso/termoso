@@ -45,6 +45,7 @@ import { OpenWithDialog, extensionOf } from "./OpenWithDialog";
 import { TransfersPanel } from "./TransfersPanel";
 import { SyncBar } from "./SyncBar";
 import { SyncDialog } from "./SyncDialog";
+import { DiffDialog, type CompareRequest } from "./DiffDialog";
 import { dropTargetAt, stageDrop, statPaths } from "./drop";
 import { joinPath } from "./format";
 import {
@@ -99,6 +100,7 @@ export function SftpPage() {
   const [rightPath, setRightPath] = useState<string | null>(null);
   const [prompt, setPrompt] = useState<ConflictPrompt | null>(null);
   const [openWith, setOpenWith] = useState<{ pane: PaneKey; entry: FsEntry } | null>(null);
+  const [compare, setCompare] = useState<CompareRequest | null>(null);
   const [syncFor, setSyncFor] = useState<Uuid | null>(null);
   const snack = useSnackbar();
   const settings = useSettings();
@@ -298,6 +300,20 @@ export function SftpPage() {
         : Promise.resolve();
     run.catch((err: unknown) => snack.error(errorMessage(err)));
   };
+  const onCompare = (pane: PaneKey) => (entry: FsEntry) => {
+    const other = oppositePath(pane);
+    if (other === null) return;
+    const idOf = (p: PaneKey) => {
+      if (sourceOf(p).kind === "local") return null;
+      const c = connOf(p);
+      return c?.status === "open" ? c.id : null;
+    };
+    setCompare({
+      name: entry.name,
+      left: { sftpId: idOf(pane), path: entry.path },
+      right: { sftpId: idOf(otherPane(pane)), path: joinPath(other, entry.name) },
+    });
+  };
   const onOpen = (pane: PaneKey) => (entry: FsEntry, mode: "default" | "with") => {
     if (mode === "with") setOpenWith({ pane, entry });
     else openEntry(pane, entry, assoc[extensionOf(entry.name)] ?? null);
@@ -324,6 +340,7 @@ export function SftpPage() {
             onTransfer={(entries) => transfer(pane, entries)}
             onReceive={(entries, dest) => transfer(otherPane(pane), entries, dest)}
             onOpen={onOpen(pane)}
+            onCompare={onCompare(pane)}
           />
         </PaneFrame>
       );
@@ -346,6 +363,7 @@ export function SftpPage() {
             onReceive={(entries, dest) => transfer(otherPane(pane), entries, dest)}
             onReceiveFiles={(dt, dest) => receiveFiles(pane, dt, dest)}
             onOpen={onOpen(pane)}
+            onCompare={onCompare(pane)}
             editing={editingPaths(editList, conn.id)}
             onClose={() => void closeSftp(conn.id)}
           />
@@ -427,6 +445,11 @@ export function SftpPage() {
         defaultLocal={leftPath}
         defaultRemote={rightPath}
         onClose={() => setSyncFor(null)}
+      />
+      <DiffDialog
+        key={compare ? `${compare.left.path}|${compare.right.path}` : ""}
+        request={compare}
+        onClose={() => setCompare(null)}
       />
       <OpenWithDialog
         key={openWith ? `${openWith.pane}:${openWith.entry.path}` : ""}
