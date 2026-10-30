@@ -20,6 +20,8 @@ import {
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import PushPinRoundedIcon from "@mui/icons-material/PushPinRounded";
 import VideocamOutlinedIcon from "@mui/icons-material/VideocamOutlined";
+import ForumOutlinedIcon from "@mui/icons-material/ForumOutlined";
+import { LogCommentsDrawer, type CommentTarget } from "../vaults/LogCommentsDrawer";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { errorMessage } from "@/api/client";
 import { logsApi, teamsApi, vaultsApi } from "@/api/endpoints";
@@ -123,6 +125,7 @@ export function RecordingsTab({ team }: { team: Team }) {
   }, [list, keys, metas]);
 
   const [deleting, setDeleting] = useState<SessionLog | null>(null);
+  const [thread, setThread] = useState<CommentTarget | null>(null);
   const del = useMutation({
     mutationFn: (l: SessionLog) => logsApi.delete(l.id),
     onSuccess: async () => {
@@ -240,7 +243,7 @@ export function RecordingsTab({ team }: { team: Team }) {
                     <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>
                       {tr("Recorded")}
                     </TableCell>
-                    {canDelete && <TableCell align="right" />}
+                    <TableCell align="right" />
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -294,8 +297,17 @@ export function RecordingsTab({ team }: { team: Team }) {
                         <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>
                           {formatDateTime(l.created_at)}
                         </TableCell>
-                        {canDelete && (
-                          <TableCell align="right">
+                        <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>
+                          <Tooltip title={tr("Comments")}>
+                            <IconButton
+                              size="small"
+                              onClick={() => setThread({ log: l, title: meta?.label ?? l.id })}
+                              aria-label={tr("Comments")}
+                            >
+                              <ForumOutlinedIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          {canDelete && (
                             <Tooltip title={tr("Delete recording")}>
                               <IconButton
                                 size="small"
@@ -305,8 +317,8 @@ export function RecordingsTab({ team }: { team: Team }) {
                                 <DeleteOutlineRoundedIcon fontSize="small" />
                               </IconButton>
                             </Tooltip>
-                          </TableCell>
-                        )}
+                          )}
+                        </TableCell>
                       </TableRow>
                     );
                   })}
@@ -317,6 +329,13 @@ export function RecordingsTab({ team }: { team: Team }) {
           </>
         )}
       </Section>
+      <LogCommentsDrawer
+        target={thread}
+        me={me}
+        canComment
+        canManage={canDelete}
+        onClose={() => setThread(null)}
+      />
       <ConfirmDialog
         open={deleting !== null}
         title={tr("Delete recording?")}

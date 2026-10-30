@@ -1547,4 +1547,12 @@ export const ru: Readonly<Record<string, string>> = {
     "{v1} управляет этим почтовым доменом через единый вход. Аккаунт с паролем для него создать нельзя — войдите через провайдера вашей организации, и аккаунт создастся автоматически.",
   "This e-mail domain is managed through single sign-on. Sign in with your organisation's provider and your account is created automatically.":
     "Этот почтовый домен управляется через единый вход. Войдите через провайдера вашей организации, и аккаунт создастся автоматически.",
+  Comments: "Комментарии",
+  "Delete comment": "Удалить комментарий",
+  "No comments yet.": "Комментариев пока нет.",
+  "No comments yet. Leave the first one, with the moment it refers to if you like.":
+    "Комментариев пока нет. Оставьте первый, при желании с моментом записи, к которому он относится.",
+  "At (mm:ss)": "Момент (мм:сс)",
+  "Use mm:ss or seconds": "Формат мм:сс или секунды",
+  Post: "Отправить",
 };

@@ -14,8 +14,8 @@ use reqwest::{Method, StatusCode};
 use termoso_crypto::keys::SymmetricKey;
 use termoso_crypto::sealed;
 use termoso_proto::logs::{
-    CreateLogRequest, CreateLogResponse, DownloadLogResponse, LogListResponse, SessionLog,
-    UpdateLogRequest,
+    CreateLogCommentRequest, CreateLogRequest, CreateLogResponse, DownloadLogResponse, LogComment,
+    LogCommentList, LogListResponse, SessionLog, UpdateLogRequest,
 };
 use termoso_proto::team::{AuditEventList, CreateInviteRequest, CreateTeamRequest, Team, TeamRole};
 use termoso_proto::vault::{
@@ -773,4 +773,162 @@ async fn mandatory_recording_policy_and_team_export() {
         StatusCode::NO_CONTENT,
     )
     .await;
+}
+
+#[tokio::test]
+async fn recording_comments_by_role() {
+    let s = server_with_storage!();
+    let owner = register(s, &unique_email("lc-owner"), "pw-owner-1234567").await;
+    let editor = register(s, &unique_email("lc-editor"), "pw-editor-123456").await;
+    let viewer = register(s, &unique_email("lc-viewer"), "pw-viewer-123456").await;
+    let outsider = register(s, &unique_email("lc-out"), "pw-outsider-1234").await;
+    let team: Team = s
+        .json(
+            Method::POST,
+            "/teams",
+            Some(owner.token()),
+            Some(&CreateTeamRequest { name: "Ops".into() }),
+        )
+        .await;
+    for u in [&editor, &viewer] {
+        join(s, &team, &owner, u, vec![]).await;
+    }
+    let (vault, _key) = team_vault(
+        s,
+        &team,
+        &owner,
+        &[(&editor, VaultRole::Editor), (&viewer, VaultRole::Viewer)],
+    )
+    .await;
+    let log = record(s, &editor, vault.id, "deploy", b"xterm bytes").await;
+    let say = |body: &str, offset: Option<i64>| CreateLogCommentRequest {
+        body: body.to_owned(),
+        offset_ms: offset,
+    };
+
+    // Empty thread for every reader; outsiders see no recording at all.
+    let empty: LogCommentList = s
+        .json(
+            Method::GET,
+            &format!("/logs/{log}/comments"),
+            Some(viewer.token()),
+            NOBODY,
+        )
+        .await;
+    assert!(empty.comments.is_empty());
+    s.expect_status(
+        Method::GET,
+        &format!("/logs/{log}/comments"),
+        Some(outsider.token()),
+        NOBODY,
+        StatusCode::NOT_FOUND,
+    )
+    .await;
+
+    // Editor (author) and owner comment; the viewer may only read.
+    let first: LogComment = s
+        .json(
+            Method::POST,
+            &format!("/logs/{log}/comments"),
+            Some(editor.token()),
+            Some(&say("  restart at 00:12  ", Some(12_000))),
+        )
+        .await;
+    assert_eq!(first.body, "restart at 00:12");
+    assert_eq!(first.offset_ms, Some(12_000));
+    assert_eq!(first.author.as_ref().map(|a| a.user_id), Some(editor.id()));
+    let second: LogComment = s
+        .json(
+            Method::POST,
+            &format!("/logs/{log}/comments"),
+            Some(owner.token()),
+            Some(&say("looks fine", None)),
+        )
+        .await;
+    s.expect_status(
+        Method::POST,
+        &format!("/logs/{log}/comments"),
+        Some(viewer.token()),
+        Some(&say("me too", None)),
+        StatusCode::FORBIDDEN,
+    )
+    .await;
+    s.expect_status(
+        Method::POST,
+        &format!("/logs/{log}/comments"),
+        Some(editor.token()),
+        Some(&say("   ", None)),
+        StatusCode::BAD_REQUEST,
+    )
+    .await;
+    s.expect_status(
+        Method::POST,
+        &format!("/logs/{log}/comments"),
+        Some(editor.token()),
+        Some(&say("back in time", Some(-1))),
+        StatusCode::BAD_REQUEST,
+    )
+    .await;
+
+    let thread: LogCommentList = s
+        .json(
+            Method::GET,
+            &format!("/logs/{log}/comments"),
+            Some(viewer.token()),
+            NOBODY,
+        )
+        .await;
+    assert_eq!(
+        thread.comments.iter().map(|c| c.id).collect::<Vec<_>>(),
+        vec![first.id, second.id],
+        "oldest first"
+    );
+
+    // Deleting: the editor cannot remove the owner's comment, the owner (manager) can remove any.
+    s.expect_status(
+        Method::DELETE,
+        &format!("/logs/{log}/comments/{}", second.id),
+        Some(editor.token()),
+        NOBODY,
+        StatusCode::FORBIDDEN,
+    )
+    .await;
+    s.expect_status(
+        Method::DELETE,
+        &format!("/logs/{log}/comments/{}", first.id),
+        Some(editor.token()),
+        NOBODY,
+        StatusCode::NO_CONTENT,
+    )
+    .await;
+    s.expect_status(
+        Method::DELETE,
+        &format!("/logs/{log}/comments/{}", second.id),
+        Some(owner.token()),
+        NOBODY,
+        StatusCode::NO_CONTENT,
+    )
+    .await;
+    let gone: LogCommentList = s
+        .json(
+            Method::GET,
+            &format!("/logs/{log}/comments"),
+            Some(owner.token()),
+            NOBODY,
+        )
+        .await;
+    assert!(gone.comments.is_empty());
+
+    // The team audit trail saw both the comment and its removal.
+    let audit: AuditEventList = s
+        .json(
+            Method::GET,
+            &format!("/teams/{}/audit?limit=50", team.id),
+            Some(owner.token()),
+            NOBODY,
+        )
+        .await;
+    let actions: Vec<&str> = audit.events.iter().map(|e| e.action.as_str()).collect();
+    assert!(actions.contains(&"log.commented"), "{actions:?}");
+    assert!(actions.contains(&"log.comment_deleted"), "{actions:?}");
 }

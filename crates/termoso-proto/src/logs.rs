@@ -65,6 +65,51 @@ schema! {
 
 /// Longest team note accepted by the server.
 pub const MAX_NOTE_CHARS: usize = 2000;
+/// Comment length cap, in characters.
+pub const MAX_COMMENT_CHARS: usize = 2000;
+/// Comments per recording.
+pub const MAX_COMMENTS_PER_LOG: i64 = 500;
+
+schema! {
+    /// One comment in a recording's thread.
+    pub struct LogComment {
+        /// Comment id.
+        pub id: Uuid,
+        /// Recording it belongs to.
+        pub log_id: Uuid,
+        /// Who wrote it.
+        pub user_id: Uuid,
+        /// Author profile.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub author: Option<LogAuthor>,
+        /// Text, trimmed, up to [`MAX_COMMENT_CHARS`].
+        pub body: String,
+        /// Point in the recording the comment refers to, milliseconds from the start.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pub offset_ms: Option<i64>,
+        /// Posted.
+        pub created_at: DateTime<Utc>,
+    }
+}
+
+schema! {
+    /// `POST /logs/{id}/comments`.
+    pub struct CreateLogCommentRequest {
+        /// Text.
+        pub body: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        /// Point in the recording, milliseconds from the start.
+        pub offset_ms: Option<i64>,
+    }
+}
+
+schema! {
+    /// `GET /logs/{id}/comments`, oldest first.
+    pub struct LogCommentList {
+        /// The thread.
+        pub comments: Vec<LogComment>,
+    }
+}
 
 schema! {
     /// `POST /logs` – reserve a log and get an upload URL.

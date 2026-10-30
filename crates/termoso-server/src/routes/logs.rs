@@ -921,3 +921,187 @@ pub async fn blob_get(
     )
         .into_response())
 }
+
+// ───────────────────────────── comments ─────────────────────────────
+
+#[derive(sqlx::FromRow)]
+struct CommentRow {
+    id: Uuid,
+    log_id: Uuid,
+    user_id: Uuid,
+    body: String,
+    offset_ms: Option<i64>,
+    created_at: DateTime<Utc>,
+    email: String,
+    display_name: Option<String>,
+    avatar_tag: Option<String>,
+}
+
+const COMMENT_SELECT: &str = "SELECT c.id, c.log_id, c.user_id, c.body, c.offset_ms, c.created_at,
+        u.email, u.display_name, u.avatar_tag
+    FROM session_log_comments c JOIN users u ON u.id = c.user_id";
+
+fn comment(r: CommentRow) -> LogComment {
+    LogComment {
+        id: r.id,
+        log_id: r.log_id,
+        user_id: r.user_id,
+        author: Some(LogAuthor {
+            user_id: r.user_id,
+            email: r.email,
+            display_name: r.display_name,
+            avatar_tag: r.avatar_tag,
+        }),
+        body: r.body,
+        offset_ms: r.offset_ms,
+        created_at: r.created_at,
+    }
+}
+
+fn clean_comment(body: &str) -> ApiResult<String> {
+    let body = body.trim();
+    if body.is_empty() {
+        return Err(Error::bad_request("Comment is empty"));
+    }
+    if body.chars().count() > MAX_COMMENT_CHARS {
+        return Err(Error::too_large(format!(
+            "Comments are limited to {MAX_COMMENT_CHARS} characters"
+        )));
+    }
+    if body
+        .chars()
+        .any(|c| c.is_control() && c != '\n' && c != '\t')
+    {
+        return Err(Error::bad_request("Comment contains control characters"));
+    }
+    Ok(body.to_owned())
+}
+
+/// Everyone who can read the recording can read its thread.
+#[utoipa::path(get, path = "/api/v1/logs/{id}/comments", tag = "logs", params(("id" = Uuid, Path)),
+    responses((status = 200, body = LogCommentList)))]
+pub async fn comments_list(
+    State(state): State<AppState>,
+    auth: Auth,
+    Path(id): Path<Uuid>,
+) -> ApiResult<Json<LogCommentList>> {
+    let grant = readable(&state, &auth, id).await?;
+    if grant.stored.log.deleted {
+        return Err(Error::not_found("Log"));
+    }
+    let rows: Vec<CommentRow> = sqlx::query_as(AssertSqlSafe(format!(
+        "{COMMENT_SELECT} WHERE c.log_id = $1 ORDER BY c.created_at, c.id"
+    )))
+    .bind(id)
+    .fetch_all(&state.db)
+    .await?;
+    Ok(Json(LogCommentList {
+        comments: rows.into_iter().map(comment).collect(),
+    }))
+}
+
+/// Editors (and the author) comment; viewers read.
+#[utoipa::path(post, path = "/api/v1/logs/{id}/comments", tag = "logs", params(("id" = Uuid, Path)),
+    request_body = CreateLogCommentRequest, responses((status = 200, body = LogComment)))]
+pub async fn comment_create(
+    State(state): State<AppState>,
+    auth: Auth,
+    Path(id): Path<Uuid>,
+    Body(req): Body<CreateLogCommentRequest>,
+) -> ApiResult<Json<LogComment>> {
+    let grant = readable(&state, &auth, id).await?;
+    let log = &grant.stored.log;
+    if log.deleted {
+        return Err(Error::not_found("Log"));
+    }
+    if !grant.can_write() {
+        return Err(Error::forbidden("Editor role required to comment"));
+    }
+    let body = clean_comment(&req.body)?;
+    if req.offset_ms.is_some_and(|o| o < 0) {
+        return Err(Error::bad_request("offset_ms must not be negative"));
+    }
+    let count: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM session_log_comments WHERE log_id = $1")
+            .bind(id)
+            .fetch_one(&state.db)
+            .await?;
+    if count >= MAX_COMMENTS_PER_LOG {
+        return Err(Error::too_large(format!(
+            "A recording holds at most {MAX_COMMENTS_PER_LOG} comments"
+        )));
+    }
+    let cid = Uuid::new_v4();
+    sqlx::query(
+        "INSERT INTO session_log_comments (id, log_id, user_id, body, offset_ms) VALUES ($1, $2, $3, $4, $5)",
+    )
+    .bind(cid)
+    .bind(id)
+    .bind(auth.user_id())
+    .bind(&body)
+    .bind(req.offset_ms)
+    .execute(&state.db)
+    .await?;
+    let row: CommentRow =
+        sqlx::query_as(AssertSqlSafe(format!("{COMMENT_SELECT} WHERE c.id = $1")))
+            .bind(cid)
+            .fetch_one(&state.db)
+            .await?;
+    if let Some(team_id) = grant.team_id() {
+        audit::record(
+            &state.db,
+            audit::Entry::new(team_id, &auth, "log.commented")
+                .vault(log.vault_id)
+                .details(serde_json::json!({
+                    "log_id": id,
+                    "author_id": log.user_id,
+                    "comment_id": cid,
+                })),
+        )
+        .await;
+    }
+    Ok(Json(comment(row)))
+}
+
+/// Your own comment, or any comment if you manage the vault (the recording's
+/// author gets no extra say over the thread).
+#[utoipa::path(delete, path = "/api/v1/logs/{id}/comments/{comment_id}", tag = "logs",
+    params(("id" = Uuid, Path), ("comment_id" = Uuid, Path)), responses((status = 204)))]
+pub async fn comment_delete(
+    State(state): State<AppState>,
+    auth: Auth,
+    Path((id, comment_id)): Path<(Uuid, Uuid)>,
+) -> ApiResult<NoContent> {
+    let grant = readable(&state, &auth, id).await?;
+    let owner: Option<Uuid> = sqlx::query_scalar(
+        "SELECT user_id FROM session_log_comments WHERE id = $1 AND log_id = $2",
+    )
+    .bind(comment_id)
+    .bind(id)
+    .fetch_optional(&state.db)
+    .await?;
+    let Some(owner) = owner else {
+        return Err(Error::not_found("Comment"));
+    };
+    // Recording authors do not moderate other people's comments; vault managers do.
+    let manages_vault = grant.access.as_ref().is_some_and(|a| a.role.can_manage());
+    if owner != auth.user_id() && !manages_vault {
+        return Err(Error::forbidden(
+            "Only the author or a vault manager can delete a comment",
+        ));
+    }
+    sqlx::query("DELETE FROM session_log_comments WHERE id = $1")
+        .bind(comment_id)
+        .execute(&state.db)
+        .await?;
+    if let Some(team_id) = grant.team_id() {
+        audit::record(
+            &state.db,
+            audit::Entry::new(team_id, &auth, "log.comment_deleted")
+                .vault(grant.stored.log.vault_id)
+                .details(serde_json::json!({ "log_id": id, "comment_id": comment_id })),
+        )
+        .await;
+    }
+    Ok(NoContent)
+}
