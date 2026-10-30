@@ -1,6 +1,6 @@
 ---
 title: Import existing hosts
-description: Bring hosts in from OpenSSH, PuTTY, Termius, MobaXterm, SecureCRT, ZOC, cloud providers, a text snippet or a QR code instead of typing them again.
+description: Bring hosts in from OpenSSH, PuTTY, Termius, MobaXterm, SecureCRT, ZOC, WinSCP, Royal TS, iTerm2, Tabby, Xshell, cloud providers, a text snippet or a QR code instead of typing them again.
 ---
 
 ## Desktop
@@ -17,6 +17,11 @@ Open **Hosts → New host ▾ → Import…** and pick a source:
 | MobaXterm        | A `.mxtsessions` export or `MobaXterm.ini`: SSH and Telnet sessions with their folders, gateway (jump) chains, SOCKS/HTTP proxies, key paths, X11 and agent forwarding. Passwords are stored encrypted inside MobaXterm and are not part of the file. |
 | SecureCRT        | The `Config/Sessions` directory (sub-folders become groups), a single session `.ini`, or the XML from *File → Export Settings*: SSH and Telnet sessions, key files, `Session:` firewalls as jump hosts, descriptions as notes. Saved passwords are encrypted with the config passphrase and are skipped. |
 | ZOC Terminal     | `HostDirectory.zhd` (in *ZOC Files → Options*): SSH hosts with folders, usernames, key files and memos. Serial entries are listed as skipped. |
+| WinSCP           | `WinSCP.ini` or *Tools → Export/Backup Configuration*: SCP/SFTP sites with their folders, key files, tunnels as jump hosts, SOCKS/HTTP proxies, keep-alive and notes. FTP, WebDAV and S3 sites are listed as skipped; saved passwords are obfuscated by WinSCP and are not read. |
+| Royal TS         | An `.rtsz` document: SSH and Telnet connections with folders, the user name from the attached credential, secure gateways as jump hosts, key paths and descriptions as notes. Passwords in the document are encrypted by Royal TS and are skipped. |
+| iTerm2           | A Dynamic Profiles JSON file, a profile saved as JSON, or `com.googlecode.iterm2.plist`: every profile whose command (or *Send text at start*) is `ssh …` becomes a host; `-p -i -J -l -A -X`, `-o User/ProxyJump/IdentityFile` and `-L/-R/-D` port forwards are understood, profile tags become tags. |
+| Tabby            | `config.yaml`: SSH and Telnet profiles with groups, key files, jump hosts (resolved by profile id), SOCKS/HTTP proxies and forwarded ports, plus the legacy `ssh.connections` list. Passwords live in the system keychain and are not part of the file. |
+| Xshell           | The `Sessions` directory (sub-folders become groups) or a single `.xsh` file: SSH and Telnet sessions with user names, X11 forwarding and descriptions. Passwords are encrypted with the Xshell master password and keys live in Xshell's own key store, both are listed per session. |
 
 Parsing only produces a **preview**: hosts, keys and settings are listed with what will be created, and nothing is written until you pick what to import and a target vault.
 
@@ -25,7 +30,7 @@ Parsing only produces a **preview**: hosts, keys and settings are listed with wh
 - A `ProxyJump` becomes a **jump host** reference to the imported bastion, so chains keep working.
 - Hosts that are already in the vault (same address, port and user) are recognised, so importing the same file twice does not duplicate them. What the existing host is missing — group, tags, notes, password, key, proxy, jump hosts — is filled in from the import; anything already set is kept. That lets you combine sources in either order, for example the Termius CSV for groups and passwords and `~/.ssh` for keys.
 - Private keys are read from disk only when you confirm, and go into the Keychain encrypted. A key with a passphrase is asked for it on first use, not during import.
-- Passwords found in the source never reach the interface; PuTTY and Termius do not export them anyway, MobaXterm and SecureCRT keep theirs encrypted and the import says so per session.
+- Passwords found in the source never reach the interface; PuTTY and Termius do not export them anyway, MobaXterm, SecureCRT, WinSCP, Royal TS and Xshell keep theirs encrypted and the import says so per session.
 
 ### Cloud providers
 
@@ -39,7 +44,7 @@ The provider credentials are kept only in this device's encrypted local storage:
 
 ## Android
 
-**+ → Import hosts** on the Hosts screen takes pasted text, a QR code or a file from the system picker and runs the same parsers as the desktop: OpenSSH `ssh_config`, a PuTTY registry export (`.reg`), MobaXterm bookmarks (`.mxtsessions`), SecureCRT settings (`.ini` / `.xml`), the ZOC host directory and CSV (the desktop's template or any sheet with host/address columns). The format is detected from the file name and contents; loose `user@host:port` lines work too. Tick the hosts you want — label, address, port, user and a password from the source are imported; key files, jump hosts, proxies and port-forwarding rules are not on the phone, so they are listed as warnings instead. Copy the export to the phone (or open it from a cloud drive) and pick it.
+**+ → Import hosts** on the Hosts screen takes pasted text, a QR code or a file from the system picker and runs the same parsers as the desktop: OpenSSH `ssh_config`, a PuTTY registry export (`.reg`), MobaXterm bookmarks (`.mxtsessions`), SecureCRT settings (`.ini` / `.xml`), the ZOC host directory, `WinSCP.ini`, a Royal TS `.rtsz` document, iTerm2 profiles (JSON / plist), Tabby `config.yaml`, an Xshell `.xsh` session and CSV (the desktop's template or any sheet with host/address columns). The format is detected from the file name and contents; loose `user@host:port` lines work too. Tick the hosts you want — label, address, port, user and a password from the source are imported; key files, jump hosts, proxies and port-forwarding rules are not on the phone, so they are listed as warnings instead. Copy the export to the phone (or open it from a cloud drive) and pick it.
 
 ![Quick Import on Android](/docs/img/android-quick-import.png)
 
