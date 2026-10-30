@@ -287,17 +287,17 @@ fn find_key<'a>(node: &'a Node, name: &str) -> Option<&'a Node> {
 }
 
 #[derive(Debug, Default)]
-struct Node {
-    tag: String,
-    name: Option<String>,
-    text: String,
-    children: Vec<Node>,
+pub(super) struct Node {
+    pub(super) tag: String,
+    pub(super) name: Option<String>,
+    pub(super) text: String,
+    pub(super) children: Vec<Node>,
 }
 
 /// Just enough XML for VanDyke exports: elements, a `name` attribute,
 /// text and the five predefined entities. Comments and processing
 /// instructions are skipped.
-fn parse_xml(input: &str) -> Option<Node> {
+pub(super) fn parse_xml(input: &str) -> Option<Node> {
     let mut stack: Vec<Node> = vec![Node {
         tag: "#root".into(),
         ..Default::default()

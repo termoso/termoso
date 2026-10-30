@@ -74,6 +74,11 @@ const SOURCE_LABEL: Record<ImportSource, string> = {
   mobaxterm: "MobaXterm",
   securecrt: "SecureCRT",
   zoc: "ZOC Terminal",
+  winscp: "WinSCP",
+  royalts: "Royal TS",
+  iterm2: "iTerm2",
+  tabby: "Tabby",
+  xshell: "Xshell",
 };
 
 const all = (n: number) => Array.from({ length: n }, (_, i) => i);
@@ -284,6 +289,43 @@ function Body({
       { name: "ZOC", extensions: ["zhd", "txt"] },
     ]);
     if (path) void load(tr("Parsing…"), () => ipc.importParseFile("zoc", path));
+  };
+  const parseWinscp = async () => {
+    const path = await pickFile(tr("WinSCP configuration"), [
+      { name: "WinSCP", extensions: ["ini"] },
+    ]);
+    if (path) void load(tr("Parsing…"), () => ipc.importParseFile("winscp", path));
+  };
+  const parseRoyalts = async () => {
+    const path = await pickFile(tr("Royal TS document"), [
+      { name: "Royal TS", extensions: ["rtsz", "xml"] },
+    ]);
+    if (path) void load(tr("Parsing…"), () => ipc.importParseFile("royalts", path));
+  };
+  const parseIterm2 = async () => {
+    const path = await pickFile(tr("iTerm2 profiles"), [
+      { name: "iTerm2", extensions: ["json", "plist"] },
+    ]);
+    if (path) void load(tr("Parsing…"), () => ipc.importParseFile("iterm2", path));
+  };
+  const parseTabby = async () => {
+    const path = await pickFile(tr("Tabby config.yaml"), [
+      { name: "Tabby", extensions: ["yaml", "yml"] },
+    ]);
+    if (path) void load(tr("Parsing…"), () => ipc.importParseFile("tabby", path));
+  };
+  const scanXshellDir = async () => {
+    const picked = await openFile({
+      directory: true,
+      multiple: false,
+      title: tr("Xshell Sessions directory"),
+    });
+    if (typeof picked === "string")
+      void load(tr("Scanning…"), () => ipc.importScanXshellDir(picked));
+  };
+  const parseXshellFile = async () => {
+    const path = await pickFile(tr("Xshell session"), [{ name: "Xshell", extensions: ["xsh"] }]);
+    if (path) void load(tr("Parsing…"), () => ipc.importParseFile("xshell", path));
   };
   const saveTemplate = async () => {
     const path = await saveFile({
@@ -519,6 +561,106 @@ function Body({
                   >
                     {tr("Host directory…")}
                   </Button>
+                }
+              />
+              <SourceCard
+                icon={<FolderOpenRoundedIcon />}
+                tone="accent"
+                title="WinSCP"
+                description={tr(
+                  "WinSCP.ini or an exported configuration: SCP/SFTP sites with folders, key files, tunnels and proxies. Saved passwords stay in WinSCP.",
+                )}
+                actions={
+                  <Button
+                    size="small"
+                    variant="contained"
+                    startIcon={<DescriptionOutlinedIcon />}
+                    onClick={() => void parseWinscp()}
+                  >
+                    {tr("WinSCP.ini…")}
+                  </Button>
+                }
+              />
+              <SourceCard
+                icon={<DnsRoundedIcon />}
+                tone="purple"
+                title="Royal TS"
+                description={tr(
+                  "An .rtsz document: SSH and Telnet connections with folders, credentials (user name only), secure gateways as jump hosts and key paths.",
+                )}
+                actions={
+                  <Button
+                    size="small"
+                    variant="contained"
+                    startIcon={<DescriptionOutlinedIcon />}
+                    onClick={() => void parseRoyalts()}
+                  >
+                    {tr("Document…")}
+                  </Button>
+                }
+              />
+              <SourceCard
+                icon={<TerminalRoundedIcon />}
+                tone="accent"
+                title="iTerm2"
+                description={tr(
+                  "Dynamic Profiles JSON or com.googlecode.iterm2.plist: profiles whose command is ssh … become hosts, with -p/-i/-J/-L/-R/-D and tags.",
+                )}
+                actions={
+                  <Button
+                    size="small"
+                    variant="contained"
+                    startIcon={<DescriptionOutlinedIcon />}
+                    onClick={() => void parseIterm2()}
+                  >
+                    {tr("Profiles…")}
+                  </Button>
+                }
+              />
+              <SourceCard
+                icon={<TerminalRoundedIcon />}
+                tone="purple"
+                title="Tabby"
+                description={tr(
+                  "config.yaml: SSH and Telnet profiles with groups, key files, jump hosts, proxies and port forwards. Passwords stay in the system keychain.",
+                )}
+                actions={
+                  <Button
+                    size="small"
+                    variant="contained"
+                    startIcon={<DescriptionOutlinedIcon />}
+                    onClick={() => void parseTabby()}
+                  >
+                    {tr("config.yaml…")}
+                  </Button>
+                }
+              />
+              <SourceCard
+                icon={<DnsRoundedIcon />}
+                tone="accent"
+                title="Xshell"
+                description={tr(
+                  "The Sessions directory (sub-folders become groups) or a single .xsh file: SSH and Telnet sessions with user names and descriptions. Passwords and keys stay in Xshell.",
+                )}
+                actions={
+                  <>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      startIcon={<FolderOpenRoundedIcon />}
+                      onClick={() => void scanXshellDir()}
+                    >
+                      {tr("Sessions directory…")}
+                    </Button>
+                    <Button
+                      size="small"
+                      color="inherit"
+                      startIcon={<DescriptionOutlinedIcon />}
+                      onClick={() => void parseXshellFile()}
+                    >
+                      {tr("Session file…")}
+                    </Button>
+                  </>
                 }
               />
             </Box>

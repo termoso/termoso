@@ -736,6 +736,14 @@ pub async fn import_scan_securecrt_dir(path: String) -> Result<ImportPreview> {
 }
 
 #[tauri::command]
+pub async fn import_scan_xshell_dir(path: String) -> Result<ImportPreview> {
+    tauri::async_runtime::spawn_blocking(move || import::scan_xshell_dir(&path))
+        .await
+        .map_err(|e| crate::error::DesktopError::new("import", e.to_string()))?
+        .map(import::remember)
+}
+
+#[tauri::command]
 pub async fn import_scan_putty_registry() -> Result<ImportPreview> {
     tauri::async_runtime::spawn_blocking(import::scan_putty_registry)
         .await
