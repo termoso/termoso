@@ -27,6 +27,8 @@ import {
   TableContainer,
 } from "@mui/material";
 import CommentOutlinedIcon from "@mui/icons-material/CommentOutlined";
+import ForumOutlinedIcon from "@mui/icons-material/ForumOutlined";
+import { LogCommentsDrawer, type CommentTarget } from "./LogCommentsDrawer";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import LockOpenRoundedIcon from "@mui/icons-material/LockOpenRounded";
 import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
@@ -163,6 +165,7 @@ export function SessionLogsSection({ vault, manager }: { vault: Vault; manager: 
     onError: (e) => snack.error(errorMessage(e)),
   });
   const [editing, setEditing] = useState<SessionLog | null>(null);
+  const [thread, setThread] = useState<CommentTarget | null>(null);
   const [deleting, setDeleting] = useState<SessionLog | null>(null);
 
   return (
@@ -322,6 +325,14 @@ export function SessionLogsSection({ vault, manager }: { vault: Vault; manager: 
                           {formatBytes(l.size_bytes)}
                         </TableCell>
                         <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>
+                          <Tooltip title={tr("Comments")}>
+                            <IconButton
+                              size="small"
+                              onClick={() => setThread({ log: l, title: meta?.label ?? l.id })}
+                            >
+                              <ForumOutlinedIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
                           {canAnnotate && (
                             <>
                               <Tooltip title={l.pinned ? tr("Unpin") : tr("Pin")}>
@@ -377,6 +388,13 @@ export function SessionLogsSection({ vault, manager }: { vault: Vault; manager: 
         )}
       </Stack>
 
+      <LogCommentsDrawer
+        target={thread}
+        me={me}
+        canComment={canAnnotate}
+        canManage={manager}
+        onClose={() => setThread(null)}
+      />
       <NoteDialog
         log={editing}
         busy={annotate.isPending}

@@ -36,3 +36,7 @@ On servers with object storage configured (`TERMOSO_S3__*`, see [Self-hosting](/
 ## Android
 
 **Recordings** in the vault menu lists the phone's recordings with the same search and pin. Recording is switched on under **Settings → Session logs** like on the desktop; the setting is per device.
+
+## Comments
+
+Every recording has a thread: the **Comments** button in its row (vault page or **Team → Recordings**) opens it. Editors and the recording's author post, optionally with the moment of the session the note refers to (`mm:ss`); viewers read. A comment is removed by its author or by a vault manager, and both actions land in the team audit trail as `log.commented` / `log.comment_deleted`. The thread is plain text on the server, like the shared note; the recording itself stays encrypted.

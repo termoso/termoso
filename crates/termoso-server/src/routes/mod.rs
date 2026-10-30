@@ -355,6 +355,14 @@ pub fn router(state: AppState) -> Router {
         .route("/logs", get(logs::list).post(logs::create))
         .route("/logs/{id}", patch(logs::update).delete(logs::delete))
         .route("/logs/{id}/download", get(logs::download))
+        .route(
+            "/logs/{id}/comments",
+            get(logs::comments_list).post(logs::comment_create),
+        )
+        .route(
+            "/logs/{id}/comments/{comment_id}",
+            delete(logs::comment_delete),
+        )
         .route("/vaults/{id}/logs", get(logs::list_vault))
         .route("/teams/{id}/logs", get(logs::team_list))
         .route("/teams/{id}/logs/export", get(logs::team_export))

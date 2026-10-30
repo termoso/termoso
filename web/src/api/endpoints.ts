@@ -69,6 +69,7 @@ import type {
   AdminTeamAuditList,
   AdminTeamMemberList,
   PageParams,
+  LogComment,
 } from "./types";
 import type {
   AccessRequest,
@@ -422,6 +423,11 @@ export const logsApi = {
   update: (id: string, patch: { pinned?: boolean; note?: string }) =>
     http.patch<SessionLog>(`/logs/${id}`, patch),
   delete: (id: string) => http.delete<undefined>(`/logs/${id}`),
+  comments: (id: string) => http.get<{ comments: LogComment[] }>(`/logs/${id}/comments`),
+  addComment: (id: string, body: string, offset_ms?: number) =>
+    http.post<LogComment>(`/logs/${id}/comments`, { body, offset_ms }),
+  deleteComment: (id: string, commentId: string) =>
+    http.delete<undefined>(`/logs/${id}/comments/${commentId}`),
 };
 
 export const bridgesApi = {
