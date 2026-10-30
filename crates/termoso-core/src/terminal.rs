@@ -59,6 +59,16 @@ pub type TermSink = mpsc::Sender<TermEvent>;
 /// Buffer between the transport and the UI in events.
 pub const EVENT_BUFFER: usize = 1024;
 
+/// Upper bound on scrollback lines any Termoso terminal keeps, whatever the
+/// settings say. A full 100 000 × 200-cell grid is roughly 200 MB in the
+/// alacritty grid, which is where the limit stops being a feature.
+pub const MAX_SCROLLBACK_LINES: u32 = 100_000;
+
+/// Clamp a user-provided scrollback setting to [`MAX_SCROLLBACK_LINES`].
+pub fn clamp_scrollback(lines: u32) -> u32 {
+    lines.min(MAX_SCROLLBACK_LINES)
+}
+
 /// Create the event channel used by every implementation.
 pub fn event_channel() -> (TermSink, TermEvents) {
     mpsc::channel(EVENT_BUFFER)
@@ -79,3 +89,15 @@ pub trait TerminalSession: Send + Sync {
 
 /// Shared, type-erased session handle.
 pub type SharedTerminal = Arc<dyn TerminalSession>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn scrollback_is_capped() {
+        assert_eq!(clamp_scrollback(500), 500);
+        assert_eq!(clamp_scrollback(MAX_SCROLLBACK_LINES), MAX_SCROLLBACK_LINES);
+        assert_eq!(clamp_scrollback(u32::MAX), MAX_SCROLLBACK_LINES);
+    }
+}

@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use termoso_core::secrets::{self, MasterKeySource};
 use termoso_core::store::Store;
 use termoso_core::sync::ConflictPolicy;
+use termoso_core::terminal::MAX_SCROLLBACK_LINES;
 
 use crate::account::AccountRuntime;
 use crate::edits::Edits;
@@ -520,8 +521,10 @@ impl Settings {
         if self.terminal_theme.is_empty() || self.terminal_theme.len() > 64 {
             return Err(DesktopError::invalid("terminalTheme must be 1-64 chars"));
         }
-        if self.scrollback > 1_000_000 {
-            return Err(DesktopError::invalid("scrollback too large"));
+        if self.scrollback > MAX_SCROLLBACK_LINES {
+            return Err(DesktopError::invalid(format!(
+                "scrollback must be at most {MAX_SCROLLBACK_LINES} lines"
+            )));
         }
         if !TERM_TYPES.contains(&self.term_type.as_str()) {
             return Err(DesktopError::invalid(format!(

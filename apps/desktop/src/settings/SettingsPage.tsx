@@ -654,7 +654,7 @@ function Terminal({ s, update }: SectionProps) {
               value={s.scrollback}
               onChange={(n) => update({ scrollback: n })}
               min={100}
-              max={1_000_000}
+              max={100_000}
               step={100}
             />
           }
