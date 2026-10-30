@@ -334,7 +334,7 @@ impl Emulator {
             size: proxy_size.clone(),
         };
         let config = Config {
-            scrolling_history: scrollback as usize,
+            scrolling_history: termoso_core::terminal::clamp_scrollback(scrollback) as usize,
             ..Config::default()
         };
         let term = Term::new(config, &size, proxy);

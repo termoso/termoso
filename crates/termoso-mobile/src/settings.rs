@@ -3,6 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 use termoso_core::store::Store;
+use termoso_core::terminal::clamp_scrollback;
 
 use crate::error::Result;
 
@@ -256,7 +257,7 @@ impl MobileSettings {
 
     pub(crate) fn save(&self, store: &Store) -> Result<()> {
         let mut s = self.clone();
-        s.scrollback_lines = s.scrollback_lines.clamp(0, 100_000);
+        s.scrollback_lines = clamp_scrollback(s.scrollback_lines);
         s.terminal_font_size = s.terminal_font_size.clamp(6, 40);
         if s.term_type.trim().is_empty() {
             s.term_type = default_term();
