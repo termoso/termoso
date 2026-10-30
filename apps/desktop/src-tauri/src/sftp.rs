@@ -1268,6 +1268,12 @@ async fn unique_local(path: &Path) -> Result<PathBuf> {
     Ok(dir.join(fresh))
 }
 
+/// Per-transfer byte budget from Settings → SFTP (`None` = unlimited).
+pub fn rate_limit<R: Runtime>(app: &AppHandle<R>) -> Option<u64> {
+    let kib = app.state::<AppState>().settings().ok()?.sftp_rate_limit_kib;
+    (kib > 0).then(|| u64::from(kib) * 1024)
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn run_transfer<R: Runtime>(
     app: &AppHandle<R>,
@@ -1282,6 +1288,7 @@ async fn run_transfer<R: Runtime>(
     tracker: &ProgressTracker<'_>,
     cancel: CancellationToken,
 ) -> Result<(u64, usize)> {
+    let rate_limit = rate_limit(app);
     let plan = match direction {
         Direction::Upload => {
             let (l, r) = (local.clone(), remote.clone());
@@ -1354,6 +1361,7 @@ async fn run_transfer<R: Runtime>(
             progress: Some(Arc::new(move |p: Progress| {
                 rep.report(base + p.done, i, skipped, &cur, false);
             })),
+            rate_limit,
         };
         moved += match direction {
             Direction::Upload => sftp.upload(&item.local, &item.remote, &opts).await?,
@@ -1513,9 +1521,175 @@ pub async fn drop_abort(dir: String) -> Result<()> {
     Ok(())
 }
 
+// ───────────────────────────── compare ─────────────────────────────
+
+/// One side of a comparison: a path on an open connection, or on this
+/// machine when `sftp_id` is `None`.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiffSide {
+    pub sftp_id: Option<Uuid>,
+    pub path: String,
+}
+
+/// One row of a line diff. `skip` rows stand for `text` unchanged lines that
+/// were left out between hunks.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DiffLine {
+    /// `equal` | `insert` | `delete` | `skip`.
+    pub kind: &'static str,
+    /// 1-based line number on the left.
+    pub old: Option<usize>,
+    /// 1-based line number on the right.
+    pub new: Option<usize>,
+    pub text: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiffResult {
+    /// Byte-for-byte identical.
+    pub same: bool,
+    /// At least one side has a NUL in its first 8 KiB: sizes only, no lines.
+    pub binary: bool,
+    /// Output stopped at [`MAX_DIFF_LINES`].
+    pub truncated: bool,
+    pub left_size: u64,
+    pub right_size: u64,
+    pub lines: Vec<DiffLine>,
+}
+
+/// Files larger than this are not compared (they are not text anyway).
+pub const MAX_DIFF_BYTES: u64 = 4 * 1024 * 1024;
+const MAX_DIFF_LINES: usize = 20_000;
+const DIFF_CONTEXT: usize = 3;
+
+async fn read_side(state: &AppState, side: &DiffSide) -> Result<Vec<u8>> {
+    let too_large = || {
+        DesktopError::invalid(format!(
+            "{} is larger than {} MiB",
+            side.path,
+            MAX_DIFF_BYTES >> 20
+        ))
+    };
+    match side.sftp_id {
+        None => {
+            let meta = tokio::fs::metadata(&side.path).await?;
+            if !meta.is_file() {
+                return Err(DesktopError::invalid(format!(
+                    "{} is not a file",
+                    side.path
+                )));
+            }
+            if meta.len() > MAX_DIFF_BYTES {
+                return Err(too_large());
+            }
+            Ok(tokio::fs::read(&side.path).await?)
+        }
+        Some(id) => {
+            let fs = state.sftp.sftp(id)?;
+            let entry = fs.stat(&side.path).await?;
+            if entry.kind == termoso_core::sftp::EntryKind::Dir {
+                return Err(DesktopError::invalid(format!(
+                    "{} is a directory",
+                    side.path
+                )));
+            }
+            if entry.size.unwrap_or(0) > MAX_DIFF_BYTES {
+                return Err(too_large());
+            }
+            Ok(fs.read(&side.path).await?)
+        }
+    }
+}
+
+/// Line diff of two files, either side local or remote.
+pub async fn diff(state: &AppState, left: DiffSide, right: DiffSide) -> Result<DiffResult> {
+    let (a, b) = tokio::try_join!(read_side(state, &left), read_side(state, &right))?;
+    Ok(diff_bytes(&a, &b))
+}
+
+fn looks_binary(bytes: &[u8]) -> bool {
+    bytes.iter().take(8192).any(|&c| c == 0)
+}
+
+/// Hunks with [`DIFF_CONTEXT`] lines of context, separated by `skip` rows.
+pub fn diff_bytes(a: &[u8], b: &[u8]) -> DiffResult {
+    let mut out = DiffResult {
+        same: a == b,
+        binary: looks_binary(a) || looks_binary(b),
+        truncated: false,
+        left_size: a.len() as u64,
+        right_size: b.len() as u64,
+        lines: Vec::new(),
+    };
+    if out.same || out.binary {
+        return out;
+    }
+    let (a, b) = (String::from_utf8_lossy(a), String::from_utf8_lossy(b));
+    let diff = similar::TextDiff::from_lines(a.as_ref(), b.as_ref());
+    let mut last_old = 0usize;
+    for (gi, group) in diff.grouped_ops(DIFF_CONTEXT).iter().enumerate() {
+        if gi > 0 {
+            let first_old = group
+                .first()
+                .map(|op| op.old_range().start)
+                .unwrap_or(last_old);
+            out.lines.push(DiffLine {
+                kind: "skip",
+                old: None,
+                new: None,
+                text: first_old.saturating_sub(last_old).to_string(),
+            });
+        }
+        for op in group {
+            for change in diff.iter_changes(op) {
+                if out.lines.len() >= MAX_DIFF_LINES {
+                    out.truncated = true;
+                    return out;
+                }
+                let kind = match change.tag() {
+                    similar::ChangeTag::Equal => "equal",
+                    similar::ChangeTag::Insert => "insert",
+                    similar::ChangeTag::Delete => "delete",
+                };
+                out.lines.push(DiffLine {
+                    kind,
+                    old: change.old_index().map(|i| i + 1),
+                    new: change.new_index().map(|i| i + 1),
+                    text: change.value().trim_end_matches(['\n', '\r']).to_string(),
+                });
+            }
+            last_old = op.old_range().end;
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn diff_bytes_hunks_and_binary() {
+        let same = diff_bytes(b"a\nb\n", b"a\nb\n");
+        assert!(same.same && same.lines.is_empty());
+        let bin = diff_bytes(b"\0\x01", b"x");
+        assert!(bin.binary && !bin.same && bin.lines.is_empty());
+        let left: String = (1..=20).map(|i| format!("l{i}\n")).collect();
+        let right = left.replace("l2\n", "L2\n").replace("l19\n", "L19\n");
+        let d = diff_bytes(left.as_bytes(), right.as_bytes());
+        assert!(!d.same && !d.binary && !d.truncated);
+        let kinds: Vec<&str> = d.lines.iter().map(|l| l.kind).collect();
+        assert!(kinds.contains(&"skip"), "{kinds:?}");
+        let del = d.lines.iter().find(|l| l.kind == "delete").unwrap();
+        assert_eq!((del.text.as_str(), del.old, del.new), ("l2", Some(2), None));
+        let ins = d.lines.iter().find(|l| l.kind == "insert").unwrap();
+        assert_eq!((ins.text.as_str(), ins.old, ins.new), ("L2", None, Some(2)));
+        let skip = d.lines.iter().find(|l| l.kind == "skip").unwrap();
+        assert_eq!(skip.text, "10");
+    }
 
     #[tokio::test]
     async fn unique_name_keeps_extension_and_counts_up() {

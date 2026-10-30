@@ -1,21 +1,24 @@
 //! Watch & upload: a local folder is watched and every file saved under it
 //! is uploaded to the same place under a remote folder of an open SFTP
-//! connection — the «saved — it's on the server» deploy loop. One-way, local
-//! → remote; remote deletions only when asked. Uploads go straight through
-//! the connection (no transfer queue entry per save), progress and errors
-//! arrive as `sftp_sync` events.
+//! connection — the «saved — it's on the server» deploy loop. Local →
+//! remote; remote deletions only when asked. With `two_way` the remote
+//! folder is also polled and files that are newer there come down, so two
+//! machines editing the same tree converge (newest mtime wins, deletions
+//! never travel server → disk). Transfers go straight through the
+//! connection (no transfer queue entry per save), progress and errors arrive
+//! as `sftp_sync` events.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Utc};
 use notify::Watcher;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use termoso_core::remote::RemoteFs;
-use termoso_core::sftp::TransferOptions;
+use termoso_core::sftp::{EntryKind, RemoteEntry, TransferOptions};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
@@ -27,6 +30,12 @@ pub const SYNC_EVENT: &str = "sftp_sync";
 const SETTLE: Duration = Duration::from_millis(400);
 /// A save that fails is retried a few times (editor still holding the file, network blip).
 const RETRIES: u32 = 2;
+/// Two-way: how often the remote tree is listed for changes.
+const POLL: Duration = Duration::from_secs(15);
+/// Watcher events for a file we just wrote ourselves are ignored this long.
+const WRITE_GRACE: Duration = Duration::from_secs(3);
+/// Two-way: listing stops here so a huge remote tree cannot pin the connection.
+const MAX_REMOTE_ENTRIES: usize = 20_000;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -39,6 +48,8 @@ pub struct SyncInfo {
     pub ignore: Vec<String>,
     /// Delete on the server what was deleted locally.
     pub delete_remote: bool,
+    /// Also download files that change on the server (polled every 15 s).
+    pub two_way: bool,
     pub started_at: DateTime<Utc>,
 }
 
@@ -46,6 +57,8 @@ pub struct SyncInfo {
 #[serde(rename_all = "camelCase")]
 pub struct SyncStats {
     pub uploaded: u64,
+    /// Two-way only: files that came down from the server.
+    pub downloaded: u64,
     pub bytes: u64,
     pub removed: u64,
     pub failed: u64,
@@ -149,6 +162,7 @@ pub async fn start<R: Runtime>(
     ignore: Vec<String>,
     delete_remote: bool,
     upload_existing: bool,
+    two_way: bool,
 ) -> Result<SyncInfo> {
     let state = app.state::<AppState>();
     let fs = state.sftp.sftp(sftp_id)?;
@@ -189,6 +203,7 @@ pub async fn start<R: Runtime>(
         remote: remote.clone(),
         ignore: ignore.clone(),
         delete_remote,
+        two_way,
         started_at: Utc::now(),
     };
     let live = Arc::new(Live {
@@ -212,6 +227,8 @@ pub async fn start<R: Runtime>(
         remote,
         ignore,
         delete_remote,
+        two_way,
+        writes: Mutex::new(HashMap::new()),
     };
     tauri::async_runtime::spawn(async move {
         // The watcher lives as long as the task.
@@ -262,6 +279,41 @@ struct Worker<R: Runtime> {
     remote: String,
     ignore: Vec<String>,
     delete_remote: bool,
+    two_way: bool,
+    /// Local paths we wrote ourselves (downloads) and when; their watcher
+    /// events must not bounce back up as uploads.
+    writes: Mutex<HashMap<PathBuf, Instant>>,
+}
+
+/// Which side of a file pair is newer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Newer {
+    Local,
+    Remote,
+    Same,
+}
+
+/// mtime decides (anything within a second is a tie, SFTP has whole seconds);
+/// on a tie a size difference means the local copy wins, like the one-way loop.
+fn newer(local_mtime: u64, local_size: u64, remote: &RemoteEntry) -> Newer {
+    let rm = u64::from(remote.mtime.unwrap_or(0));
+    if local_mtime > rm + 1 {
+        Newer::Local
+    } else if rm > local_mtime + 1 {
+        Newer::Remote
+    } else if remote.size.is_some_and(|s| s != local_size) {
+        Newer::Local
+    } else {
+        Newer::Same
+    }
+}
+
+fn mtime_secs(meta: &std::fs::Metadata) -> u64 {
+    meta.modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
 }
 
 impl<R: Runtime> Worker<R> {
@@ -273,12 +325,20 @@ impl<R: Runtime> Worker<R> {
         let cancel = self.live.cancel.clone();
         let mut pending: BTreeMap<PathBuf, Change> = BTreeMap::new();
         let mut known_dirs: HashSet<String> = HashSet::new();
-        if upload_existing {
+        let mut seen: HashMap<String, (Option<u64>, Option<u32>)> = HashMap::new();
+        if self.two_way {
+            self.reconcile(&mut pending, &mut seen, upload_existing)
+                .await;
+            self.set_pending(pending.len());
+        } else if upload_existing {
             for p in walk(&self.root, &self.ignore) {
                 pending.insert(p, Change::Upsert);
             }
             self.set_pending(pending.len());
         }
+        let mut poll = tokio::time::interval(POLL);
+        poll.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        poll.tick().await;
         loop {
             let wait = if pending.is_empty() {
                 None
@@ -291,6 +351,9 @@ impl<R: Runtime> Worker<R> {
                     let Some(ev) = ev else { return Some("watcher stopped".into()) };
                     self.absorb(ev, &mut pending);
                     self.set_pending(pending.len());
+                }
+                _ = poll.tick(), if self.two_way => {
+                    self.poll_remote(&mut seen, &pending).await;
                 }
                 _ = async { match wait { Some(s) => s.await, None => std::future::pending().await } } => {
                     // Settle timer fired: flush everything collected so far,
@@ -325,6 +388,7 @@ impl<R: Runtime> Worker<R> {
             if p == &self.root
                 || !p.starts_with(&self.root)
                 || is_ignored(&self.root, p, &self.ignore)
+                || self.recently_written(p)
             {
                 continue;
             }
@@ -371,6 +435,7 @@ impl<R: Runtime> Worker<R> {
                     preserve_mtime: true,
                     cancel: cancel.clone(),
                     progress: None,
+                    rate_limit: crate::sftp::rate_limit(&self.app),
                 };
                 let mut attempt = 0;
                 loop {
@@ -412,6 +477,202 @@ impl<R: Runtime> Worker<R> {
                 }
             }
         }
+    }
+
+    /// Two-way start: list both trees once; a file only here goes up (when
+    /// asked), only there comes down, on both sides the newer one wins.
+    async fn reconcile(
+        &self,
+        pending: &mut BTreeMap<PathBuf, Change>,
+        seen: &mut HashMap<String, (Option<u64>, Option<u32>)>,
+        upload_existing: bool,
+    ) {
+        let remote: HashMap<String, RemoteEntry> = self
+            .walk_remote()
+            .await
+            .into_iter()
+            .filter(|(_, e)| e.kind == EntryKind::File)
+            .collect();
+        for (rel, e) in &remote {
+            seen.insert(rel.clone(), (e.size, e.mtime));
+        }
+        let mut local_rels: HashSet<String> = HashSet::new();
+        for p in walk(&self.root, &self.ignore) {
+            if self.live.cancel.is_cancelled() {
+                return;
+            }
+            let Some(rel) = relative(&self.root, &p) else {
+                continue;
+            };
+            let Ok(meta) = std::fs::metadata(&p) else {
+                continue;
+            };
+            if meta.is_dir() {
+                if upload_existing {
+                    pending.insert(p, Change::Upsert);
+                }
+                continue;
+            }
+            local_rels.insert(rel.clone());
+            match remote.get(&rel) {
+                None => {
+                    if upload_existing {
+                        pending.insert(p, Change::Upsert);
+                    }
+                }
+                Some(e) => match newer(mtime_secs(&meta), meta.len(), e) {
+                    Newer::Local => {
+                        pending.insert(p, Change::Upsert);
+                    }
+                    Newer::Remote => self.download(&rel, e).await,
+                    Newer::Same => {}
+                },
+            }
+        }
+        for (rel, e) in &remote {
+            if self.live.cancel.is_cancelled() {
+                return;
+            }
+            if !local_rels.contains(rel) {
+                self.download(rel, e).await;
+            }
+        }
+    }
+
+    /// Two-way tick: anything new or changed on the server since the last
+    /// listing comes down, unless the local copy is newer or about to go up.
+    async fn poll_remote(
+        &self,
+        seen: &mut HashMap<String, (Option<u64>, Option<u32>)>,
+        pending: &BTreeMap<PathBuf, Change>,
+    ) {
+        let remote = self.walk_remote().await;
+        let mut current: HashSet<String> = HashSet::new();
+        for (rel, e) in remote {
+            if self.live.cancel.is_cancelled() {
+                return;
+            }
+            if e.kind != EntryKind::File {
+                continue;
+            }
+            current.insert(rel.clone());
+            let key = (e.size, e.mtime);
+            if seen.insert(rel.clone(), key) == Some(key) {
+                continue;
+            }
+            let local = self.local_path(&rel);
+            if pending.contains_key(&local) {
+                continue;
+            }
+            if let Ok(meta) = std::fs::metadata(&local)
+                && newer(mtime_secs(&meta), meta.len(), &e) != Newer::Remote
+            {
+                continue;
+            }
+            self.download(&rel, &e).await;
+        }
+        seen.retain(|k, _| current.contains(k));
+    }
+
+    async fn download(&self, rel: &str, entry: &RemoteEntry) {
+        let local = self.local_path(rel);
+        if let Some(parent) = local.parent()
+            && let Err(e) = std::fs::create_dir_all(parent)
+        {
+            self.failed(rel, e.to_string());
+            return;
+        }
+        self.mark_written(&local);
+        let opts = TransferOptions {
+            resume: false,
+            preserve_mtime: true,
+            cancel: self.live.cancel.clone(),
+            progress: None,
+            rate_limit: crate::sftp::rate_limit(&self.app),
+        };
+        let res = self.fs.download(&entry.path, &local, &opts).await;
+        self.mark_written(&local);
+        match res {
+            Ok(bytes) => self.downloaded(rel, bytes),
+            Err(_) if self.live.cancel.is_cancelled() => {}
+            Err(e) => self.failed(rel, e.to_string()),
+        }
+    }
+
+    /// Every entry under the remote root (relative path with slashes), ignore
+    /// patterns applied to names, depth-first, capped at [`MAX_REMOTE_ENTRIES`].
+    async fn walk_remote(&self) -> Vec<(String, RemoteEntry)> {
+        let mut out = Vec::new();
+        let mut stack = vec![self.remote.clone()];
+        while let Some(dir) = stack.pop() {
+            if self.live.cancel.is_cancelled() || out.len() >= MAX_REMOTE_ENTRIES {
+                break;
+            }
+            let entries = match self.fs.list(&dir).await {
+                Ok(v) => v,
+                Err(e) => {
+                    self.failed(&dir, e.to_string());
+                    continue;
+                }
+            };
+            for e in entries {
+                if e.name == "." || e.name == ".." {
+                    continue;
+                }
+                if self
+                    .ignore
+                    .iter()
+                    .any(|p| glob_match(p.trim_end_matches('/'), &e.name))
+                {
+                    continue;
+                }
+                let Some(rel) = e.path.strip_prefix(&self.remote) else {
+                    continue;
+                };
+                let rel = rel.trim_start_matches('/').to_string();
+                if rel.is_empty() {
+                    continue;
+                }
+                if e.kind == EntryKind::Dir {
+                    stack.push(e.path.clone());
+                }
+                out.push((rel, e));
+            }
+        }
+        out
+    }
+
+    fn local_path(&self, rel: &str) -> PathBuf {
+        let mut p = self.root.clone();
+        for part in rel.split('/').filter(|s| !s.is_empty()) {
+            p.push(part);
+        }
+        p
+    }
+
+    fn mark_written(&self, path: &Path) {
+        self.writes
+            .lock()
+            .expect("sync writes poisoned")
+            .insert(path.to_path_buf(), Instant::now());
+    }
+
+    fn recently_written(&self, path: &Path) -> bool {
+        let mut w = self.writes.lock().expect("sync writes poisoned");
+        w.retain(|_, t| t.elapsed() < WRITE_GRACE);
+        w.contains_key(path)
+    }
+
+    fn downloaded(&self, rel: &str, bytes: u64) {
+        let mut s = self.live.stats.lock().expect("sync stats poisoned");
+        s.downloaded += 1;
+        s.bytes += bytes;
+        s.last_path = Some(rel.to_string());
+        s.last_at = Some(Utc::now());
+        s.last_error = None;
+        let snap = s.clone();
+        drop(s);
+        self.emit(snap);
     }
 
     fn set_pending(&self, n: usize) {
@@ -604,6 +865,30 @@ mod tests {
         assert_eq!(normalize_remote("/"), "/");
         assert_eq!(remote_parent("/srv/app/x").as_deref(), Some("/srv/app"));
         assert_eq!(remote_parent("/x").as_deref(), Some("/"));
+    }
+
+    #[test]
+    fn newer_side_by_mtime_then_size() {
+        let e = |mtime: u32, size: u64| RemoteEntry {
+            name: "f".into(),
+            path: "/r/f".into(),
+            kind: EntryKind::File,
+            size: Some(size),
+            mode: None,
+            uid: None,
+            gid: None,
+            user: None,
+            group: None,
+            mtime: Some(mtime),
+            atime: None,
+            link_target: None,
+            target_kind: None,
+        };
+        assert_eq!(newer(1000, 10, &e(1000, 10)), Newer::Same);
+        assert_eq!(newer(1001, 10, &e(1000, 10)), Newer::Same);
+        assert_eq!(newer(1002, 10, &e(1000, 10)), Newer::Local);
+        assert_eq!(newer(1000, 10, &e(1002, 10)), Newer::Remote);
+        assert_eq!(newer(1000, 11, &e(1000, 10)), Newer::Local);
     }
 
     #[test]

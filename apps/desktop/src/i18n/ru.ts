@@ -3232,4 +3232,21 @@ export const ru: Readonly<Record<string, string>> = {
   "Disk encryption": "Шифрование диска",
   "Screen lock": "Блокировка экрана",
   "Hardware key": "Аппаратный ключ",
+  "Every file saved under the local folder is uploaded to the same place under the remote folder, until you stop. Local → server; turn on two-way to also pull what changes on the server.":
+    "Каждый файл, сохранённый в локальной папке, загружается в то же место удалённой папки, пока вы не остановите. Локальная → сервер; включите двустороннюю, чтобы забирать и изменения с сервера.",
+  "Two-way: download files that change on the server (checked every 15 s, newest wins, deletions are not pulled)":
+    "Двусторонняя: скачивать файлы, изменившиеся на сервере (проверка каждые 15 с, побеждает новейший, удаления не забираются)",
+  "{n} downloaded": "{n} скачано",
+  "Transfer speed limit": "Лимит скорости передачи",
+  "KiB/s per file, for the queue, watch & upload and edits. 0 is unlimited.":
+    "КиБ/с на файл: очередь, «Следить и загружать» и правки. 0 = без лимита.",
+  "Compare with other pane": "Сравнить с другой панелью",
+  "Remote: {path}": "Удалённый: {path}",
+  "Local: {path}": "Локальный: {path}",
+  "Compare: {name}": "Сравнение: {name}",
+  "The files are identical.": "Файлы идентичны.",
+  "Binary content differs; sizes {a} and {b}.":
+    "Двоичное содержимое различается; размеры {a} и {b}.",
+  "… {n} unchanged lines": "… {n} строк без изменений",
+  "… output truncated": "… вывод обрезан",
 };

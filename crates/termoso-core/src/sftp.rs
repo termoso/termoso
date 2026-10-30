@@ -128,6 +128,8 @@ pub struct TransferOptions {
     pub cancel: CancellationToken,
     /// Called after every chunk.
     pub progress: Option<ProgressFn>,
+    /// Bytes per second this transfer may use; `None` is unlimited.
+    pub rate_limit: Option<u64>,
 }
 
 impl Default for TransferOptions {
@@ -137,6 +139,51 @@ impl Default for TransferOptions {
             preserve_mtime: true,
             cancel: CancellationToken::new(),
             progress: None,
+            rate_limit: None,
+        }
+    }
+}
+
+/// Paces a byte stream to a rate: after each chunk the caller sleeps until
+/// the bytes moved so far fit the budget accumulated since the start. Short
+/// bursts up to one chunk are allowed; the average converges on the limit.
+#[derive(Debug)]
+pub struct Throttle {
+    bytes_per_sec: Option<u64>,
+    started: std::time::Instant,
+    moved: u64,
+}
+
+impl Throttle {
+    /// `None` or `Some(0)` disables pacing.
+    pub fn new(bytes_per_sec: Option<u64>) -> Self {
+        Self {
+            bytes_per_sec: bytes_per_sec.filter(|&b| b > 0),
+            started: std::time::Instant::now(),
+            moved: 0,
+        }
+    }
+
+    /// Account for `bytes` and return how long to sleep so the stream stays
+    /// within the limit (zero when under budget or unlimited).
+    pub fn delay_after(&mut self, bytes: usize, now: std::time::Instant) -> std::time::Duration {
+        self.moved += bytes as u64;
+        let Some(rate) = self.bytes_per_sec else {
+            return std::time::Duration::ZERO;
+        };
+        let due = std::time::Duration::from_secs_f64(self.moved as f64 / rate as f64);
+        due.saturating_sub(now.saturating_duration_since(self.started))
+    }
+
+    /// Account for `bytes` and sleep off any excess; `cancel` cuts the wait.
+    pub async fn pace(&mut self, bytes: usize, cancel: &CancellationToken) {
+        let d = self.delay_after(bytes, std::time::Instant::now());
+        if d.is_zero() {
+            return;
+        }
+        tokio::select! {
+            _ = tokio::time::sleep(d) => {}
+            _ = cancel.cancelled() => {}
         }
     }
 }
@@ -605,6 +652,7 @@ impl Sftp {
 
         let done = AtomicU64::new(offset);
         let mut buf = vec![0u8; CHUNK];
+        let mut throttle = Throttle::new(opts.rate_limit);
         loop {
             if opts.cancel.is_cancelled() {
                 file.flush().await?;
@@ -620,6 +668,7 @@ impl Sftp {
             file.write_all(&buf[..n]).await?;
             let d = done.fetch_add(n as u64, Ordering::Relaxed) + n as u64;
             opts.report(d, total);
+            throttle.pace(n, &opts.cancel).await;
         }
         file.flush().await?;
         drop(file);
@@ -680,6 +729,7 @@ impl Sftp {
 
         let mut done = offset;
         let mut buf = vec![0u8; CHUNK];
+        let mut throttle = Throttle::new(opts.rate_limit);
         loop {
             if opts.cancel.is_cancelled() {
                 let _ = dst.close().await;
@@ -695,6 +745,7 @@ impl Sftp {
             }
             done += n as u64;
             opts.report(done, total);
+            throttle.pace(n, &opts.cancel).await;
         }
         dst.flush().await?;
         dst.close().await?;
@@ -814,5 +865,34 @@ impl RemoteFs for Sftp {
     }
     async fn close(&self) -> Result<()> {
         Sftp::close(self).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn throttle_paces_to_the_limit() {
+        use std::time::{Duration, Instant};
+        let t0 = Instant::now();
+        let mut t = Throttle::new(Some(1024));
+        t.started = t0;
+        // 1 KiB at t=0 is due at t=1s: sleep the whole second.
+        assert_eq!(t.delay_after(1024, t0), Duration::from_secs(1));
+        // Another 1 KiB at t=1.5s is due at t=2s: half a second.
+        assert_eq!(
+            t.delay_after(1024, t0 + Duration::from_millis(1500)),
+            Duration::from_millis(500)
+        );
+        // Far behind schedule: no sleep.
+        assert_eq!(
+            t.delay_after(1024, t0 + Duration::from_secs(10)),
+            Duration::ZERO
+        );
+        let mut off = Throttle::new(Some(0));
+        assert_eq!(off.delay_after(1 << 20, t0), Duration::ZERO);
+        let mut none = Throttle::new(None);
+        assert_eq!(none.delay_after(1 << 20, t0), Duration::ZERO);
     }
 }

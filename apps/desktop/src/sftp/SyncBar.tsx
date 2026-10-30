@@ -91,6 +91,7 @@ export function SyncBar() {
 
 const emptyStats = (): SyncStats => ({
   uploaded: 0,
+  downloaded: 0,
   bytes: 0,
   removed: 0,
   failed: 0,
@@ -103,8 +104,9 @@ const emptyStats = (): SyncStats => ({
 function summary(s: SyncStats): string {
   if (s.pending > 0) return tr("Uploading {n}…", { n: s.pending });
   if (s.lastError) return tr("{n} failed", { n: s.failed });
-  if (s.uploaded === 0 && s.removed === 0) return tr("Watching for changes");
+  if (s.uploaded === 0 && s.removed === 0 && s.downloaded === 0) return tr("Watching for changes");
   const parts = [tr("{n} uploaded ({size})", { n: s.uploaded, size: formatSize(s.bytes) })];
+  if (s.downloaded > 0) parts.push(tr("{n} downloaded", { n: s.downloaded }));
   if (s.removed > 0) parts.push(tr("{n} removed", { n: s.removed }));
   if (s.failed > 0) parts.push(tr("{n} failed", { n: s.failed }));
   return parts.join(" · ");

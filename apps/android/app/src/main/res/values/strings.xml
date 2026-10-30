@@ -1455,6 +1455,9 @@
     <string name="terminal_type">Terminal type</string>
     <string name="scrollback">Scrollback</string>
     <string name="n_lines">%1$d lines</string>
+    <string name="transfer_rate_limit">Transfer speed limit</string>
+    <string name="rate_unlimited">Unlimited</string>
+    <string name="n_kib_s">%1$d KiB/s</string>
     <string name="keep_alive_interval">Keep-alive interval</string>
     <string name="default_for_hosts_without_their_own_interval">Default for hosts without their own interval</string>
     <string name="off">Off</string>
