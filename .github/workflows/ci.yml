@@ -120,6 +120,7 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm run wasm
       - run: npm run format:check
+      - run: node ../scripts/i18n-extract.mjs --check
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run build

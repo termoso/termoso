@@ -283,7 +283,7 @@ private fun ChainEditorDialog(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("${i + 1}. ${h?.label ?: id}", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                         IconButton(enabled = i > 0, onClick = { hostIds = hostIds.toMutableList().also { l -> l.add(i - 1, l.removeAt(i)) } }) {
-                            Icon(Icons.Filled.ArrowUpward, contentDescription = null)
+                            Icon(Icons.Filled.ArrowUpward, contentDescription = stringResource(R.string.move_up))
                         }
                         IconButton(onClick = { hostIds = hostIds - id }) { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.remove_2)) }
                     }
