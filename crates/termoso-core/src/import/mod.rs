@@ -7,10 +7,15 @@
 #![allow(missing_docs)]
 
 pub mod csv;
+pub mod iterm2;
 pub mod mobaxterm;
 pub mod putty;
+pub mod royalts;
 pub mod securecrt;
 pub mod ssh_config;
+pub mod tabby;
+pub mod winscp;
+pub mod xshell;
 pub mod zoc;
 
 use std::path::{Path, PathBuf};
@@ -44,6 +49,11 @@ pub enum ImportSource {
     Mobaxterm,
     Securecrt,
     Zoc,
+    Winscp,
+    Royalts,
+    Iterm2,
+    Tabby,
+    Xshell,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -250,4 +260,22 @@ pub fn utf16(bytes: &[u8], little: bool) -> String {
         })
         .collect();
     String::from_utf16_lossy(&units)
+}
+
+/// `host`, `host:port` or `[v6]:port`; a bad or zero port is dropped.
+pub(super) fn split_host_port(s: &str) -> (&str, Option<u16>) {
+    let s = s.trim();
+    if let Some(rest) = s.strip_prefix('[')
+        && let Some((host, tail)) = rest.split_once(']')
+    {
+        let port = tail.strip_prefix(':').and_then(|p| p.parse().ok());
+        return (host, port);
+    }
+    match s.rsplit_once(':') {
+        Some((host, port)) if !host.contains(':') => match port.parse::<u16>() {
+            Ok(p) if p > 0 => (host, Some(p)),
+            _ => (s, None),
+        },
+        _ => (s, None),
+    }
 }

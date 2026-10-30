@@ -29,7 +29,8 @@ pub struct ImportedHostItem {
 
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct ImportPreviewItem {
-    /// `ssh_config`, `putty`, `csv`, `mobaxterm`, `securecrt`, `zoc`.
+    /// `ssh_config`, `putty`, `csv`, `mobaxterm`, `securecrt`, `zoc`, `winscp`,
+    /// `royalts`, `iterm2`, `tabby`, `xshell`.
     pub source: String,
     pub hosts: Vec<ImportedHostItem>,
     pub warnings: Vec<String>,
@@ -43,6 +44,11 @@ fn source_name(s: ImportSource) -> &'static str {
         ImportSource::Mobaxterm => "mobaxterm",
         ImportSource::Securecrt => "securecrt",
         ImportSource::Zoc => "zoc",
+        ImportSource::Winscp => "winscp",
+        ImportSource::Royalts => "royalts",
+        ImportSource::Iterm2 => "iterm2",
+        ImportSource::Tabby => "tabby",
+        ImportSource::Xshell => "xshell",
     }
 }
 
@@ -54,6 +60,11 @@ fn parse_source(s: &str) -> Option<ImportSource> {
         "mobaxterm" | "moba" => ImportSource::Mobaxterm,
         "securecrt" => ImportSource::Securecrt,
         "zoc" => ImportSource::Zoc,
+        "winscp" => ImportSource::Winscp,
+        "royalts" | "royal_ts" | "rtsz" => ImportSource::Royalts,
+        "iterm2" | "iterm" => ImportSource::Iterm2,
+        "tabby" => ImportSource::Tabby,
+        "xshell" | "xsh" => ImportSource::Xshell,
         _ => return None,
     })
 }
@@ -73,6 +84,28 @@ pub fn detect(text: &str, file_name: &str) -> ImportSource {
         || ext == "reg"
     {
         return ImportSource::Putty;
+    }
+    if head_l.contains("[sessions\\") || name == "winscp.ini" {
+        return ImportSource::Winscp;
+    }
+    if head_l.contains("<rtszdocument") || head_l.contains("<royalsshconnection") || ext == "rtsz" {
+        return ImportSource::Royalts;
+    }
+    if head_l.contains("[connection]") || ext == "xsh" {
+        return ImportSource::Xshell;
+    }
+    if head_l.contains("\"profiles\"")
+        || head_l.contains("<key>new bookmarks</key>")
+        || head_l.contains("com.googlecode.iterm2")
+        || head_l.contains("\"custom command\"")
+    {
+        return ImportSource::Iterm2;
+    }
+    if head_l.contains("profiles:") && head_l.contains("type: ssh")
+        || head_l.contains("connections:") && (ext == "yaml" || ext == "yml")
+        || name == "config.yaml" && head_l.contains("profiles:")
+    {
+        return ImportSource::Tabby;
     }
     if head_l.contains("[bookmarks") || head_l.contains("subrep=") || name.contains("mobaxterm") {
         return ImportSource::Mobaxterm;
@@ -130,6 +163,17 @@ pub fn parse(text: &str, file_name: &str, source: Option<String>) -> Result<Impo
             }
         }
         ImportSource::Zoc => core::zoc::parse_into(text, &mut preview)?,
+        ImportSource::Winscp => core::winscp::parse_into(text, &mut preview)?,
+        ImportSource::Royalts => core::royalts::parse_into(text, &mut preview)?,
+        ImportSource::Iterm2 => core::iterm2::parse_into(text, &mut preview)?,
+        ImportSource::Tabby => core::tabby::parse_into(text, &mut preview)?,
+        ImportSource::Xshell => {
+            let label = Path::new(file_name)
+                .file_stem()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            core::xshell::parse_into(text, &label, &[], &mut preview)?
+        }
     }
     Ok(flatten(preview))
 }
@@ -206,6 +250,29 @@ mod tests {
         assert_eq!(
             detect("<?xml?><VanDyke version=\"3.0\">", "a.xml"),
             ImportSource::Securecrt
+        );
+        assert_eq!(
+            detect(
+                "[Configuration]\n[Sessions\\Prod/Web]\nHostName=a\n",
+                "WinSCP.ini"
+            ),
+            ImportSource::Winscp
+        );
+        assert_eq!(
+            detect("<?xml version=\"1.0\"?><RTSZDocument>", "Servers.rtsz"),
+            ImportSource::Royalts
+        );
+        assert_eq!(
+            detect("[CONNECTION]\nHost=a\n", "web.xsh"),
+            ImportSource::Xshell
+        );
+        assert_eq!(
+            detect("{\"Profiles\": [{\"Name\": \"a\"}]}", "profiles.json"),
+            ImportSource::Iterm2
+        );
+        assert_eq!(
+            detect("profiles:\n  - type: ssh\n    name: a\n", "config.yaml"),
+            ImportSource::Tabby
         );
         assert_eq!(
             detect("label,address,port\nweb,10.0.0.1,22\n", "hosts.csv"),

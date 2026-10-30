@@ -234,5 +234,10 @@ private fun importSourceLabel(source: String): String = when (source) {
     "mobaxterm" -> "MobaXterm"
     "securecrt" -> "SecureCRT"
     "zoc" -> "ZOC"
+    "winscp" -> "WinSCP"
+    "royalts" -> "Royal TS"
+    "iterm2" -> "iTerm2"
+    "tabby" -> "Tabby"
+    "xshell" -> "Xshell"
     else -> "ssh_config"
 }
