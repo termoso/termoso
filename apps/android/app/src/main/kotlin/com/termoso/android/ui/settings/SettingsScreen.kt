@@ -118,6 +118,7 @@ fun SettingsScreen(
     var delayPicker by remember { mutableStateOf(false) }
     var termTypePicker by remember { mutableStateOf(false) }
     var scrollbackPicker by remember { mutableStateOf(false) }
+    var rateLimitPicker by remember { mutableStateOf(false) }
     var keepAlivePicker by remember { mutableStateOf(false) }
     var privacy by remember { mutableStateOf(false) }
     var licenses by remember { mutableStateOf(false) }
@@ -411,6 +412,12 @@ fun SettingsScreen(
                     checked = filesEnabled,
                     onCheckedChange = container.files::setEnabled,
                 )
+                RowDivider()
+                ChevronRow(
+                    title = stringResource(R.string.transfer_rate_limit),
+                    badge = rateLimitLabel(settings.transferRateLimitKib),
+                    modifier = Modifier.clickable { rateLimitPicker = true },
+                )
             }
 
             SectionLabel(stringResource(R.string.about))
@@ -468,6 +475,14 @@ fun SettingsScreen(
             onPick = { set { s -> s.copy(termType = it) } },
         ) { termTypePicker = false }
     }
+    if (rateLimitPicker) {
+        ChoiceSheet(
+            stringResource(R.string.transfer_rate_limit),
+            RATE_LIMITS.map { it to rateLimitLabel(it) },
+            settings.transferRateLimitKib,
+            onPick = { set { s -> s.copy(transferRateLimitKib = it) } },
+        ) { rateLimitPicker = false }
+    }
     if (scrollbackPicker) {
         ChoiceSheet(
             stringResource(R.string.scrollback),
@@ -514,5 +529,11 @@ fun SettingsScreen(
 
 /** `TERM` values a shell is likely to have terminfo for. */
 private val TERM_TYPES = listOf("xterm-256color", "xterm", "screen-256color", "tmux-256color", "linux", "vt100")
+private val RATE_LIMITS = listOf(0u, 256u, 512u, 1024u, 2048u, 5120u, 10240u, 51200u)
+
+@Composable
+private fun rateLimitLabel(kib: UInt): String =
+    if (kib == 0u) stringResource(R.string.rate_unlimited) else stringResource(R.string.n_kib_s, kib.toInt())
+
 private val SCROLLBACKS = listOf(500u, 1000u, 2000u, 5000u, 10000u, 50000u)
 private val KEEP_ALIVES = listOf(0u, 15u, 30u, 60u, 120u, 300u)

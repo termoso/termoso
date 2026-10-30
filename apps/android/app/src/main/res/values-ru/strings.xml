@@ -1489,6 +1489,9 @@
     <string name="terminal_type">Тип терминала</string>
     <string name="scrollback">История прокрутки</string>
     <string name="n_lines">%1$d строк</string>
+    <string name="transfer_rate_limit">Лимит скорости передачи</string>
+    <string name="rate_unlimited">Без лимита</string>
+    <string name="n_kib_s">%1$d КиБ/с</string>
     <string name="keep_alive_interval">Интервал keep-alive</string>
     <string name="default_for_hosts_without_their_own_interval">Для хостов без своего интервала</string>
     <string name="off">Выкл.</string>

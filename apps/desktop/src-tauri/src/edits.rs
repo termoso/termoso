@@ -202,6 +202,7 @@ pub async fn open<R: Runtime>(
         preserve_mtime: true,
         cancel: cancel.clone(),
         progress: None,
+        rate_limit: None,
     };
     if let Err(e) = sftp.download(&remote, &local, &opts).await {
         let _ = tokio::fs::remove_dir_all(&dir).await;
@@ -290,6 +291,7 @@ async fn watch<R: Runtime>(
             preserve_mtime: false,
             cancel: live.cancel.clone(),
             progress: None,
+            rate_limit: None,
         };
         match sftp.upload(&local, &remote, &opts).await {
             Ok(bytes) => {

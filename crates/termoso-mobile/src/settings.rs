@@ -15,6 +15,9 @@ fn default_true() -> bool {
 fn default_font_size() -> u32 {
     14
 }
+/// 1 GiB/s: anything above is "unlimited" in practice.
+const MAX_RATE_LIMIT_KIB: u32 = 1 << 20;
+
 fn default_scrollback() -> u32 {
     5000
 }
@@ -109,6 +112,9 @@ pub struct MobileSettings {
     pub cursor_blink: bool,
     #[serde(default = "default_scrollback")]
     pub scrollback_lines: u32,
+    /// SFTP transfer speed limit in KiB/s per transfer; 0 is unlimited.
+    #[serde(default)]
+    pub transfer_rate_limit_kib: u32,
     #[serde(default = "default_term")]
     pub term_type: String,
     #[serde(default = "default_true")]
@@ -218,6 +224,7 @@ impl Default for MobileSettings {
             cursor_style: default_cursor(),
             cursor_blink: true,
             scrollback_lines: default_scrollback(),
+            transfer_rate_limit_kib: 0,
             term_type: default_term(),
             terminal_bell: true,
             auto_reconnect: true,
@@ -262,6 +269,8 @@ impl MobileSettings {
     pub(crate) fn save(&self, store: &Store) -> Result<()> {
         let mut s = self.clone();
         s.scrollback_lines = clamp_scrollback(s.scrollback_lines);
+        s.scrollback_lines = s.scrollback_lines.clamp(0, 100_000);
+        s.transfer_rate_limit_kib = s.transfer_rate_limit_kib.min(MAX_RATE_LIMIT_KIB);
         s.terminal_font_size = s.terminal_font_size.clamp(6, 40);
         if s.term_type.trim().is_empty() {
             s.term_type = default_term();

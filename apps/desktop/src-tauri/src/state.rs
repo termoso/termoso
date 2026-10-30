@@ -393,6 +393,9 @@ pub struct Settings {
     pub notify_command_seconds: u32,
     /// A file transfer finished or failed while the SFTP tab was not in front.
     pub notify_transfers: bool,
+    /// SFTP transfer speed limit in KiB/s per transfer; 0 is unlimited.
+    #[serde(default)]
+    pub sftp_rate_limit_kib: u32,
     /// A live session was dropped by the network / server.
     pub notify_sessions: bool,
     /// Team and account: access to a shared vault, someone joined a shared
@@ -477,6 +480,7 @@ impl Default for Settings {
             notify_commands: true,
             notify_command_seconds: 5,
             notify_transfers: true,
+            sftp_rate_limit_kib: 0,
             notify_sessions: true,
             notify_account: true,
             shortcuts: BTreeMap::new(),
@@ -525,6 +529,9 @@ impl Settings {
             return Err(DesktopError::invalid(format!(
                 "scrollback must be at most {MAX_SCROLLBACK_LINES} lines"
             )));
+        }
+        if self.sftp_rate_limit_kib > 1 << 20 {
+            return Err(DesktopError::invalid("sftpRateLimitKib too large"));
         }
         if !TERM_TYPES.contains(&self.term_type.as_str()) {
             return Err(DesktopError::invalid(format!(
