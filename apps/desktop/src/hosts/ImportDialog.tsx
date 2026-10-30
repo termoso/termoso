@@ -324,9 +324,7 @@ function Body({
       void load(tr("Scanning…"), () => ipc.importScanXshellDir(picked));
   };
   const parseXshellFile = async () => {
-    const path = await pickFile(tr("Xshell session"), [
-      { name: "Xshell", extensions: ["xsh"] },
-    ]);
+    const path = await pickFile(tr("Xshell session"), [{ name: "Xshell", extensions: ["xsh"] }]);
     if (path) void load(tr("Parsing…"), () => ipc.importParseFile("xshell", path));
   };
   const saveTemplate = async () => {
