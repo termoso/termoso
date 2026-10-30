@@ -3234,7 +3234,6 @@ export const ru: Readonly<Record<string, string>> = {
   "Hardware key": "Аппаратный ключ",
   "WinSCP.ini or an exported configuration: SCP/SFTP sites with folders, key files, tunnels and proxies. Saved passwords stay in WinSCP.":
     "WinSCP.ini или экспорт конфигурации: SCP/SFTP-сайты с папками, файлами ключей, туннелями и прокси. Сохранённые пароли остаются в WinSCP.",
-  "WinSCP.ini…": "WinSCP.ini…",
   "An .rtsz document: SSH and Telnet connections with folders, credentials (user name only), secure gateways as jump hosts and key paths.":
     "Документ .rtsz: SSH- и Telnet-подключения с папками, учётными данными (только имя пользователя), secure gateway как jump-хосты и пути к ключам.",
   "Document…": "Документ…",
@@ -3243,7 +3242,6 @@ export const ru: Readonly<Record<string, string>> = {
   "Profiles…": "Профили…",
   "config.yaml: SSH and Telnet profiles with groups, key files, jump hosts, proxies and port forwards. Passwords stay in the system keychain.":
     "config.yaml: SSH- и Telnet-профили с группами, файлами ключей, jump-хостами, прокси и пробросами портов. Пароли остаются в системной связке ключей.",
-  "config.yaml…": "config.yaml…",
   "The Sessions directory (sub-folders become groups) or a single .xsh file: SSH and Telnet sessions with user names and descriptions. Passwords and keys stay in Xshell.":
     "Каталог Sessions (подпапки становятся группами) или один файл .xsh: SSH- и Telnet-сессии с именами пользователей и описаниями. Пароли и ключи остаются в Xshell.",
   "Sessions directory…": "Каталог Sessions…",
