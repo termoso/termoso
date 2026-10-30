@@ -20,11 +20,17 @@ export function formatNumber(n: number): string {
   return new Intl.NumberFormat(activeLocale()).format(n);
 }
 
+const CLOCK_SKEW_MS = 2 * 60_000;
+
 export function formatRelative(iso: string | undefined | null): string {
   if (!iso) return "—";
   const t = new Date(iso).getTime();
   if (Number.isNaN(t)) return "—";
-  const diff = Date.now() - t;
+  let diff = Date.now() - t;
+  // Server timestamps run a few seconds ahead of a browser whose clock lags;
+  // a fresh event is "just now", not "in a moment". Real future times
+  // (scheduled runs, expiry) are minutes away and keep the future wording.
+  if (diff < 0 && diff > -CLOCK_SKEW_MS) diff = 0;
   const future = diff < 0;
   const min = Math.round(Math.abs(diff) / 60_000);
   if (min < 1) return future ? tr("in a moment") : tr("just now");
