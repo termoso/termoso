@@ -288,6 +288,8 @@ function Body({
                     <IconButton
                       size="small"
                       onClick={() => setOpen((o) => ({ ...o, [c.key]: !o[c.key] }))}
+                      aria-label={open[c.key] ? tr("Hide details") : tr("Show details")}
+                      aria-expanded={open[c.key]}
                     >
                       {open[c.key] ? (
                         <ExpandMoreRoundedIcon fontSize="small" />
