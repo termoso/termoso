@@ -81,8 +81,10 @@ fun TerminalView(
     onSwipeSession: (Boolean) -> Unit = {},
     /** Image/file inserted by the keyboard or pasted; the caller uploads it. */
     onContent: (Uri) -> Unit = {},
-    /** Tap on an OSC 8 hyperlink; the caller offers to open it. */
+    /** Tap on an OSC 8 hyperlink or a printed URL; the caller offers to open it. */
     onLink: (String) -> Unit = {},
+    /** Search hits on the visible rows, drawn like a selection in the tertiary colour. */
+    highlights: List<TermSelection> = emptyList(),
     /** Long-press arrow gesture state for an on-screen hint; `null` when it ends. */
     onArrowGesture: (ArrowHint?) -> Unit = {},
     /** Small badge drawn just above the cursor cell (multiplayer: who is typing). */
@@ -167,6 +169,7 @@ fun TerminalView(
     val currentGrid by rememberUpdatedState(grid)
     val slop = with(density) { 12.dp.toPx() }
     val selectionColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+    val highlightColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.45f)
 
     fun selectWordAt(offset: Offset) {
         val g = currentGrid ?: return
@@ -188,7 +191,7 @@ fun TerminalView(
                         }
                         currentGrid?.let { g ->
                             val cell = currentMetrics.cellAt(offset, g)
-                            g.linkAt(cell.row, cell.col)?.let { uri ->
+                            (g.linkAt(cell.row, cell.col) ?: g.urlAt(cell.row, cell.col))?.let { uri ->
                                 onLink(uri)
                                 return@detectTapGestures
                             }
@@ -336,6 +339,7 @@ fun TerminalView(
                     cursorOverride = override,
                     focused = focused,
                 )
+                for (h in highlights) drawSelection(h, g, metrics, highlightColor)
                 selection?.let { drawSelection(it, g, metrics, selectionColor) }
             }
         }

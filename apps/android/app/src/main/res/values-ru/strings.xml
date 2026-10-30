@@ -339,6 +339,14 @@
     <string name="open_">Открыть</string>
     <string name="duplicate">Дублировать</string>
     <string name="reconnect">Переподключиться</string>
+    <string name="auto_reconnect">Переподключаться автоматически</string>
+    <string name="auto_reconnect_summary">Когда сеть возвращается или меняется, оборванные SSH-сессии переподключаются, старый экран остаётся над новым приглашением</string>
+    <string name="search_in_terminal">Поиск в терминале</string>
+    <string name="search_terminal_hint">Найти в истории вывода</string>
+    <string name="match_n_of_m">%1$d из %2$d</string>
+    <string name="no_matches">Совпадений нет</string>
+    <string name="previous_match">Предыдущее совпадение</string>
+    <string name="next_match">Следующее совпадение</string>
     <string name="open_sftp">Открыть SFTP</string>
     <string name="edit_host">Изменить хост</string>
     <string name="add_to_hosts">Добавить в хосты</string>

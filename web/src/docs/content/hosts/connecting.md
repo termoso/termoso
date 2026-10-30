@@ -98,7 +98,7 @@ When the server supports it, the SSH key exchange uses the ML-KEM hybrid (`mlkem
 
 ## Reconnecting
 
-A dropped SSH session shows **Reconnect** in the terminal; the scrollback stays, the new shell starts below it. Mosh sessions survive network changes and sleep on their own — switch from Wi-Fi to mobile data and the prompt is simply there when you come back. Port-forwarding rules reconnect by themselves with increasing back-off.
+A dropped SSH session shows **Reconnect** in the terminal; the scrollback stays, the new shell starts below it. On Android the app also reconnects by itself when the network comes back or changes (Wi-Fi to mobile data, a tunnel going up) with the previous screen kept above the new prompt; **Settings → Connections → Reconnect automatically** turns that off. Mosh sessions survive network changes and sleep on their own — switch from Wi-Fi to mobile data and the prompt is simply there when you come back. Port-forwarding rules reconnect by themselves with increasing back-off.
 
 ## Local terminal
 
