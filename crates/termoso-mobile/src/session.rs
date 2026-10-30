@@ -37,7 +37,9 @@ use crate::live::{LiveListener, LiveParticipantCard, LiveShare, ShareState, View
 use crate::presence::Slot;
 use crate::serial::PipeTerminal;
 use crate::settings::MobileSettings;
-use crate::terminal::{Emulator, GridFrame, GridSnapshot, InputMark, TermSignal, TerminalPalette};
+use crate::terminal::{
+    Emulator, GridFrame, GridSnapshot, InputMark, SearchHit, TermSignal, TerminalPalette,
+};
 
 /// Give the shell time to print its prompt before the startup snippet lands.
 const STARTUP_SNIPPET_DELAY: Duration = Duration::from_millis(400);
@@ -1269,6 +1271,51 @@ impl SshSession {
             .lock()
             .expect("emulator poisoned")
             .scroll_to_bottom();
+        self.inner.listener.on_render();
+    }
+
+    /// Scroll so that scrollback-absolute `line` (from [`SshSession::search`])
+    /// is at the top of the screen.
+    pub fn scroll_to_line(&self, line: i64) {
+        self.inner
+            .emulator
+            .lock()
+            .expect("emulator poisoned")
+            .scroll_to_line(line);
+        self.inner.listener.on_render();
+    }
+
+    /// Case-insensitive search through scrollback and screen, oldest first,
+    /// at most 2000 hits.
+    pub fn search(&self, query: String) -> Vec<SearchHit> {
+        self.inner
+            .emulator
+            .lock()
+            .expect("emulator poisoned")
+            .search(&query, 2000)
+    }
+
+    /// Scrollback and screen as plain text (last `max_lines` lines), to carry
+    /// over into a reconnected session with [`SshSession::preload`].
+    pub fn dump_text(&self, max_lines: u32) -> String {
+        self.inner
+            .emulator
+            .lock()
+            .expect("emulator poisoned")
+            .dump_text(max_lines as usize)
+    }
+
+    /// Write text straight into the emulator (not to the remote): the previous
+    /// session's screen, shown above the fresh shell after a reconnect.
+    pub fn preload(&self, text: String) {
+        if text.is_empty() {
+            return;
+        }
+        self.inner
+            .emulator
+            .lock()
+            .expect("emulator poisoned")
+            .feed(text.as_bytes());
         self.inner.listener.on_render();
     }
 

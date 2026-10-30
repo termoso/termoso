@@ -1,5 +1,12 @@
 package com.termoso.android.data
 
+import android.net.ConnectivityManager
+import android.net.Network
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import com.termoso.android.R
 import com.termoso.android.str
 import com.termoso.android.ui.components.initialConnecting
@@ -244,6 +251,9 @@ class TerminalSession(
  * The foreground service mirrors the session count so Android keeps the process
  * (and the sockets) alive while the user is in another app.
  */
+/** Lines of the old screen shown above a reconnected shell. */
+private const val CARRY_LINES = 300u
+
 class SessionManager(
     private val context: Context,
     private val repo: VaultRepository,
@@ -259,6 +269,48 @@ class SessionManager(
 
     private val _activeId = MutableStateFlow<String?>(null)
     val activeId: StateFlow<String?> = _activeId.asStateFlow()
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var reconnectJob: Job? = null
+
+    init {
+        watchNetwork()
+    }
+
+    /**
+     * Auto-reconnect: when the device gets a (new) network, every remote session
+     * that dropped on its own comes back. A session closed by the user is gone
+     * from the list, so anything still here in Closed/Failed is an unexpected drop.
+     */
+    private fun watchNetwork() {
+        val cm = context.getSystemService(ConnectivityManager::class.java) ?: return
+        var first = true
+        runCatching {
+            cm.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: Network) {
+                    if (first) {
+                        first = false
+                        return
+                    }
+                    reconnectDropped()
+                }
+            })
+        }
+    }
+
+    private fun reconnectDropped() {
+        if (!repo.settings.value.autoReconnect) return
+        reconnectJob?.cancel()
+        reconnectJob = scope.launch {
+            // Let routes settle; a captive portal or DNS that is not up yet fails anyway.
+            delay(1500)
+            val dropped = _sessions.value.filter { s ->
+                s.reconnectable && (s.hostId != null || s.quick != null) &&
+                    s.state.value.let { it is SessionState.Closed || it is SessionState.Failed }
+            }
+            for (s in dropped) runCatching { reconnect(s.id) }
+        }
+    }
 
     val active: TerminalSession? get() = _sessions.value.firstOrNull { it.id == _activeId.value }
 
@@ -496,6 +548,8 @@ class SessionManager(
     /** Replace a closed/failed session with a fresh connection to the same target. */
     suspend fun reconnect(id: String): TerminalSession? {
         val old = find(id) ?: return null
+        // Carry the old screen over so the user keeps their context above the new prompt.
+        val carried = withContext(Dispatchers.IO) { runCatching { old.rust.dumpText(CARRY_LINES) }.getOrDefault("") }
         val fresh = when {
             old.hostId != null && old.vaultId != null -> connectHost(old.hostId, old.vaultId, old.transport)
             old.quick != null -> connectQuick(old.quick)
@@ -504,7 +558,12 @@ class SessionManager(
             else -> return null
         }
         _sessions.update { list -> list.filterNot { it.id == fresh.id }.map { if (it.id == id) fresh else it } }
-        withContext(Dispatchers.IO) { runCatching { old.rust.disconnect() } }
+        withContext(Dispatchers.IO) {
+            runCatching { old.rust.disconnect() }
+            if (carried.isNotBlank()) {
+                runCatching { fresh.rust.preload(carried + "\r\n\u001b[2m" + "─".repeat(24) + " reconnected \u001b[0m\r\n") }
+            }
+        }
         return fresh
     }
 

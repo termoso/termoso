@@ -1,5 +1,13 @@
 package com.termoso.android.ui.terminal
 
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import com.termoso.core.SearchHit
 import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -209,6 +217,7 @@ fun TerminalScreen(
     val gridShown = rememberSaveable { mutableStateOf(false) }
     // Bumped by the session bar's keyboard button to bring the soft keyboard back.
     var imeRequest by remember { mutableStateOf(0) }
+    var searchRequest by remember { mutableStateOf(0) }
     // Background of the active terminal's theme: the session bar sits on it, as in Termius.
     val terminalBackground = remember { mutableStateOf<Color?>(null) }
     // The sharing sheet is per session: switching chips or losing the session closes it.
@@ -240,6 +249,7 @@ fun TerminalScreen(
                     onToggleGrid = {
                         if (gridShown.value) imeRequest++ else gridShown.value = true
                     },
+                    onSearch = { searchRequest++ },
                     background = terminalBackground.value ?: MaterialTheme.colorScheme.surfaceContainer,
                 )
             }
@@ -260,6 +270,7 @@ fun TerminalScreen(
                     shell = shell,
                     snackbar = snackbar,
                     settings = settings,
+                    searchRequest = searchRequest,
                     onOpenSnippets = onOpenSnippets,
                     onOpenAccount = onOpenAccount,
                     onCustomizeKeys = onCustomizeKeys,
@@ -334,6 +345,7 @@ private fun SessionBar(
     onNew: () -> Unit,
     gridShown: Boolean = false,
     onToggleGrid: (() -> Unit)? = null,
+    onSearch: (() -> Unit)? = null,
     background: Color = MaterialTheme.colorScheme.surfaceContainer,
 ) {
     val activeId = active?.id
@@ -391,6 +403,7 @@ private fun SessionBar(
                     onClick = onLive,
                 )
             }
+            if (onSearch != null) HeaderButton(Icons.Filled.Search, stringResource(R.string.search_in_terminal), onClick = onSearch)
             HeaderButton(Icons.Filled.MoreVert, stringResource(R.string.session_actions), onClick = { onMenu(active.id) })
         }
         HeaderButton(Icons.Filled.Add, stringResource(R.string.new_session), tint = MaterialTheme.colorScheme.primary, onClick = onNew)
@@ -489,6 +502,8 @@ private fun ActiveSession(
     onHardwareKeyHook: (((KeyEvent) -> Boolean)?) -> Unit,
     /** Incremented by the caller to open the History & themes sheet. */
     panelRequest: Int = 0,
+    /** Incremented by the caller to open the scrollback search bar. */
+    searchRequest: Int = 0,
     /** Whether the key grid stands in for the keyboard (owned by the screen so the session bar can toggle it). */
     gridShown: MutableState<Boolean> = mutableStateOf(false),
     /** Incremented by the caller to show the soft keyboard (closing the grid). */
@@ -505,6 +520,60 @@ private fun ActiveSession(
     val scope = rememberCoroutineScope()
     val controller = remember(session) { TerminalController(session) }
     val state by session.state.collectAsStateWithLifecycle()
+    // Scrollback search: hits live in scrollback-absolute lines; the frame says which are on screen.
+    var searchOpen by remember(session.id) { mutableStateOf(false) }
+    var query by remember(session.id) { mutableStateOf("") }
+    var hits by remember(session.id) { mutableStateOf<List<SearchHit>>(emptyList()) }
+    var hitIndex by remember(session.id) { mutableIntStateOf(0) }
+    var frameInfo by remember(session.id) { mutableStateOf(Triple(0L, 0L, 0)) }
+    val frameTick by session.frameTick.collectAsStateWithLifecycle()
+    LaunchedEffect(searchRequest) {
+        if (searchRequest > 0) searchOpen = true
+    }
+    BackHandler(enabled = searchOpen) { searchOpen = false }
+    LaunchedEffect(searchOpen) {
+        if (!searchOpen) {
+            query = ""
+            hits = emptyList()
+        }
+    }
+    var lastQuery by remember(session.id) { mutableStateOf("") }
+    LaunchedEffect(searchOpen, query, frameTick) {
+        if (!searchOpen || query.isBlank()) {
+            hits = emptyList()
+            lastQuery = query
+            return@LaunchedEffect
+        }
+        delay(150)
+        val found = withContext(Dispatchers.IO) { runCatching { session.rust.search(query) }.getOrDefault(emptyList()) }
+        val fresh = query != lastQuery
+        lastQuery = query
+        hits = found
+        if (found.isEmpty()) return@LaunchedEffect
+        if (fresh || hitIndex >= found.size) {
+            hitIndex = found.lastIndex
+            withContext(Dispatchers.IO) { runCatching { session.rust.scrollToLine(found.last().line) } }
+        }
+    }
+    val goHit: (Int) -> Unit = { delta ->
+        if (hits.isNotEmpty()) {
+            hitIndex = Math.floorMod(hitIndex + delta, hits.size)
+            val line = hits[hitIndex].line
+            scope.launch(Dispatchers.IO) { runCatching { session.rust.scrollToLine(line) } }
+        }
+    }
+    val searchHighlights = remember(hits, frameInfo) {
+        val (history, offset, rows) = frameInfo
+        hits.mapNotNull { h ->
+            val row = (h.line - (history - offset)).toInt()
+            if (row in 0 until rows) {
+                val c = h.col.toInt()
+                TermSelection(CellPoint(row, c), CellPoint(row, c + h.len.toInt() - 1))
+            } else {
+                null
+            }
+        }
+    }
     val prompt by session.prompt.collectAsStateWithLifecycle()
     val canWrite by session.canWrite.collectAsStateWithLifecycle()
     // Multiplayer: whoever typed last gets a small avatar above the cursor for a moment.
@@ -552,7 +621,6 @@ private fun ActiveSession(
     var arrowHint by remember { mutableStateOf<ArrowHint?>(null) }
 
     val autocompleteOn = autocompleteAllowed(settings.autocomplete, state, canWrite, session.isView)
-    val frameTick by session.frameTick.collectAsStateWithLifecycle()
     val completions = remember(session) { AutocompleteTracker() }
     var suggestions by remember(session) { mutableStateOf<List<SuggestionItem>>(emptyList()) }
     // Re-keyed by every rendered frame; the delay collapses output bursts.
@@ -855,6 +923,17 @@ private fun ActiveSession(
     Box(modifier) {
         Column(Modifier.fillMaxSize()) {
             if (session.isView) ViewBanner(canWrite)
+            if (searchOpen) {
+                TerminalSearchBar(
+                    query = query,
+                    onQuery = { query = it },
+                    count = hits.size,
+                    index = hitIndex,
+                    onPrev = { goHit(-1) },
+                    onNext = { goHit(1) },
+                    onClose = { searchOpen = false },
+                )
+            }
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 TerminalView(
                     session = session,
@@ -867,7 +946,9 @@ private fun ActiveSession(
                     onFrame = {
                         scrolled = it.frame.displayOffset > 0u
                         terminalBackground.value = it.frame.background?.toInt()?.let { c -> Color(c or (0xFF shl 24)) }
+                        frameInfo = Triple(it.frame.history.toLong(), it.frame.displayOffset.toLong(), it.rows)
                     },
+                    highlights = searchHighlights,
                     cursorBadge = typingBy?.let { card ->
                         {
                             UserAvatar(
@@ -1181,5 +1262,58 @@ private fun openLink(context: Context, uri: String) {
             .onFailure { copyToClipboard(context, uri) }
     } else {
         copyToClipboard(context, uri)
+    }
+}
+
+@Composable
+private fun TerminalSearchBar(
+    query: String,
+    onQuery: (String) -> Unit,
+    count: Int,
+    index: Int,
+    onPrev: () -> Unit,
+    onNext: () -> Unit,
+    onClose: () -> Unit,
+) {
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focus.requestFocus() }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .padding(horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TextField(
+            value = query,
+            onValueChange = onQuery,
+            modifier = Modifier.weight(1f).focusRequester(focus),
+            singleLine = true,
+            placeholder = { Text(stringResource(R.string.search_terminal_hint)) },
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+            ),
+        )
+        Text(
+            when {
+                query.isBlank() -> ""
+                count == 0 -> stringResource(R.string.no_matches)
+                else -> stringResource(R.string.match_n_of_m, index + 1, count)
+            },
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        IconButton(onClick = onPrev, enabled = count > 0) {
+            Icon(Icons.Filled.KeyboardArrowUp, contentDescription = stringResource(R.string.previous_match))
+        }
+        IconButton(onClick = onNext, enabled = count > 0) {
+            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = stringResource(R.string.next_match))
+        }
+        IconButton(onClick = onClose) {
+            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.close))
+        }
     }
 }
