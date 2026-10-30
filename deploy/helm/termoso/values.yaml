@@ -1,0 +1,130 @@
+# Termoso server. Every TERMOSO_* variable from deploy/.env.example works
+# here: put plain settings under `config`, secrets under `secrets` (or in an
+# existing Secret named by `existingSecret`).
+
+image:
+  repository: ghcr.io/termoso/termoso-server
+  # Defaults to the chart's appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+replicaCount: 1
+
+# Plain configuration, rendered into a ConfigMap as TERMOSO_* environment variables.
+config:
+  TERMOSO_PUBLIC_URL: https://termoso.example.com
+  TERMOSO_SERVER_NAME: Termoso
+  TERMOSO_ADMIN_EMAILS: you@example.com
+  TERMOSO_TRUST_PROXY: "true"
+  TERMOSO_LOG: info,sqlx=warn
+  TERMOSO_LOG_FORMAT: json
+  TERMOSO_WEBAUTHN__RP_ID: termoso.example.com
+  TERMOSO_WEBAUTHN__ORIGINS: https://termoso.example.com,tauri://localhost,http://tauri.localhost
+  # TERMOSO_SMTP__HOST: smtp.example.com
+  # TERMOSO_SMTP__PORT: "587"
+  # TERMOSO_SMTP__SECURITY: starttls
+  # TERMOSO_SMTP__FROM: Termoso <no-reply@termoso.example.com>
+  # TERMOSO_METRICS__ENABLED: "true"
+  # TERMOSO_METRICS__BIND: 0.0.0.0:9090
+
+# Secret values, rendered into a Secret unless `existingSecret` is set.
+# TERMOSO_MASTER_KEY is required: `openssl rand -base64 32`.
+secrets:
+  TERMOSO_MASTER_KEY: ""
+  # TERMOSO_SMTP__USERNAME: ""
+  # TERMOSO_SMTP__PASSWORD: ""
+  # TERMOSO_SSO__GITHUB__CLIENT_ID: ""
+  # TERMOSO_SSO__GITHUB__CLIENT_SECRET: ""
+# Name of a Secret you manage yourself (all keys are exposed as env vars). Leaves `secrets` unused.
+existingSecret: ""
+
+# Where the API stores state. With `bundled.*.enabled` the chart runs the
+# service and fills the URL in; otherwise set the URL (or its secret) here.
+database:
+  # postgres://user:pass@host:5432/termoso
+  url: ""
+  # Secret and key holding the URL instead of `url`.
+  existingSecret: ""
+  existingSecretKey: TERMOSO_DATABASE_URL
+redis:
+  url: ""
+  existingSecret: ""
+  existingSecretKey: TERMOSO_REDIS_URL
+s3:
+  endpoint: ""
+  bucket: termoso-logs
+  region: us-east-1
+  accessKey: ""
+  secretKey: ""
+  # Secret with TERMOSO_S3__ACCESS_KEY / TERMOSO_S3__SECRET_KEY.
+  existingSecret: ""
+
+# Single-replica StatefulSets next to the API, same images as docker-compose.
+# Fine for a team server; for HA use managed Postgres/Redis/S3 and turn these off.
+bundled:
+  postgres:
+    enabled: true
+    image: postgres:18-alpine
+    password: change-me
+    storage: 10Gi
+    storageClassName: ""
+  redis:
+    enabled: true
+    image: redis:8-alpine
+    storage: 1Gi
+    storageClassName: ""
+  rustfs:
+    enabled: true
+    image: rustfs/rustfs:1.0.0
+    accessKey: termoso
+    secretKey: change-me-too
+    storage: 20Gi
+    storageClassName: ""
+
+service:
+  type: ClusterIP
+  port: 8080
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: termoso.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #  - secretName: termoso-tls
+  #    hosts: [termoso.example.com]
+
+metrics:
+  # Expose the private metrics listener on the pod (TERMOSO_METRICS__ENABLED must be on in `config`).
+  enabled: false
+  port: 9090
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    labels: {}
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 1Gi
+
+podAnnotations: {}
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  fsGroup: 10001
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+nodeSelector: {}
+tolerations: []
+affinity: {}

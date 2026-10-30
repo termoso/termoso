@@ -1,0 +1,71 @@
+{{- if .Values.bundled.postgres.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "termoso.fullname" . }}-postgres
+  labels:
+    {{- include "termoso.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+spec:
+  clusterIP: None
+  selector:
+    {{- include "termoso.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+  ports:
+    - name: postgres
+      port: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "termoso.fullname" . }}-postgres
+  labels:
+    {{- include "termoso.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+spec:
+  serviceName: {{ include "termoso.fullname" . }}-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "termoso.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: postgres
+  template:
+    metadata:
+      labels:
+        {{- include "termoso.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: {{ .Values.bundled.postgres.image }}
+          env:
+            - name: POSTGRES_USER
+              value: termoso
+            - name: POSTGRES_DB
+              value: termoso
+            - name: POSTGRES_PASSWORD
+              value: {{ .Values.bundled.postgres.password | quote }}
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - name: postgres
+              containerPort: 5432
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "termoso", "-d", "termoso"]
+            periodSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- with .Values.bundled.postgres.storageClassName }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.bundled.postgres.storage }}
+{{- end }}

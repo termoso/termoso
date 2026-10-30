@@ -1,0 +1,68 @@
+{{- if .Values.bundled.rustfs.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "termoso.fullname" . }}-rustfs
+  labels:
+    {{- include "termoso.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rustfs
+spec:
+  clusterIP: None
+  selector:
+    {{- include "termoso.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: rustfs
+  ports:
+    - name: rustfs
+      port: 9000
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "termoso.fullname" . }}-rustfs
+  labels:
+    {{- include "termoso.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rustfs
+spec:
+  serviceName: {{ include "termoso.fullname" . }}-rustfs
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "termoso.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: rustfs
+  template:
+    metadata:
+      labels:
+        {{- include "termoso.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: rustfs
+    spec:
+      containers:
+        - name: rustfs
+          image: {{ .Values.bundled.rustfs.image }}
+          env:
+            - name: RUSTFS_ACCESS_KEY
+              value: {{ .Values.bundled.rustfs.accessKey | quote }}
+            - name: RUSTFS_SECRET_KEY
+              value: {{ .Values.bundled.rustfs.secretKey | quote }}
+          ports:
+            - name: rustfs
+              containerPort: 9000
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 9000
+            periodSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- with .Values.bundled.rustfs.storageClassName }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.bundled.rustfs.storage }}
+{{- end }}

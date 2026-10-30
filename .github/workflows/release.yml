@@ -70,6 +70,15 @@ jobs:
           [ "$pkg" = "$ws" ] || { echo "::error::apps/desktop/package.json and Cargo.toml versions differ"; exit 1; }
           ios=$(sed -n 's/^    MARKETING_VERSION: "\(.*\)"/\1/p' apps/ios/project.yml | head -1)
           [ "$ios" = "$ws" ] || { echo "::error::apps/ios/project.yml MARKETING_VERSION ($ios) differs from Cargo.toml ($ws)"; exit 1; }
+          # Store manifests and the Helm chart carry the version too.
+          chart=$(sed -n 's/^appVersion: "\(.*\)"/\1/p' deploy/helm/termoso/Chart.yaml)
+          snap=$(sed -n 's/^version: "\(.*\)"/\1/p' packaging/snap/snapcraft.yaml)
+          scoop=$(node -p "require('./packaging/scoop/termoso.json').version")
+          fdroid=$(sed -n 's/^CurrentVersion: \(.*\)/\1/p' packaging/fdroid/com.termoso.android.yml)
+          flatpak=$(sed -n 's|.*/archive/refs/tags/v\(.*\)\.tar\.gz|\1|p' packaging/flatpak/com.termoso.Termoso.yml)
+          for pair in "deploy/helm/termoso/Chart.yaml=$chart" "packaging/snap/snapcraft.yaml=$snap" "packaging/scoop/termoso.json=$scoop" "packaging/fdroid/com.termoso.android.yml=$fdroid" "packaging/flatpak/com.termoso.Termoso.yml=$flatpak"; do
+            [ "${pair#*=}" = "$ws" ] || { echo "::error::${pair%%=*} carries version ${pair#*=}, Cargo.toml has $ws"; exit 1; }
+          done
           if [ "$GITHUB_REF_TYPE" = tag ]; then
             [ "$GITHUB_REF_NAME" = "v$pkg" ] || { echo "::error::tag $GITHUB_REF_NAME does not match version $pkg"; exit 1; }
           fi

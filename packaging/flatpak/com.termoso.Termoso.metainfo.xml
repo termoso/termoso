@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.termoso.Termoso</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>AGPL-3.0-or-later</project_license>
+  <name>Termoso</name>
+  <summary>SSH, SFTP and terminal client with an encrypted vault</summary>
+  <description>
+    <p>Termoso keeps your hosts, keys and snippets in a vault that is encrypted on your device, syncs them to your own server or none at all, and gives you a fast terminal, SFTP with resume and folder sync, port forwarding, Mosh, Telnet and serial consoles.</p>
+    <p>Teams get shared vaults with roles, SSO, audit and session recordings on a self-hosted server.</p>
+  </description>
+  <launchable type="desktop-id">com.termoso.Termoso.desktop</launchable>
+  <url type="homepage">https://termoso.dev</url>
+  <url type="bugtracker">https://github.com/termoso/termoso/issues</url>
+  <url type="vcs-browser">https://github.com/termoso/termoso</url>
+  <developer id="dev.termoso"><name>Termoso</name></developer>
+  <content_rating type="oars-1.1" />
+  <screenshots>
+    <screenshot type="default">
+      <image>https://termoso.dev/screenshots/terminal.png</image>
+      <caption>Terminal with host sidebar</caption>
+    </screenshot>
+  </screenshots>
+  <releases>
+    <release version="0.11.3" date="2026-10-30" />
+  </releases>
+</component>
