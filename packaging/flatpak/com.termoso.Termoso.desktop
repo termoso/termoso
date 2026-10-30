@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Termoso
+Comment=SSH, SFTP and terminal client with an encrypted vault
+Exec=termoso %U
+Icon=com.termoso.Termoso
+Terminal=false
+Type=Application
+Categories=Network;RemoteAccess;System;TerminalEmulator;
+Keywords=ssh;sftp;terminal;mosh;telnet;serial;
+MimeType=x-scheme-handler/ssh;x-scheme-handler/termoso;
+StartupWMClass=termoso

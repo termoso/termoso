@@ -426,9 +426,12 @@ signed Android APKs per ABI, the unsigned iOS `.ipa` with its AltStore source,
 `SHA256SUMS.txt`, and the `ghcr.io/termoso/termoso-server:<version>` and
 `termoso-bridge:<version>` images; stable releases are then pushed to the
 apt/dnf repositories (`pkg.termoso.dev`), the Homebrew tap
-(`brew install --cask termoso/termoso/termoso`) and winget (`Termoso.Termoso`).
+(`brew install --cask termoso/termoso/termoso`) and winget (`Termoso.Termoso`);
+manifests for Flathub, Snap, Scoop and F-Droid live in [`packaging/`](packaging/)
+and a Helm chart in [`deploy/helm/termoso`](deploy/helm/termoso/).
 The version must match in the workspace
-`Cargo.toml`, `apps/desktop/package.json` and `apps/ios/project.yml`. Process,
+`Cargo.toml`, `apps/desktop/package.json`, `apps/ios/project.yml`, the Helm
+chart's `appVersion` and the `packaging/` manifests (the release workflow checks). Process,
 secrets and the updater behaviour: [docs/RELEASING.md](docs/RELEASING.md);
 building the same artifacts on your own machine, with your own signing keys:
 [docs/BUILDING.md](docs/BUILDING.md).

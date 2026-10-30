@@ -33,6 +33,10 @@ The apt and dnf repositories are signed; the key fingerprint is shown at
 Packages installed this way still use the built-in updater on Windows and
 macOS; on Linux the repository is the update channel.
 
+Manifests for Flathub, the Snap Store, Scoop and F-Droid are kept in
+[`packaging/`](https://github.com/termoso/termoso/tree/main/packaging) and
+follow each release; they are not published to those stores yet.
+
 ## Desktop
 
 | Platform               | Files                                              | Notes                                                                                                        |

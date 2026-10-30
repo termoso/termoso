@@ -35,6 +35,10 @@ In any app choose **Sign in → Use another server** and enter your `TERMOSO_PUB
 > [!WARNING]
 > Use a publicly trusted certificate (Let's Encrypt is fine). The apps ship the Mozilla root store and do not consult the operating system's trust store, so a private CA is not accepted.
 
+## Kubernetes
+
+A Helm chart lives in `deploy/helm/termoso`: the API as a Deployment plus, by default, single-node Postgres, Redis and RustFS next to it; for production point it at managed services. Steps and values are in the [self-hosting guide](https://github.com/termoso/termoso/blob/main/docs/SELF_HOSTING.md#kubernetes-helm).
+
 ## Podman
 
 The same stack ships as Podman Quadlet units in `deploy/quadlet/` for servers that run everything through systemd, rootful or rootless. See the [full self-hosting guide](https://github.com/termoso/termoso/blob/main/docs/SELF_HOSTING.md#podman-quadlet) for the steps.

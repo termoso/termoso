@@ -1,0 +1,17 @@
+Termoso server {{ .Chart.AppVersion }} is rolling out as {{ include "termoso.fullname" . }}.
+
+{{- if .Values.ingress.enabled }}
+URL: {{ range .Values.ingress.hosts }}https://{{ .host }} {{ end }}
+{{- else }}
+No ingress: reach it with
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "termoso.fullname" . }} 8080:{{ .Values.service.port }}
+and set TERMOSO_PUBLIC_URL to what clients will use.
+{{- end }}
+
+Sign in with an address from TERMOSO_ADMIN_EMAILS to get the admin console.
+{{- if or .Values.bundled.postgres.enabled .Values.bundled.rustfs.enabled }}
+
+Bundled Postgres/RustFS run as single replicas with the passwords from values.yaml;
+change them, and for anything beyond one team point `database`, `redis` and `s3` at
+managed services and set bundled.*.enabled=false.
+{{- end }}

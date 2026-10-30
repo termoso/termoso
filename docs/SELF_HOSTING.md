@@ -421,6 +421,33 @@ Validate edited unit files without touching the system:
 /usr/libexec/podman/quadlet -dryrun -user   # path varies: /usr/lib/podman/quadlet on some distros
 ```
 
+## Kubernetes (Helm)
+
+`deploy/helm/termoso` runs the API as a Deployment (read-only, non-root,
+`termoso-server --healthcheck` as liveness/readiness probe) and, by default, a
+single-replica Postgres, Redis and RustFS as StatefulSets with persistent
+volumes, the same images as the compose stack:
+
+```sh
+helm install termoso deploy/helm/termoso --namespace termoso --create-namespace \
+  --set secrets.TERMOSO_MASTER_KEY="$(openssl rand -base64 32)" \
+  --set config.TERMOSO_PUBLIC_URL=https://termoso.example.com \
+  --set config.TERMOSO_WEBAUTHN__RP_ID=termoso.example.com \
+  --set config.TERMOSO_ADMIN_EMAILS=you@example.com \
+  --set bundled.postgres.password="$(openssl rand -hex 16)" \
+  --set bundled.rustfs.secretKey="$(openssl rand -hex 16)" \
+  --set ingress.enabled=true --set ingress.hosts[0].host=termoso.example.com
+```
+
+Every `TERMOSO_*` variable from `deploy/.env.example` goes under `config`
+(plain) or `secrets` (rendered into a Secret; or bring your own with
+`existingSecret`). For production turn `bundled.*.enabled` off and point
+`database`, `redis` and `s3` at managed services, then `replicaCount` can go
+above one (see [Scaling](#scaling)). `metrics.enabled` exposes the private
+Prometheus listener and `metrics.serviceMonitor.enabled` adds a ServiceMonitor.
+Upgrade with `helm upgrade termoso deploy/helm/termoso --reuse-values --set
+image.tag=<version>`; migrations run on start.
+
 ## Backups and restore
 
 Back up, in this order of importance:
