@@ -112,17 +112,27 @@ final class SmokeUITests: XCTestCase {
         let canvas = el("terminal.canvas")
         XCTAssertTrue(canvas.waitForExistence(timeout: 10), "terminal did not open")
         XCTAssertTrue(el("terminal.keyPanel").waitForExistence(timeout: 5))
-        // Wait for the shell prompt: connecting overlay goes away.
+        // Wait for the shell itself, not just the connecting overlay: the
+        // prompt must be on the grid before keys mean anything.
         let connecting = el("terminal.state.connecting")
         _ = connecting.waitForNonExistence(timeout: 15)
+        XCTAssertTrue(
+            canvasMatching("value CONTAINS '$'").waitForExistence(timeout: 20),
+            "shell prompt did not appear: \(canvas.value ?? "nil")"
+        )
         snap("11-terminal-open")
 
-        canvas.tap()
-        canvas.typeText("echo termoso-$((40+2))\n")
-        let output = app.descendants(matching: .any)
-            .matching(NSPredicate(format: "identifier == 'terminal.canvas' AND value CONTAINS 'termoso-42'"))
-            .firstMatch
-        XCTAssertTrue(output.waitForExistence(timeout: 15), "shell output did not reach the grid: \(canvas.value ?? "nil")")
+        // Keys typed in the first moments after focus can be dropped by the
+        // simulator (first-responder hand-off, insert suppression), so retry
+        // with a fresh marker instead of failing on a single lost line.
+        var echoed = false
+        for attempt in 0 ..< 3 where !echoed {
+            canvas.tap()
+            Thread.sleep(forTimeInterval: 1)
+            canvas.typeText("echo termoso-$((40+\(attempt + 2)))\n")
+            echoed = canvasMatching("value CONTAINS 'termoso-\(42 + attempt)'").waitForExistence(timeout: 10)
+        }
+        XCTAssertTrue(echoed, "shell output did not reach the grid: \(canvas.value ?? "nil")")
         snap("12-terminal-echo")
 
         // Extra keys: Ctrl+C via the sticky modifier, then Tab.
@@ -148,6 +158,13 @@ final class SmokeUITests: XCTestCase {
         snap("14-terminal-closed")
         el("terminal.closeSession").tap()
         XCTAssertTrue(el("connections.empty").waitForExistence(timeout: 5))
+    }
+
+    /// The terminal canvas once its mirrored text satisfies `predicate`.
+    private func canvasMatching(_ predicate: String) -> XCUIElement {
+        app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier == 'terminal.canvas' AND \(predicate)"))
+            .firstMatch
     }
 
     /// Identifier lookup independent of the element type SwiftUI picks
