@@ -9003,7 +9003,7 @@ version = "0.11.3"
 dependencies = [
  "aws-lc-rs",
  "aws-lc-sys 0.45.0",
- "rand 0.8.8",
+ "rand 0.10.2",
  "rsa 0.9.10",
  "sha1 0.10.7",
  "sha2 0.10.9",
@@ -9255,7 +9255,7 @@ dependencies = [
  "metrics-exporter-prometheus",
  "oauth2",
  "openidconnect",
- "rand 0.8.8",
+ "rand 0.10.2",
  "rcgen",
  "redis",
  "reqwest 0.12.28",
