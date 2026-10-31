@@ -52,14 +52,19 @@ fail() {
 
 window_id() { "$out/window" "$pid" 2>/dev/null; }
 
+# screencapture -l fails with "could not create image from window" while the
+# window server has not composited the window yet (seen on GitHub macOS runners
+# right after launch); retry, then fall back to the whole screen.
 shoot() {
-  local name=$1 wid
-  if wid=$(window_id); then
-    screencapture -x -o -l "$wid" "$out/$name.png"
-  else
-    echo "::warning::no window for screenshot $name, capturing the whole screen"
-    screencapture -x "$out/$name.png"
-  fi
+  local name=$1 wid attempt
+  for attempt in 1 2 3 4 5; do
+    if wid=$(window_id) && screencapture -x -o -l "$wid" "$out/$name.png" 2>/dev/null; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "::warning::no window capture for screenshot $name after $attempt attempts, capturing the whole screen"
+  screencapture -x "$out/$name.png"
 }
 
 # The window must appear on its own (before the script does anything).
