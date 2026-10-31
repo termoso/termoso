@@ -2,7 +2,7 @@
 # exactly the binary that was signed for GitHub releases.
 name: termoso
 base: core24
-version: "0.11.3"
+version: "0.11.4"
 summary: SSH, SFTP and terminal client with an encrypted vault
 description: |
   Termoso keeps hosts, keys and snippets in a vault encrypted on your device,
