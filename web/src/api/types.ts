@@ -553,6 +553,18 @@ export interface SessionLog {
   note_by?: string;
 }
 
+/** One comment in a recording's thread. */
+export interface LogComment {
+  id: string;
+  log_id: string;
+  user_id: string;
+  author?: LogAuthor;
+  body: string;
+  /** Point in the recording, milliseconds from the start. */
+  offset_ms?: number;
+  created_at: string;
+}
+
 export interface LogListResponse {
   logs: SessionLog[];
   since: number;
