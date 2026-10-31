@@ -1,6 +1,9 @@
 package com.termoso.android.ui.hosts
 
 import com.termoso.android.ui.keychain.AddKeyToHostFlow
+import com.termoso.android.ui.components.distroVector
+import com.termoso.android.ui.components.IconCatalog
+import androidx.compose.ui.graphics.Color
 import com.termoso.android.plural
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -439,7 +442,14 @@ private fun HostList(
                         ListRow(
                             title = g.label,
                             subtitle = groupSubtitle(g),
-                            leading = { IconTile(Icons.Filled.Folder) },
+                            leading = {
+                                val picked = remember(g.icon) { IconCatalog.picked(g.icon) }
+                                if (picked != null) {
+                                    IconTile(distroVector(picked), tint = Color.White, container = picked.color)
+                                } else {
+                                    IconTile(Icons.Filled.Folder)
+                                }
+                            },
                             modifier = Modifier.combinedClickable(
                                 onClick = { onOpenGroup(g.id) },
                                 onLongClick = { onGroupLongPress(g) },
@@ -465,7 +475,7 @@ private fun HostList(
                         ListRow(
                             title = h.label.ifBlank { h.address },
                             subtitle = hostSubtitle(h),
-                            leading = { HostAvatar(h.osName, selected = selected) },
+                            leading = { HostAvatar(h.osName, selected = selected, icon = h.icon) },
                             modifier = Modifier.combinedClickable(
                                 onClick = { onHostTap(h) },
                                 onLongClick = { onHostLongPress(h) },
