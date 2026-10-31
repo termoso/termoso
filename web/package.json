@@ -25,12 +25,12 @@
     "@mui/icons-material": "9.5.0",
     "@mui/material": "9.5.0",
     "@simplewebauthn/browser": "14.0.0",
-    "@tanstack/react-query": "5.104.4",
+    "@tanstack/react-query": "5.104.5",
     "marked": "16.4.2",
     "qrcode.react": "4.2.0",
     "react": "19.3.1",
     "react-dom": "19.3.1",
-    "react-router": "8.4.0"
+    "react-router": "8.5.0"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
@@ -45,7 +45,7 @@
     "jiti": "2.7.0",
     "prettier": "3.9.10",
     "typescript": "5.9.3",
-    "typescript-eslint": "8.71.2",
-    "vite": "8.3.4"
+    "typescript-eslint": "8.72.0",
+    "vite": "8.3.5"
   }
 }
