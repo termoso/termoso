@@ -3,9 +3,7 @@ import { brandIcons, genericIcons } from "./iconCatalog";
 
 export type { DistroIcon };
 
-const catalog = new Map<string, DistroIcon>(
-  [...genericIcons, ...brandIcons].map((i) => [i.id, i]),
-);
+const catalog = new Map<string, DistroIcon>([...genericIcons, ...brandIcons].map((i) => [i.id, i]));
 
 /**
  * Icon for an explicit pick (`Host.icon` / `Group.icon`): the generic and

@@ -3233,7 +3233,7 @@ export const ru: Readonly<Record<string, string>> = {
   "Screen lock": "Блокировка экрана",
   "Hardware key": "Аппаратный ключ",
   "Change icon": "Сменить значок",
-  "Applications": "Приложения",
+  Applications: "Приложения",
   "Operating systems": "Операционные системы",
   "Default (folder)": "По умолчанию (папка)",
   "Automatic (detected OS)": "Автоматически (определённая ОС)",
