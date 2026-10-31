@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use bytes::Bytes;
-use russh::keys::ssh_key::{Algorithm, PrivateKey, PublicKey};
+use russh::keys::ssh_key::{Algorithm, PrivateKey};
 use russh::server::{Auth, ChannelOpenHandle, Msg, Server as _, Session};
 use russh::{Channel, ChannelId, MethodSet};
 use termoso_mobile::{
@@ -114,7 +114,7 @@ impl russh::server::Handler for Handler {
     async fn auth_publickey_offered(
         &mut self,
         _user: &str,
-        _key: &PublicKey,
+        _offer: russh::server::PublicKeyOffer<'_>,
     ) -> Result<Auth, Self::Error> {
         Ok(if self.srv.pubkey {
             Auth::Accept
@@ -123,7 +123,11 @@ impl russh::server::Handler for Handler {
         })
     }
 
-    async fn auth_publickey(&mut self, user: &str, _key: &PublicKey) -> Result<Auth, Self::Error> {
+    async fn auth_publickey(
+        &mut self,
+        user: &str,
+        _key: russh::server::VerifiedPublicKey<'_>,
+    ) -> Result<Auth, Self::Error> {
         Ok(if self.srv.pubkey && user == USER {
             Auth::Accept
         } else {

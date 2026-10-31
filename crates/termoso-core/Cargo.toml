@@ -23,7 +23,7 @@ rusqlite = { version = "0.39", features = ["bundled"] }
 keyring = { version = "4", optional = true }
 
 # ssh / sftp / terminals
-russh = { version = "0.64", features = ["rsa"] }
+russh = { version = "0.65", features = ["rsa"] }
 russh-sftp = "3"
 portable-pty = { version = "0.9", optional = true }
 serialport = { version = "4.9", default-features = false, optional = true }
