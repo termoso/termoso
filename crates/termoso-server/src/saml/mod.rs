@@ -172,7 +172,7 @@ impl ServiceProvider {
     /// Fresh SAML message ID (NCName: must start with a letter or `_`).
     pub fn new_request_id() -> String {
         let mut b = [0u8; 20];
-        rand::RngCore::fill_bytes(&mut rand::thread_rng(), &mut b);
+        rand::fill(&mut b);
         format!("_{}", hex::encode(b))
     }
 
@@ -909,7 +909,7 @@ pub mod test_support {
     }
     /// A fresh key unrelated to any fixture.
     pub fn random_key() -> SpKey {
-        SpKey::from_rsa(&rsa::RsaPrivateKey::new(&mut rand::thread_rng(), 2048).unwrap()).unwrap()
+        SpKey::from_rsa(&rsa::RsaPrivateKey::new(&mut rand_core::OsRng, 2048).unwrap()).unwrap()
     }
     pub fn sp_cert_der() -> Vec<u8> {
         pem_to_der(SP_CERT_PEM).unwrap()
