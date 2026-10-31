@@ -3,11 +3,12 @@
 //! no associated data. A wire message is the low 8 nonce bytes followed by
 //! the ciphertext and tag.
 
-use aes::Aes128;
+use aes9::Aes128;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use ocb3::aead::consts::{U12, U16};
-use ocb3::{AeadInPlace, KeyInit, Nonce, Ocb3};
+use ocb3::aead::inout::InOutBuf;
+use ocb3::{AeadInOut, KeyInit, Nonce, Ocb3, Tag};
 use zeroize::Zeroizing;
 
 use super::MoshError;
@@ -59,7 +60,7 @@ pub struct Session {
 impl Session {
     pub fn new(key: &Key, to_server: bool) -> Self {
         Self {
-            cipher: Cipher::new(key.0.as_slice().into()),
+            cipher: Cipher::new(key.0.as_slice().try_into().expect("16-byte key")),
             to_server,
             next_seq: 0,
         }
@@ -89,7 +90,7 @@ impl Session {
         out.extend_from_slice(plaintext);
         let tag = self
             .cipher
-            .encrypt_in_place_detached(&nonce, &[], &mut out[8..])
+            .encrypt_inout_detached(&nonce, &[], InOutBuf::from(&mut out[8..]))
             .map_err(|_| MoshError::Cipher)?;
         out.extend_from_slice(&tag);
         Ok(out)
@@ -103,9 +104,10 @@ impl Session {
         let direction_seq = u64::from_be_bytes(wire[..8].try_into().expect("8 bytes"));
         let nonce = Self::nonce(direction_seq);
         let (body, tag) = wire[8..].split_at(wire.len() - 8 - 16);
+        let tag = Tag::<U16>::try_from(tag).map_err(|_| MoshError::Cipher)?;
         let mut out = body.to_vec();
         self.cipher
-            .decrypt_in_place_detached(&nonce, &[], &mut out, tag.into())
+            .decrypt_inout_detached(&nonce, &[], InOutBuf::from(out.as_mut_slice()), &tag)
             .map_err(|_| MoshError::Cipher)?;
         Ok((direction_seq, out))
     }
@@ -164,14 +166,14 @@ mod tests {
             0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D,
             0x0E, 0x0F,
         ]));
-        let cipher = Cipher::new(key.0.as_slice().into());
+        let cipher = Cipher::new(key.0.as_slice().try_into().expect("16-byte key"));
         let nonce: Nonce<U12> = [
             0xBB, 0xAA, 0x99, 0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11, 0x00,
         ]
         .into();
         let mut buf = Vec::new();
         let tag = cipher
-            .encrypt_in_place_detached(&nonce, &[], &mut buf)
+            .encrypt_inout_detached(&nonce, &[], InOutBuf::from(&mut buf[..]))
             .unwrap();
         assert_eq!(
             hex::encode(tag).to_uppercase(),
