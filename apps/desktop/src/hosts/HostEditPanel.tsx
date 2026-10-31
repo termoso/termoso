@@ -26,6 +26,8 @@ import FolderOutlinedIcon from "@mui/icons-material/FolderOutlined";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useSnackbar } from "@/components/Snackbar";
 import { distroIcon } from "./distroIcons";
+import { IconPicker } from "./IconPicker";
+import { pickedIcon } from "./icons";
 import { DistroGlyph, ProtocolGlyph } from "./HostAvatar";
 import { ConnectButton, connectTo, type ConnectTarget } from "./ConnectSplit";
 import { TagsPopover } from "./TagsPopover";
@@ -34,7 +36,6 @@ import { WebDavAuthFields } from "./WebDavAuthFields";
 import { ServerKeyField } from "./ServerKeyField";
 import {
   Field,
-  IconTile,
   Loading,
   SectionCard,
   SidePanel,
@@ -286,7 +287,7 @@ function HostEditor({
     const p = (proxies.data ?? []).find((c) => c.id === id);
     return p ? `${p.data.kind.toUpperCase()} ${p.data.host}:${p.data.port}` : null;
   };
-  const icon = distroIcon(form.icon) ?? distroIcon(form.osName);
+  const icon = pickedIcon(form.icon) ?? distroIcon(form.osName);
   const glyphProtocol: HostProtocol = form.ssh ? "ssh" : form.telnet ? "telnet" : "webdav";
   const selectedTags = (tags.data ?? []).filter((t) => form.tagIds.includes(t.id));
   const selectedTagIds = new Set(form.tagIds);
@@ -467,9 +468,15 @@ function HostEditor({
           {id && <ConnectedNowCard viewers={presence.get(id) ?? []} />}
           <SectionCard title={tr("Address")}>
             <Box sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
-              <IconTile size={sizes.tile} color={icon?.color}>
-                {icon ? <DistroGlyph icon={icon} /> : <ProtocolGlyph protocol={glyphProtocol} />}
-              </IconTile>
+              <IconPicker
+                value={form.icon}
+                onChange={(v) => set("icon", v)}
+                disabled={readOnly}
+                autoLabel={tr("Automatic (detected OS)")}
+                fallback={
+                  icon ? <DistroGlyph icon={icon} /> : <ProtocolGlyph protocol={glyphProtocol} />
+                }
+              />
               <TextField
                 required
                 autoFocus={!hostId}

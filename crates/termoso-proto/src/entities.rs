@@ -124,6 +124,10 @@ pub mod payload {
             /// Sort order.
             #[serde(default)]
             pub sort_order: i32,
+            /// Icon chosen by the user (an icon id such as `server` or
+            /// `zabbix`); `None` shows the default folder.
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub icon: Option<String>,
             /// Id of the group in the system that created it through an API
             /// bridge (CMDB, cloud inventory); lets the bridge find it again.
             #[serde(default, skip_serializing_if = "Option::is_none")]

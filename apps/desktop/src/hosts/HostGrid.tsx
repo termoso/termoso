@@ -7,7 +7,8 @@ import CloudSyncOutlinedIcon from "@mui/icons-material/CloudSyncOutlined";
 import type { MouseEvent, ReactNode } from "react";
 import { hasWebDav, hostProtocols, type GroupNode, type HostCard } from "@/ipc/types";
 import { CardGrid, CheckTile, EntityCard, IconTile, SectionTitle } from "@/components/ui";
-import { HostAvatar } from "./HostAvatar";
+import { DistroGlyph, HostAvatar } from "./HostAvatar";
+import { pickedIcon } from "./icons";
 import type { HostDnd } from "./dnd";
 import type { HostViewer } from "./presence";
 import { PresenceStack } from "./PresenceViews";
@@ -99,9 +100,10 @@ export function SelectableTile({
 }
 
 export function GroupTile({ g, size, cloud }: { g: GroupNode; size?: number; cloud?: boolean }) {
+  const picked = pickedIcon(g.icon);
   return (
-    <IconTile size={size} sx={{ position: "relative" }}>
-      <FolderRoundedIcon />
+    <IconTile size={size} color={picked?.color} sx={{ position: "relative" }}>
+      {picked ? <DistroGlyph icon={picked} /> : <FolderRoundedIcon />}
       {cloud ? (
         <Tooltip title={tr("Synced with a cloud account")}>
           <CloudSyncOutlinedIcon
