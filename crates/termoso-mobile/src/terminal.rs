@@ -307,6 +307,15 @@ pub struct InputMark {
     pub col: usize,
 }
 
+/// One match of [`Emulator::search`]: `line` counts from the top of the
+/// scrollback (same space as [`InputMark`]), `col`/`len` in cells.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Record)]
+pub struct SearchHit {
+    pub line: i64,
+    pub col: u32,
+    pub len: u32,
+}
+
 /// The emulator: feed bytes, take snapshots.
 pub struct Emulator {
     term: Term<Proxy>,
@@ -377,6 +386,114 @@ impl Emulator {
 
     pub fn scroll_to_bottom(&mut self) {
         self.term.scroll_display(Scroll::Bottom);
+    }
+
+    /// Scroll so that scrollback-absolute `line` is the top visible row (or
+    /// as close as the history allows).
+    pub fn scroll_to_line(&mut self, line: i64) {
+        let grid = self.term.grid();
+        let history = grid.history_size() as i64;
+        let target = (history - line).clamp(0, history);
+        let delta = target - grid.display_offset() as i64;
+        if delta != 0 {
+            self.term.scroll_display(Scroll::Delta(
+                delta.clamp(i32::MIN as i64, i32::MAX as i64) as i32
+            ));
+        }
+    }
+
+    /// Text of one grid row (history rows have negative `visible`), spacers
+    /// skipped, trailing blanks kept so columns line up.
+    fn row_chars(&self, visible: i32) -> Vec<(usize, char)> {
+        let grid = self.term.grid();
+        let row = &grid[alacritty_terminal::index::Line(visible)];
+        let cols = self.size.cols as usize;
+        let mut out = Vec::with_capacity(cols);
+        for col in 0..cols {
+            let cell = &row[alacritty_terminal::index::Column(col)];
+            if cell.flags.contains(Flags::WIDE_CHAR_SPACER) {
+                continue;
+            }
+            out.push((col, cell.c));
+        }
+        out
+    }
+
+    /// Case-insensitive search through scrollback and screen, oldest first,
+    /// at most `max` hits. Wrapped lines are not joined.
+    pub fn search(&self, query: &str, max: usize) -> Vec<SearchHit> {
+        let needle: Vec<char> = query.chars().flat_map(char::to_lowercase).collect();
+        if needle.is_empty() || max == 0 {
+            return Vec::new();
+        }
+        let grid = self.term.grid();
+        let history = grid.history_size() as i64;
+        let rows = i64::from(self.size.rows);
+        let mut hits = Vec::new();
+        for visible in -history..rows {
+            let chars = self.row_chars(visible as i32);
+            let lower: Vec<char> = chars
+                .iter()
+                .map(|(_, c)| c.to_lowercase().next().unwrap_or(*c))
+                .collect();
+            let mut i = 0;
+            while i + needle.len() <= lower.len() {
+                if lower[i..i + needle.len()] == needle[..] {
+                    let (start_col, _) = chars[i];
+                    let (end_col, _) = chars[i + needle.len() - 1];
+                    hits.push(SearchHit {
+                        line: visible + history,
+                        col: start_col as u32,
+                        len: (end_col + 1 - start_col) as u32,
+                    });
+                    if hits.len() >= max {
+                        return hits;
+                    }
+                    i += needle.len();
+                } else {
+                    i += 1;
+                }
+            }
+        }
+        hits
+    }
+
+    /// The last `max_lines` lines of scrollback plus screen as plain text
+    /// (`\r\n` separated, wrapped rows joined), for carrying a screen over
+    /// into a reconnected session. Empty on the alternate screen.
+    pub fn dump_text(&self, max_lines: usize) -> String {
+        if self.mode().contains(TermMode::ALT_SCREEN) {
+            return String::new();
+        }
+        let grid = self.term.grid();
+        let history = grid.history_size() as i64;
+        let rows = i64::from(self.size.rows);
+        let cols = self.size.cols as usize;
+        let mut lines: Vec<String> = Vec::new();
+        let mut carry = String::new();
+        for visible in -history..rows {
+            let text: String = self
+                .row_chars(visible as i32)
+                .into_iter()
+                .map(|(_, c)| c)
+                .collect();
+            let wrapped = grid[alacritty_terminal::index::Line(visible as i32)]
+                [alacritty_terminal::index::Column(cols - 1)]
+            .flags
+            .contains(Flags::WRAPLINE);
+            carry.push_str(&text);
+            if !wrapped {
+                lines.push(std::mem::take(&mut carry).trim_end().to_string());
+            }
+        }
+        if !carry.is_empty() {
+            lines.push(carry.trim_end().to_string());
+        }
+        while lines.last().is_some_and(|l| l.is_empty()) {
+            lines.pop();
+        }
+        let skip = lines.len().saturating_sub(max_lines);
+        lines[skip..].join("\r\n")
     }
 
     pub fn mode(&self) -> TermMode {
@@ -605,6 +722,24 @@ impl Emulator {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn search_and_dump() {
+        let (mut e, _rx) = Emulator::new(20, 3, 100, TerminalPalette::termoso_dark());
+        e.feed(b"alpha Beta\r\ngamma\r\nbeta again\r\nlast\r\n");
+        let hits = e.search("beta", 10);
+        assert_eq!(hits.len(), 2);
+        assert_eq!((hits[0].col, hits[0].len), (6, 4));
+        assert!(hits[0].line < hits[1].line);
+        assert!(e.search("", 10).is_empty());
+        let dump = e.dump_text(100);
+        assert_eq!(dump, "alpha Beta\r\ngamma\r\nbeta again\r\nlast");
+        assert_eq!(e.dump_text(2), "beta again\r\nlast");
+        e.scroll_to_line(0);
+        assert!(e.snapshot().display_offset > 0);
+        e.scroll_to_bottom();
+        assert_eq!(e.snapshot().display_offset, 0);
+    }
 
     fn emu() -> (Emulator, mpsc::UnboundedReceiver<TermSignal>) {
         Emulator::new(20, 5, 100, TerminalPalette::termoso_dark())

@@ -113,6 +113,9 @@ pub struct MobileSettings {
     pub term_type: String,
     #[serde(default = "default_true")]
     pub terminal_bell: bool,
+    /// Reconnect dropped SSH sessions by itself when the network comes back or changes.
+    #[serde(default = "default_true")]
+    pub auto_reconnect: bool,
     #[serde(default = "default_true")]
     pub haptic_feedback: bool,
     /// Keep the screen on while a terminal is in front.
@@ -217,6 +220,7 @@ impl Default for MobileSettings {
             scrollback_lines: default_scrollback(),
             term_type: default_term(),
             terminal_bell: true,
+            auto_reconnect: true,
             haptic_feedback: true,
             keep_screen_on: true,
             keep_alive_seconds: default_keepalive(),

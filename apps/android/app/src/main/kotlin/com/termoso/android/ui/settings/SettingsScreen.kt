@@ -307,6 +307,13 @@ fun SettingsScreen(
                 )
                 RowDivider()
                 SwitchRow(
+                    title = stringResource(R.string.auto_reconnect),
+                    subtitle = stringResource(R.string.auto_reconnect_summary),
+                    checked = settings.autoReconnect,
+                    onCheckedChange = { v -> set { it.copy(autoReconnect = v) } },
+                )
+                RowDivider()
+                SwitchRow(
                     title = stringResource(R.string.keep_screen_on),
                     subtitle = stringResource(R.string.while_a_terminal_is_in_the_foreground),
                     checked = settings.keepScreenOn,

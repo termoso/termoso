@@ -333,6 +333,14 @@
     <string name="open_">Open</string>
     <string name="duplicate">Duplicate</string>
     <string name="reconnect">Reconnect</string>
+    <string name="auto_reconnect">Reconnect automatically</string>
+    <string name="auto_reconnect_summary">When the network comes back or changes, dropped SSH sessions reconnect with the old screen kept above the new prompt</string>
+    <string name="search_in_terminal">Search in terminal</string>
+    <string name="search_terminal_hint">Find in scrollback</string>
+    <string name="match_n_of_m">%1$d of %2$d</string>
+    <string name="no_matches">No matches</string>
+    <string name="previous_match">Previous match</string>
+    <string name="next_match">Next match</string>
     <string name="open_sftp">Open SFTP</string>
     <string name="edit_host">Edit host</string>
     <string name="add_to_hosts">Add to hosts</string>

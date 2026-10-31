@@ -17,6 +17,7 @@ private const val FLAG_STRIKEOUT = 1 shl 3
 private const val FLAG_WIDE = 1 shl 5
 private const val FLAG_WIDE_SPACER = 1 shl 6
 private const val FLAG_HIDDEN = 1 shl 7
+private val URL_RE = Regex("(?:https?|ftp)://[^\\s<>\"'`\\u00A0]+")
 
 /** Read-only view over the packed cell buffer of a [GridFrame]. */
 class CellGrid(val frame: GridFrame) {
@@ -47,6 +48,33 @@ class CellGrid(val frame: GridFrame) {
 
     /** Concealed (SGR 8) text; never leaves the grid as plain text. */
     fun isHidden(row: Int, col: Int): Boolean = flags(row, col) and FLAG_HIDDEN != 0
+
+    /**
+     * A plain-text URL (`http(s)://`, `ftp://`) printed across [col] of [row],
+     * for taps on links that are not OSC 8 hyperlinks. Single row only.
+     */
+    fun urlAt(row: Int, col: Int): String? {
+        if (row !in 0 until rows || col !in 0 until cols) return null
+        val sb = StringBuilder(cols)
+        val colOf = IntArray(cols + 1)
+        var n = 0
+        for (c in 0 until cols) {
+            val cp = codepoint(row, c)
+            if (cp == 0 || isSpacer(row, c)) continue
+            colOf[n++] = c
+            sb.appendCodePoint(cp)
+        }
+        val text = sb.toString()
+        for (m in URL_RE.findAll(text)) {
+            var end = m.range.last + 1
+            while (end > m.range.first && text[end - 1] in ".,;:!?)]}'\"") end--
+            if (end <= m.range.first) continue
+            val startCol = colOf[m.range.first]
+            val endCol = colOf[end - 1]
+            if (col in startCol..endCol) return text.substring(m.range.first, end)
+        }
+        return null
+    }
 
     /** Text of one row with trailing blanks trimmed. */
     fun lineText(row: Int): String {
