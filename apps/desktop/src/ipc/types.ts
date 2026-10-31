@@ -1290,7 +1290,18 @@ export interface HostKeyPin {
 
 // ───────────────────────────── import (ssh_config / PuTTY / CSV) ─────────────────────────────
 
-export type ImportSource = "ssh_config" | "putty" | "csv" | "mobaxterm" | "securecrt" | "zoc";
+export type ImportSource =
+  | "ssh_config"
+  | "putty"
+  | "csv"
+  | "mobaxterm"
+  | "securecrt"
+  | "zoc"
+  | "winscp"
+  | "royalts"
+  | "iterm2"
+  | "tabby"
+  | "xshell";
 
 export interface ImportedProxy {
   kind: string;

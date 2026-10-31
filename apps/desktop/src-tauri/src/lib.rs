@@ -310,6 +310,7 @@ pub fn run() {
             commands_tools::import_parse_file,
             commands_tools::import_scan_putty_registry,
             commands_tools::import_scan_securecrt_dir,
+            commands_tools::import_scan_xshell_dir,
             commands_tools::theme_import_file,
             commands_tools::import_ssh_dir_default,
             commands_tools::import_csv_template,

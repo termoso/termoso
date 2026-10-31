@@ -26,8 +26,8 @@ use crate::state::AppState;
 use crate::trust;
 pub use termoso_core::import::{
     ImportPreview, ImportSource, ImportedHost, ImportedKey, ImportedKnownHost, ImportedProxy,
-    MAX_TEXT_FILE, PfKind, csv, default_ssh_dir, display, expand_tilde, mobaxterm, putty,
-    read_text, securecrt, ssh_config, zoc,
+    MAX_TEXT_FILE, PfKind, csv, default_ssh_dir, display, expand_tilde, iterm2, mobaxterm, putty,
+    read_text, royalts, securecrt, ssh_config, tabby, winscp, xshell, zoc,
 };
 
 const MAX_KEY_FILE: u64 = 64 * 1024;
@@ -381,6 +381,17 @@ pub fn parse_file(source: ImportSource, path: &str) -> Result<ImportPreview> {
             }
         }
         ImportSource::Zoc => zoc::parse_into(&text, &mut preview)?,
+        ImportSource::Winscp => winscp::parse_into(&text, &mut preview)?,
+        ImportSource::Royalts => royalts::parse_into(&text, &mut preview)?,
+        ImportSource::Iterm2 => iterm2::parse_into(&text, &mut preview)?,
+        ImportSource::Tabby => tabby::parse_into(&text, &mut preview)?,
+        ImportSource::Xshell => {
+            let label = path
+                .file_stem()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            xshell::parse_into(&text, &label, &[], &mut preview)?
+        }
     }
     if preview.is_empty() {
         return Err(DesktopError::invalid(match source {
@@ -392,6 +403,11 @@ pub fn parse_file(source: ImportSource, path: &str) -> Result<ImportPreview> {
             ImportSource::Mobaxterm => "No SSH or Telnet sessions found in the MobaXterm bookmarks",
             ImportSource::Securecrt => "No SSH or Telnet sessions found in the SecureCRT export",
             ImportSource::Zoc => "No SSH hosts found in the ZOC host directory",
+            ImportSource::Winscp => "No SCP/SFTP sites found in the WinSCP configuration",
+            ImportSource::Royalts => "No SSH or Telnet connections found in the Royal TS document",
+            ImportSource::Iterm2 => "No profiles with an ssh command found in the iTerm2 file",
+            ImportSource::Tabby => "No SSH or Telnet profiles found in the Tabby config",
+            ImportSource::Xshell => "No SSH or Telnet session found in the Xshell file",
         }));
     }
     Ok(preview)
@@ -420,6 +436,25 @@ pub fn scan_securecrt_dir(dir: &str) -> Result<ImportPreview> {
     if preview.is_empty() {
         return Err(DesktopError::invalid(
             "No SecureCRT sessions found — pick the Config or Config/Sessions directory",
+        ));
+    }
+    Ok(preview)
+}
+
+/// Xshell `Sessions` directory: one `.xsh` per session, sub-folders are groups.
+pub fn scan_xshell_dir(dir: &str) -> Result<ImportPreview> {
+    let dir = expand_tilde(dir.trim());
+    if !dir.is_dir() {
+        return Err(DesktopError::not_found(format!(
+            "{} is not a directory",
+            display(&dir)
+        )));
+    }
+    let mut preview = ImportPreview::new(ImportSource::Xshell, display(&dir));
+    xshell::scan_dir(&dir, &mut preview)?;
+    if preview.is_empty() {
+        return Err(DesktopError::invalid(
+            "No Xshell sessions found — pick the Sessions directory (Documents/NetSarang Computer/<version>/Xshell/Sessions)",
         ));
     }
     Ok(preview)
