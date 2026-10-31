@@ -38,7 +38,7 @@ On the desktop hover to see the target, then <kbd>Ctrl</kbd>+click (<kbd>⌘</kb
 
 | Setting              | What it does                                                                          |
 | -------------------- | ------------------------------------------------------------------------------------- |
-| **Scrollback lines** | How much output is kept per session; **Clear buffer** wipes it for one session        |
+| **Scrollback lines** | How much output is kept per session, up to 100 000 lines on every platform; **Clear buffer** wipes it for one session |
 | **Audible bell**     | Play a sound on `BEL`; off by default                                                 |
 | **Copy on select**   | Copy a selection to the clipboard as soon as it is made; otherwise right-click copies |
 | **Line height**      | Spacing between rows, for dense logs or for readability                               |
