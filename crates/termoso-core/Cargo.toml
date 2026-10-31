@@ -38,7 +38,7 @@ p256 = { version = "0.13", optional = true, features = ["ecdh"] }
 aes = { version = "0.8" }
 cbc = { version = "0.1", optional = true }
 # Mosh: AES-128-OCB3 datagrams + zlib-compressed instructions.
-ocb3 = { version = "0.1", default-features = false }
+ocb3 = { version = "0.2", default-features = false }
 flate2 = "1"
 hkdf = { workspace = true, optional = true }
 rand_core = { workspace = true, optional = true }
