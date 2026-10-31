@@ -3232,4 +3232,9 @@ export const ru: Readonly<Record<string, string>> = {
   "Disk encryption": "Шифрование диска",
   "Screen lock": "Блокировка экрана",
   "Hardware key": "Аппаратный ключ",
+  "Change icon": "Сменить значок",
+  "Applications": "Приложения",
+  "Operating systems": "Операционные системы",
+  "Default (folder)": "По умолчанию (папка)",
+  "Automatic (detected OS)": "Автоматически (определённая ОС)",
 };

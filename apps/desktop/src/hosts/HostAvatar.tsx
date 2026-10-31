@@ -7,6 +7,7 @@ import type { HostCard, SessionInfo } from "@/ipc/types";
 import { IconTile } from "@/components/ui";
 import { sizes } from "@/theme/theme";
 import { distroIcon, type DistroIcon } from "./distroIcons";
+import { pickedIcon } from "./icons";
 
 /** Renders a distro glyph as a regular MUI icon (inherits `fontSize` / `color`). */
 export function DistroGlyph({ icon, ...props }: { icon: DistroIcon } & SvgIconProps) {
@@ -22,7 +23,7 @@ export function hostIcon(
   host: Pick<HostCard, "icon" | "osName"> | null | undefined,
 ): DistroIcon | null {
   if (!host) return null;
-  return distroIcon(host.icon) ?? distroIcon(host.osName);
+  return pickedIcon(host.icon) ?? distroIcon(host.osName);
 }
 
 /** Protocols a glyph can stand for: saved-host sections plus the session-only ones. */
@@ -39,7 +40,7 @@ export function HostGlyph({
   icon?: string | null | undefined;
   protocol: GlyphProtocol;
 } & SvgIconProps) {
-  const icon = distroIcon(iconId) ?? distroIcon(osName);
+  const icon = pickedIcon(iconId) ?? distroIcon(osName);
   if (icon) return <DistroGlyph icon={icon} {...props} />;
   return <ProtocolGlyph protocol={protocol} {...props} />;
 }

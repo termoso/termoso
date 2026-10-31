@@ -14,6 +14,7 @@ import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import ContentCopyRoundedIcon from "@mui/icons-material/ContentCopyRounded";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
+import FolderRoundedIcon from "@mui/icons-material/FolderRounded";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useSnackbar } from "@/components/Snackbar";
 import { Field, Loading, SectionCard, SidePanel, ToolIconButton } from "@/components/ui";
@@ -39,6 +40,7 @@ import { monoFontFamily, sizes } from "@/theme/theme";
 import { AgentForwardingRow, CredentialsFields, X11ForwardingRow } from "./CredentialsFields";
 import { ChainDialog, ProxyDialog } from "./HostAdvancedDialogs";
 import { CloudSyncSection } from "./CloudSyncSection";
+import { IconPicker } from "./IconPicker";
 import { tr, trn } from "@/i18n";
 
 interface Props {
@@ -233,14 +235,23 @@ function GroupEditor({
       >
         <SectionCard title={tr("Group")}>
           <Field label={tr("Name")}>
-            <TextField
-              required
-              autoFocus={!groupId}
-              value={form.label}
-              onChange={(e) => set("label", e.target.value)}
-              placeholder={tr("Production, Staging, Home lab…")}
-              error={touched && form.label.trim().length === 0}
-            />
+            <Box sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
+              <IconPicker
+                value={form.icon}
+                onChange={(v) => set("icon", v)}
+                autoLabel={tr("Default (folder)")}
+                fallback={<FolderRoundedIcon />}
+              />
+              <TextField
+                required
+                autoFocus={!groupId}
+                value={form.label}
+                onChange={(e) => set("label", e.target.value)}
+                placeholder={tr("Production, Staging, Home lab…")}
+                error={touched && form.label.trim().length === 0}
+                sx={{ flex: 1 }}
+              />
+            </Box>
           </Field>
           <Field
             label={tr("Parent group")}
