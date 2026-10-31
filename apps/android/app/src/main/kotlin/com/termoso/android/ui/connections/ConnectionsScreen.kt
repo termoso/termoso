@@ -127,6 +127,7 @@ fun ConnectionsScreen(
 ) {
     val revision by shell.repo.revision.collectAsStateWithLifecycle()
     val sessions by shell.sessions.sessions.collectAsStateWithLifecycle()
+    val activeSessionId by shell.sessions.activeId.collectAsStateWithLifecycle()
     val sftp by shell.sftp.connections.collectAsStateWithLifecycle()
     val settings by shell.repo.settings.collectAsStateWithLifecycle()
     val vaults by shell.vaults.collectAsStateWithLifecycle()
@@ -284,11 +285,16 @@ fun ConnectionsScreen(
             if (sessions.isNotEmpty() || sftp.isNotEmpty()) {
                 SectionLabel(if (open == 1) stringResource(R.string.active_session) else stringResource(R.string.active_sessions, open))
                 SectionCard {
-                    sessions.forEachIndexed { i, s ->
+                    // The session to resume (last active, with the thumbnail) leads the list.
+                    val ordered = sessions.sortedByDescending { it.id == activeSessionId }
+                    ordered.forEachIndexed { i, s ->
                         if (i > 0) RowDivider()
                         ActiveSessionRow(
                             session = s,
                             fontFamily = settings.terminalFontFamily,
+                            // Only the session the user left the terminal from gets the big
+                            // thumbnail; every tab has one in the terminal's tab switcher.
+                            showPreview = s.id == activeSessionId,
                             siblings = siblingsOf(s, sessions),
                             sftpForHost = s.hostId?.let { id -> sftp.filter { it.hostId == id } } ?: emptyList(),
                             onOpen = { shell.sessions.setActive(s.id); onOpenTerminal() },
@@ -477,6 +483,7 @@ fun ConnectionsScreen(
 private fun ActiveSessionRow(
     session: TerminalSession,
     fontFamily: String,
+    showPreview: Boolean,
     siblings: List<TerminalSession>,
     sftpForHost: List<SftpConnection>,
     onOpen: () -> Unit,
@@ -502,8 +509,8 @@ private fun ActiveSessionRow(
     val ssh = remote && (session.quick?.protocol?.equals("ssh", true) ?: true)
     val hostTotal = siblings.size + 1 + sftpForHost.size
     Column {
-        // A glance at what is on screen, as on the Termius Connections tab.
-        if (state is SessionState.Connected) {
+        // A glance at what is on screen, for the session to resume.
+        if (showPreview && state is SessionState.Connected) {
             TerminalPreview(
                 session = session,
                 fontFamily = fontFamily,
