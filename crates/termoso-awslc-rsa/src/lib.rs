@@ -205,13 +205,13 @@ mod tests {
     use rsa::{Oaep, Pkcs1v15Encrypt, RsaPrivateKey, RsaPublicKey};
 
     fn fresh() -> (RsaPrivateKey, PrivateKey) {
-        let key = RsaPrivateKey::new(&mut rand::thread_rng(), 2048).unwrap();
+        let key = RsaPrivateKey::new(&mut rand_core::OsRng, 2048).unwrap();
         let der = key.to_pkcs8_der().unwrap();
         (key, PrivateKey::from_pkcs8_der(der.as_bytes()).unwrap())
     }
 
     fn oaep_encrypt(pk: &RsaPublicKey, digest: Hash, mgf1: Hash, msg: &[u8]) -> Vec<u8> {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand_core::OsRng;
         let padding = match (digest, mgf1) {
             (Hash::Sha1, Hash::Sha1) => Oaep::new::<sha1::Sha1>(),
             (Hash::Sha256, Hash::Sha256) => Oaep::new::<sha2::Sha256>(),
@@ -294,7 +294,7 @@ mod tests {
         let (key, sp) = fresh();
         let ct = key
             .to_public_key()
-            .encrypt(&mut rand::thread_rng(), Pkcs1v15Encrypt, b"legacy")
+            .encrypt(&mut rand_core::OsRng, Pkcs1v15Encrypt, b"legacy")
             .unwrap();
         assert_eq!(sp.decrypt(Padding::Pkcs1v15, &ct).unwrap(), b"legacy");
         // PKCS#1 v1.5 unpadding has no integrity check: an OAEP ciphertext
@@ -329,7 +329,7 @@ mod tests {
         );
         let (_, sp) = fresh();
         assert_eq!(sp.bits(), 2048);
-        let small = RsaPrivateKey::new(&mut rand::thread_rng(), 1024).unwrap();
+        let small = RsaPrivateKey::new(&mut rand_core::OsRng, 1024).unwrap();
         assert_eq!(
             PrivateKey::from_pkcs8_der(small.to_pkcs8_der().unwrap().as_bytes()).err(),
             Some(KeyError::TooSmall(1024))

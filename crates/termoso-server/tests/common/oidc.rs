@@ -174,7 +174,7 @@ async fn token(
 /// runtime that will keep running for the whole test binary).
 pub async fn serve(listener: std::net::TcpListener) -> anyhow::Result<MockIdp> {
     let issuer = format!("http://{}", listener.local_addr()?);
-    let key = RsaPrivateKey::new(&mut rand::thread_rng(), 2048)?;
+    let key = RsaPrivateKey::new(&mut rand_core::OsRng, 2048)?;
     let idp = Arc::new(Idp {
         issuer: issuer.clone(),
         key,

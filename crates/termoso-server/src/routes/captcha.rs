@@ -8,7 +8,6 @@ use axum::extract::{Query, State};
 use axum::http::{HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use base64::Engine;
-use rand::RngCore;
 use serde::Deserialize;
 
 use crate::error::Error;
@@ -31,7 +30,7 @@ fn theme(raw: Option<&str>) -> &'static str {
 
 fn nonce() -> String {
     let mut b = [0u8; 16];
-    rand::thread_rng().fill_bytes(&mut b);
+    rand::fill(&mut b);
     base64::engine::general_purpose::STANDARD.encode(b)
 }
 

@@ -107,14 +107,14 @@ mod tests {
     use rsa::{Oaep, Pkcs1v15Encrypt};
 
     fn fresh() -> RsaPrivateKey {
-        RsaPrivateKey::new(&mut rand::thread_rng(), 2048).unwrap()
+        RsaPrivateKey::new(&mut rand_core::OsRng, 2048).unwrap()
     }
 
     #[test]
     fn decrypts_oaep_with_independent_hashes() {
         let key = fresh();
         let sp = SpKey::from_rsa(&key).unwrap();
-        let mut rng = rand::thread_rng();
+        let mut rng = rand_core::OsRng;
         let ct = key
             .to_public_key()
             .encrypt(
@@ -183,7 +183,7 @@ mod tests {
             SpKey::from_pkcs8_der(&[0x30, 0x03, 0x02, 0x01, 0x00]),
             Err(KeyError::Decrypt(termoso_awslc_rsa::KeyError::Malformed))
         ));
-        let small = RsaPrivateKey::new(&mut rand::thread_rng(), 1024).unwrap();
+        let small = RsaPrivateKey::new(&mut rand_core::OsRng, 1024).unwrap();
         assert!(matches!(
             SpKey::from_rsa(&small),
             Err(KeyError::Decrypt(termoso_awslc_rsa::KeyError::TooSmall(

@@ -2,19 +2,19 @@
 
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use rand::{Rng, RngCore, distributions::Uniform};
+use rand::{RngExt, distr::Uniform};
 
 /// 32 random bytes as URL-safe base64 (43 chars).
 pub fn random_token() -> String {
     let mut b = [0u8; 32];
-    rand::thread_rng().fill_bytes(&mut b);
+    rand::fill(&mut b);
     URL_SAFE_NO_PAD.encode(b)
 }
 
 /// Numeric code of `n` digits (email verification / device approval).
 pub fn numeric_code(n: usize) -> String {
-    let mut rng = rand::thread_rng();
-    let dist = Uniform::new_inclusive(0u8, 9);
+    let mut rng = rand::rng();
+    let dist = Uniform::new_inclusive(0u8, 9).expect("valid range");
     (0..n)
         .map(|_| char::from(b'0' + rng.sample(dist)))
         .collect()
@@ -23,8 +23,8 @@ pub fn numeric_code(n: usize) -> String {
 /// Backup code: 10 chars from an unambiguous alphabet, formatted `xxxxx-xxxxx`.
 pub fn backup_code() -> String {
     const ALPHABET: &[u8] = b"abcdefghjkmnpqrstuvwxyz23456789";
-    let mut rng = rand::thread_rng();
-    let dist = Uniform::new(0, ALPHABET.len());
+    let mut rng = rand::rng();
+    let dist = Uniform::new(0, ALPHABET.len()).expect("valid range");
     let raw: String = (0..10)
         .map(|_| char::from(ALPHABET[rng.sample(dist)]))
         .collect();
