@@ -9,7 +9,6 @@
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use base64::Engine;
-use rand::RngCore;
 use sha2::{Digest, Sha256};
 use termoso_proto::sshid::SshIdKeyType;
 
@@ -64,7 +63,7 @@ pub struct HandlePage<'a> {
 
 fn nonce() -> String {
     let mut b = [0u8; 16];
-    rand::thread_rng().fill_bytes(&mut b);
+    rand::fill(&mut b);
     base64::engine::general_purpose::STANDARD.encode(b)
 }
 

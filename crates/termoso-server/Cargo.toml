@@ -36,6 +36,8 @@ utoipa-swagger-ui = { workspace = true }
 argon2 = { workspace = true }
 blake3 = { workspace = true }
 rand = { workspace = true }
+# rand_core 0.6 `OsRng` feeds the `rsa` 0.9 API, which predates rand 0.9+.
+rand_core = { workspace = true }
 base64 = { workspace = true }
 zeroize = { workspace = true }
 subtle = { workspace = true }

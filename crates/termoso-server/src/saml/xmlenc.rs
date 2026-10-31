@@ -231,12 +231,11 @@ pub fn encrypt_assertion_with(
     transport: KeyTransport,
 ) -> String {
     use aes::cipher::BlockEncryptMut;
-    use rand::RngCore;
-    let mut rng = rand::thread_rng();
+    let mut rng = rand_core::OsRng;
     let mut key = [0u8; 32];
-    rng.fill_bytes(&mut key);
+    rand::fill(&mut key);
     let mut iv = [0u8; 16];
-    rng.fill_bytes(&mut iv);
+    rand::fill(&mut iv);
     let mut plain = assertion_xml.as_bytes().to_vec();
     let pad = 16 - (plain.len() % 16);
     plain.extend(std::iter::repeat_n(0u8, pad - 1));
@@ -347,7 +346,7 @@ mod tests {
     const ASSERTION: &str = r#"<saml:Assertion ID="_a" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"><saml:Issuer>idp</saml:Issuer></saml:Assertion>"#;
 
     fn keys() -> (RsaPrivateKey, SpKey) {
-        let key = RsaPrivateKey::new(&mut rand::thread_rng(), 2048).unwrap();
+        let key = RsaPrivateKey::new(&mut rand_core::OsRng, 2048).unwrap();
         let sp = SpKey::from_rsa(&key).unwrap();
         (key, sp)
     }
