@@ -110,8 +110,9 @@ impl russh::server::Handler for TestHandler {
     async fn auth_publickey_offered(
         &mut self,
         _user: &str,
-        key: &PublicKey,
+        offer: russh::server::PublicKeyOffer<'_>,
     ) -> Result<Auth, Self::Error> {
+        let key = offer.public_key;
         self.srv.observed.offered.lock().unwrap().push(key.clone());
         Ok(if self.srv.is_authorized(key) {
             Auth::Accept
@@ -120,8 +121,12 @@ impl russh::server::Handler for TestHandler {
         })
     }
 
-    async fn auth_publickey(&mut self, user: &str, key: &PublicKey) -> Result<Auth, Self::Error> {
-        Ok(if user == USER && self.srv.is_authorized(key) {
+    async fn auth_publickey(
+        &mut self,
+        user: &str,
+        key: russh::server::VerifiedPublicKey<'_>,
+    ) -> Result<Auth, Self::Error> {
+        Ok(if user == USER && self.srv.is_authorized(key.public_key) {
             Auth::Accept
         } else {
             Auth::reject()
