@@ -667,6 +667,8 @@ struct Inner {
     runtime: tokio::runtime::Handle,
     /// Fired by `disconnect`: aborts the connect and every transfer.
     closed: CancellationToken,
+    /// Settings → transfer speed limit, KiB/s (0 = unlimited).
+    rate_limit_kib: u32,
     /// Team presence registration for a saved team-vault host.
     presence: Option<Slot>,
 }
@@ -723,6 +725,7 @@ impl SftpSession {
             queue: Mutex::new(TransferQueue::new(closed.clone())),
             runtime: runtime.clone(),
             closed,
+            rate_limit_kib: settings.transfer_rate_limit_kib,
             presence,
         });
         let session = Arc::new(Self {
@@ -1004,6 +1007,10 @@ impl Drop for SftpSession {
 }
 
 impl Inner {
+    fn rate_limit(&self) -> Option<u64> {
+        (self.rate_limit_kib > 0).then(|| u64::from(self.rate_limit_kib) * 1024)
+    }
+
     fn set_state(&self, state: SessionState) {
         if let Some(p) = &self.presence {
             match state {
@@ -1045,6 +1052,7 @@ impl Inner {
             preserve_mtime: true,
             cancel: launch.cancel.clone(),
             progress: Some(progress),
+            rate_limit: self.rate_limit(),
         };
         match launch.direction {
             TransferDirection::Download => {

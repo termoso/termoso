@@ -150,6 +150,8 @@ export interface Settings {
   notifyCommandSeconds: number;
   /** A transfer finished or failed while the SFTP tab was not in front. */
   notifyTransfers: boolean;
+  /** SFTP transfer speed limit in KiB/s per transfer; 0 is unlimited. */
+  sftpRateLimitKib: number;
   /** A live session was dropped by the network / server. */
   notifySessions: boolean;
   /** Shared vault access, someone joined a shared terminal, remote sign-out. */
@@ -2248,11 +2250,14 @@ export interface SyncInfo {
   remote: string;
   ignore: string[];
   deleteRemote: boolean;
+  /** Also download files that change on the server. */
+  twoWay: boolean;
   startedAt: string;
 }
 
 export interface SyncStats {
   uploaded: number;
+  downloaded: number;
   bytes: number;
   removed: number;
   failed: number;
@@ -2260,6 +2265,29 @@ export interface SyncStats {
   lastPath: string | null;
   lastAt: string | null;
   lastError: string | null;
+}
+
+/** One side of a file comparison; `sftpId: null` is this machine. */
+export interface DiffSide {
+  sftpId: Uuid | null;
+  path: string;
+}
+
+export interface DiffLine {
+  kind: "equal" | "insert" | "delete" | "skip";
+  old: number | null;
+  new: number | null;
+  /** For `skip`: the number of unchanged lines left out. */
+  text: string;
+}
+
+export interface DiffResult {
+  same: boolean;
+  binary: boolean;
+  truncated: boolean;
+  leftSize: number;
+  rightSize: number;
+  lines: DiffLine[];
 }
 
 export interface SyncCard {

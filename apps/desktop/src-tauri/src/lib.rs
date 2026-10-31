@@ -238,6 +238,7 @@ pub fn run() {
             commands::edits_list,
             commands::syncs_list,
             commands::sync_start,
+            commands::sftp_diff,
             commands::sync_stop,
             commands::edit_open,
             commands::edit_upload_now,

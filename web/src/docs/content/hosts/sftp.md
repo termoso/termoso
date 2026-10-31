@@ -42,11 +42,20 @@ Needs `lrzsz` on the remote (`apt install lrzsz`, `apk add lrzsz`), works over S
 
 For the «saved — it's on the server» loop, the SFTP toolbar has **Watch & upload** (the sync icon, shown when the left pane is the local disk). Pick a local folder and a remote folder on the open connection: from then on every file saved, created or renamed under the local folder is uploaded to the same path under the remote one, until you stop it from the bar at the bottom of the SFTP screen. Directories are created on the server as needed.
 
-- One way only, local → server. Nothing is downloaded, and remote files are deleted only if you switch on **Delete on the server what is deleted locally**.
+- Local → server by default. Nothing is downloaded, and remote files are deleted only if you switch on **Delete on the server what is deleted locally**.
+- **Two-way** also lists the remote folder every 15 seconds and downloads files that are new or newer there (SFTP keeps whole seconds, so a tie within a second goes to the local copy). At start both trees are compared once and the newer side of every file wins. Deletions never travel server → disk; files you just downloaded are not uploaded back.
 - **Upload everything in the folder now** (on by default) does a first full upload so the server matches before you start editing.
 - **Ignore** takes names or globs skipped at any depth; the default is `.git node_modules .DS_Store *.swp *~ .#* *.tmp` — editor temp files and dependency folders stay local.
 - Saves are batched for ~400 ms (editors write a file in several steps) and a failed upload is retried twice; the bar shows counts, the last file and the last error.
-- Watches end with the connection and are not remembered between launches. For a two-way or offline-tolerant sync use a tool made for it (rsync, Mutagen, Syncthing); this is deliberately the simple deploy loop.
+- Watches end with the connection and are not remembered between launches. For an offline-tolerant or conflict-aware sync use a tool made for it (rsync, Mutagen, Syncthing); this is deliberately the simple loop.
+
+## Compare files
+
+**Compare with other pane** in a file's menu diffs it against the file of the same name in the other pane's directory, local or remote on either side. Hunks are shown with three lines of context, unchanged stretches are folded; files over 4 MiB or with binary content are compared by size only.
+
+## Speed limit
+
+**Settings → SFTP → Transfer speed limit** caps every transfer (queue, watch & upload, edits) at the given KiB/s per file; 0 is unlimited. Android has the same setting under Settings → Files.
 
 ## WebDAV
 

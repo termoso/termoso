@@ -48,6 +48,7 @@ import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import ContentCopyRoundedIcon from "@mui/icons-material/ContentCopyRounded";
 import UploadRoundedIcon from "@mui/icons-material/UploadRounded";
+import DifferenceRoundedIcon from "@mui/icons-material/DifferenceRounded";
 import DownloadRoundedIcon from "@mui/icons-material/DownloadRounded";
 import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
 import AppsRoundedIcon from "@mui/icons-material/AppsRounded";
@@ -115,6 +116,8 @@ interface Props {
   onReceiveFiles?: (dt: DataTransfer, dest: string) => void;
   /** Open a file locally (`with` asks for the application first). */
   onOpen: (entry: FsEntry, mode: "default" | "with") => void;
+  /** Diff a file against the one of the same name in the opposite pane. */
+  onCompare?: (entry: FsEntry) => void;
   /** Paths currently open for editing (remote side). */
   editing?: ReadonlySet<string>;
   /** Actions → Close; closes the connection behind a remote pane. */
@@ -204,6 +207,7 @@ export function FilePane(props: Props) {
     onReceive,
     onReceiveFiles,
     onOpen,
+    onCompare,
     editing,
     onClose,
     disabled = false,
@@ -666,6 +670,14 @@ export function FilePane(props: Props) {
               <AppsRoundedIcon fontSize="small" />
             </ListItemIcon>
             <ListItemText>{tr("Open with…")}</ListItemText>
+          </MenuItem>
+        )}
+        {actionFile && onCompare && (
+          <MenuItem disabled={oppositePath === null} onClick={() => onCompare(actionFile)}>
+            <ListItemIcon>
+              <DifferenceRoundedIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>{tr("Compare with other pane")}</ListItemText>
           </MenuItem>
         )}
         {selectedEntries.length > 0 && (
