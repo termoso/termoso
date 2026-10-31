@@ -130,7 +130,7 @@ fun HostActionsSheet(
                 .padding(bottom = 24.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                HostAvatar(host.osName)
+                HostAvatar(host.osName, icon = host.icon)
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
                     Text(

@@ -38,12 +38,13 @@ fun distroVector(icon: DistroIcon): ImageVector = vectorCache.getOrPut(icon.id) 
 }
 
 /**
- * Host tile: brand-coloured distro glyph when the OS is known, neutral
- * terminal tile otherwise; green check while selected.
+ * Host tile: the icon the user picked (`Host.icon`, see [IconCatalog]) or,
+ * failing that, the brand-coloured distro glyph when the OS is known, and a
+ * neutral terminal tile otherwise; green check while selected.
  */
 @Composable
-fun HostAvatar(osName: String?, modifier: Modifier = Modifier, selected: Boolean = false, size: Int = 40) {
-    val icon = remember(osName) { DistroIcons.forOs(osName) }
+fun HostAvatar(osName: String?, modifier: Modifier = Modifier, selected: Boolean = false, size: Int = 40, icon: String? = null) {
+    val icon = remember(osName, icon) { IconCatalog.picked(icon) ?: DistroIcons.forOs(osName) }
     Box(
         modifier = modifier
             .size(size.dp)

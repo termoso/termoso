@@ -61,6 +61,9 @@ object DistroIcons {
         "win" to "windows",
     )
 
+    /** Exact id or alias (`macos` → `osx`); no fuzzy matching. */
+    fun forId(id: String): DistroIcon? = byId[aliases[id] ?: id]
+
     /** Icon for a stored `osName`; tolerates legacy free-form values ("Ubuntu 22.04"). */
     fun forOs(osName: String?): DistroIcon? {
         val key = osName?.trim()?.lowercase().orEmpty()

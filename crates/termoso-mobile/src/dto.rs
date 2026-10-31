@@ -564,6 +564,8 @@ pub struct GroupItem {
     pub host_count: u32,
     pub group_count: u32,
     pub has_config: bool,
+    /// User-chosen icon id (`None` = default folder).
+    pub icon: Option<String>,
 }
 
 impl From<hosts::GroupNode> for GroupItem {
@@ -576,6 +578,7 @@ impl From<hosts::GroupNode> for GroupItem {
             host_count: g.host_count as u32,
             group_count: g.group_count as u32,
             has_config: g.has_config,
+            icon: g.icon,
         }
     }
 }
