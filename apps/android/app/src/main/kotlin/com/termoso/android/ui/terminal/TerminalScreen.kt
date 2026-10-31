@@ -22,11 +22,16 @@ import android.view.HapticFeedbackConstants
 import android.view.KeyEvent
 import android.view.inputmethod.InputMethodManager
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.AnimatedVisibility
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,11 +51,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBackIosNew
@@ -96,11 +98,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
@@ -138,8 +138,6 @@ import com.termoso.core.SpecialKey
 import com.termoso.core.SuggestionItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -209,6 +207,8 @@ fun TerminalScreen(
     }
 
     var liveSheet by remember { mutableStateOf(false) }
+    // Browser-style tab grid over the terminal, opened from the session pill.
+    var switcherOpen by remember { mutableStateOf(false) }
     // Session whose `⋯` menu is open; it is also made active so the menu's shortcuts target it.
     var menuFor by remember { mutableStateOf<String?>(null) }
     // Bumped by the session menu to open the History & themes panel, which lives with the terminal.
@@ -223,6 +223,7 @@ fun TerminalScreen(
     // The sharing sheet is per session: switching chips or losing the session closes it.
     LaunchedEffect(active?.id) { liveSheet = false }
 
+    Box(Modifier.fillMaxSize()) {
     Scaffold(
         contentWindowInsets = WindowInsets(0),
         snackbarHost = { SnackbarHost(snackbar, Modifier.windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))) },
@@ -244,6 +245,7 @@ fun TerminalScreen(
                     onClose = { id -> scope.launch { shell.sessions.close(id) } },
                     onLive = { liveSheet = true },
                     onMenu = { id -> shell.sessions.setActive(id); menuFor = id },
+                    onOpenSwitcher = { switcherOpen = true },
                     onNew = onNewSession,
                     gridShown = gridShown.value,
                     onToggleGrid = {
@@ -288,6 +290,24 @@ fun TerminalScreen(
             }
         }
     }
+    AnimatedVisibility(
+        visible = switcherOpen && sessions.isNotEmpty(),
+        enter = fadeIn(tween(160)) + scaleIn(tween(200), initialScale = 0.94f),
+        exit = fadeOut(tween(120)) + scaleOut(tween(160), targetScale = 0.94f),
+    ) {
+        TabSwitcher(
+            sessions = sessions,
+            activeId = active?.id,
+            fontFamily = settings.terminalFontFamily,
+            onSelect = { shell.sessions.setActive(it) },
+            onClose = { id -> scope.launch { shell.sessions.close(id) } },
+            onMenu = { id -> shell.sessions.setActive(id); menuFor = id },
+            onNew = { switcherOpen = false; onNewSession() },
+            onDismiss = { switcherOpen = false },
+        )
+    }
+    }
+    LaunchedEffect(sessions.isEmpty()) { if (sessions.isEmpty()) switcherOpen = false }
     if (liveSheet && active != null) {
         LiveSheet(session = active, shell = shell, onClose = { liveSheet = false })
     }
@@ -342,6 +362,7 @@ private fun SessionBar(
     onClose: (String) -> Unit,
     onLive: () -> Unit,
     onMenu: (String) -> Unit,
+    onOpenSwitcher: () -> Unit,
     onNew: () -> Unit,
     gridShown: Boolean = false,
     onToggleGrid: (() -> Unit)? = null,
@@ -360,37 +381,18 @@ private fun SessionBar(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         HeaderButton(Icons.Filled.ArrowBackIosNew, stringResource(R.string.back), onClick = onBack)
-        val listState = rememberLazyListState()
-        // Bring the active chip into view when the selection changes and again
-        // whenever the row is re-measured to a new width (dialogs, IME), which
-        // resets the scroll offset; manual scrolling in between is left alone.
-        LaunchedEffect(activeId, sessions.size) {
-            val index = sessions.indexOfFirst { it.id == activeId }
-            if (index < 0) return@LaunchedEffect
-            snapshotFlow {
-                val info = listState.layoutInfo
-                if (info.totalItemsCount > index) info.viewportEndOffset - info.viewportStartOffset else null
-            }.filterNotNull().distinctUntilChanged().collect {
-                listState.animateScrollToItem(index)
-            }
-        }
-        LazyRow(
-            Modifier.weight(1f),
-            state = listState,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            items(sessions, key = { it.id }) { s ->
-                SessionChip(
-                    s,
-                    s.id == activeId,
-                    onClick = { onSelect(s.id) },
-                    onLongClick = { onMenu(s.id) },
-                    onClose = { onClose(s.id) },
-                    // A lone session stretches across the row like the Termius pill.
-                    fillWidth = sessions.size == 1,
-                    modifier = if (sessions.size == 1) Modifier.fillParentMaxWidth() else Modifier,
-                )
-            }
+        // One browser-style pill for the active session; the tab grid lists the rest.
+        if (active != null) {
+            TabSwitcherButton(
+                session = active,
+                count = sessions.size,
+                onOpen = onOpenSwitcher,
+                onLongClick = { onMenu(active.id) },
+                onClose = { onClose(active.id) },
+                modifier = Modifier.weight(1f),
+            )
+        } else {
+            Spacer(Modifier.weight(1f))
         }
         if (active != null) {
             val shared by active.share.collectAsStateWithLifecycle()
@@ -412,75 +414,6 @@ private fun SessionBar(
                 if (gridShown) Icons.Filled.Keyboard else Icons.Filled.GridView,
                 if (gridShown) stringResource(R.string.toggle_keyboard) else stringResource(R.string.more_keys),
                 onClick = onToggleGrid,
-            )
-        }
-    }
-}
-
-/**
- * One session pill: distro icon (a spinner while connecting), the name, and —
- * on the active pill — the close button. State shows through colour: accent
- * for the active session, error red for a failed one, muted for a closed one.
- */
-@Composable
-private fun SessionChip(
-    session: TerminalSession,
-    active: Boolean,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit,
-    onClose: () -> Unit,
-    /** Stretched pill: the name takes the free width so the close button sits at the edge. */
-    fillWidth: Boolean = false,
-    modifier: Modifier = Modifier,
-) {
-    val state by session.state.collectAsStateWithLifecycle()
-    val detected by session.detectedOs.collectAsStateWithLifecycle()
-    val accent = MaterialTheme.colorScheme.primary
-    val bg = if (active) accent.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceContainerHigh
-    val fg = when {
-        state is SessionState.Failed -> MaterialTheme.colorScheme.error
-        active -> accent
-        state is SessionState.Closed -> MaterialTheme.colorScheme.onSurfaceVariant
-        else -> MaterialTheme.colorScheme.onSurface
-    }
-    Row(
-        modifier
-            .height(36.dp)
-            .clip(ChipShape)
-            .background(bg)
-            // Not focusable: a focus grab (e.g. after a dialog closes) would
-            // otherwise scroll the row back to the first chip.
-            .focusProperties { canFocus = false }
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick, onLongClickLabel = stringResource(R.string.session_actions))
-            .padding(start = 12.dp, end = if (active) 4.dp else 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        when {
-            state is SessionState.Connecting -> CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = fg)
-            session.isView -> Icon(Icons.Filled.Groups, contentDescription = null, tint = fg, modifier = Modifier.size(18.dp))
-            else -> HostAvatar(detected ?: session.savedOsName, size = 20)
-        }
-        Text(
-            session.label,
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Medium,
-            color = fg,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            // Weight only in a stretched pill: in an unbounded LazyRow item it would collapse to zero.
-            modifier = if (fillWidth) Modifier.weight(1f) else Modifier.widthIn(max = 180.dp),
-        )
-        if (active) {
-            Icon(
-                Icons.Filled.Close,
-                contentDescription = stringResource(R.string.close_session),
-                tint = fg,
-                modifier = Modifier
-                    .size(26.dp)
-                    .clip(RoundedCornerShape(13.dp))
-                    .clickable(onClick = onClose)
-                    .padding(5.dp),
             )
         }
     }

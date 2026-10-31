@@ -92,7 +92,11 @@ fun TermosoTheme(
     val context = LocalContext.current
     val scheme = when {
         dynamicColor && supportsDynamicColor ->
-            if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            (if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context))
+                // Row dividers use outlineVariant; the Material You palette makes it a
+                // visible line, while the Termoso schemes keep it one surface layer away
+                // (barely there). Match that so sections look the same in both modes.
+                .let { it.copy(outlineVariant = it.surfaceContainer) }
         dark -> DarkScheme
         else -> LightScheme
     }

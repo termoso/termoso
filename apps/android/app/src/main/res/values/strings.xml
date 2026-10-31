@@ -1112,6 +1112,7 @@
     <string name="history_themes">History &amp; themes</string>
     <string name="customize_keys">Customize keys</string>
     <string name="new_session">New session</string>
+    <string name="tabs_count">%1$d tabs</string>
     <string name="history">History</string>
     <string name="themes">Themes</string>
     <string name="this_host">This host</string>

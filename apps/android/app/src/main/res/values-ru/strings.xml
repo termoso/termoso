@@ -1117,6 +1117,7 @@
     <string name="history_themes">История и темы</string>
     <string name="customize_keys">Настроить клавиши</string>
     <string name="new_session">Новая сессия</string>
+    <string name="tabs_count">Вкладок: %1$d</string>
     <string name="history">История</string>
     <string name="themes">Темы</string>
     <string name="this_host">Этот хост</string>
