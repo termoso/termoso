@@ -1159,7 +1159,12 @@ export function WarningList({
           {title} ({warnings.length})
         </Typography>
         {warnings.length > 3 && (
-          <IconButton size="small" onClick={() => setExpanded((v) => !v)}>
+          <IconButton
+            size="small"
+            onClick={() => setExpanded((v) => !v)}
+            aria-label={expanded ? tr("Hide details") : tr("Show details")}
+            aria-expanded={expanded}
+          >
             <ExpandMoreRoundedIcon
               fontSize="small"
               sx={{

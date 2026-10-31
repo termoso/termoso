@@ -1,0 +1,25 @@
+; Weblate project configuration (https://docs.weblate.org/en/latest/admin/continuous.html).
+; Components below are what we add on the hosted instance; the repository is
+; the source of truth and Weblate pushes translation commits back as PRs.
+[weblate]
+url = https://hosted.weblate.org/
+
+[component "desktop"]
+file_format = json
+filemask = apps/desktop/src/i18n/*.json
+template = apps/desktop/src/i18n/en.json
+new_base = apps/desktop/src/i18n/en.json
+source_language = en
+
+[component "web"]
+file_format = json
+filemask = web/src/i18n/*.json
+template = web/src/i18n/en.json
+new_base = web/src/i18n/en.json
+source_language = en
+
+[component "android"]
+file_format = aresource
+filemask = apps/android/app/src/main/res/values-*/strings.xml
+template = apps/android/app/src/main/res/values/strings.xml
+source_language = en
