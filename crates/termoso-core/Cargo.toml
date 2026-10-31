@@ -36,9 +36,11 @@ ctap-hid-fido2 = { version = "3.5", optional = true }
 ciborium = { version = "0.2", optional = true }
 p256 = { version = "0.13", optional = true, features = ["ecdh"] }
 aes = { version = "0.8" }
+# Mosh OCB3 (ocb3 0.2 is on cipher 0.5); the FIDO2 CBC path still uses aes 0.8 through cbc 0.1.
+aes9 = { package = "aes", version = "0.9" }
 cbc = { version = "0.1", optional = true }
 # Mosh: AES-128-OCB3 datagrams + zlib-compressed instructions.
-ocb3 = { version = "0.1", default-features = false }
+ocb3 = { version = "0.2", default-features = false }
 flate2 = "1"
 hkdf = { workspace = true, optional = true }
 rand_core = { workspace = true, optional = true }
