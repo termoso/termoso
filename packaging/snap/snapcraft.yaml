@@ -1,0 +1,51 @@
+# Snap of the desktop app, built from the release .deb so the Store gets
+# exactly the binary that was signed for GitHub releases.
+name: termoso
+base: core24
+version: "0.11.3"
+summary: SSH, SFTP and terminal client with an encrypted vault
+description: |
+  Termoso keeps hosts, keys and snippets in a vault encrypted on your device,
+  syncs them to your own server (or none), and gives you a fast terminal, SFTP
+  with resume and folder sync, port forwarding, Mosh, Telnet and serial consoles.
+grade: stable
+confinement: strict
+license: AGPL-3.0-or-later
+website: https://termoso.dev
+source-code: https://github.com/termoso/termoso
+issues: https://github.com/termoso/termoso/issues
+
+platforms:
+  amd64:
+  arm64:
+
+apps:
+  termoso:
+    command: usr/bin/termoso-desktop
+    extensions: [gnome]
+    desktop: usr/share/applications/termoso.desktop
+    plugs:
+      - network
+      - network-bind
+      - home
+      - removable-media
+      - raw-usb
+      - serial-port
+      - password-manager-service
+      - audio-playback
+    environment:
+      WEBKIT_DISABLE_DMABUF_RENDERER: "1"
+
+parts:
+  termoso:
+    plugin: dump
+    source:
+      - on amd64: https://github.com/termoso/termoso/releases/download/v$SNAPCRAFT_PROJECT_VERSION/termoso_$SNAPCRAFT_PROJECT_VERSION_amd64.deb
+      - on arm64: https://github.com/termoso/termoso/releases/download/v$SNAPCRAFT_PROJECT_VERSION/termoso_$SNAPCRAFT_PROJECT_VERSION_arm64.deb
+    source-type: deb
+    stage-packages:
+      - libwebkit2gtk-4.1-0
+      - libayatana-appindicator3-1
+    override-build: |
+      craftctl default
+      sed -i 's|^Icon=.*|Icon=${SNAP}/usr/share/icons/hicolor/128x128/apps/termoso-desktop.png|' $CRAFT_PART_INSTALL/usr/share/applications/termoso.desktop || true

@@ -1,0 +1,17 @@
+apiVersion: v2
+name: termoso
+description: Termoso server, the self-hosted sync, team and SSO backend for the Termoso SSH client. The chart runs the API and, by default, a single-node Postgres, Redis and RustFS next to it; point it at managed services for production.
+type: application
+version: 0.1.0
+appVersion: "0.11.3"
+home: https://termoso.dev
+sources:
+  - https://github.com/termoso/termoso
+keywords:
+  - ssh
+  - terminal
+  - sftp
+  - vault
+maintainers:
+  - name: Termoso
+    url: https://github.com/termoso/termoso
