@@ -40,7 +40,7 @@ modules:
       - install -Dm644 apps/desktop/src-tauri/icons/icon.png /app/share/icons/hicolor/512x512/apps/com.termoso.Termoso.png
     sources:
       - type: archive
-        url: https://github.com/termoso/termoso/archive/refs/tags/v0.11.3.tar.gz
+        url: https://github.com/termoso/termoso/archive/refs/tags/v0.11.4.tar.gz
         sha256: REPLACE_WITH_RELEASE_TARBALL_SHA256
       - cargo-sources.json
       - node-sources.json
