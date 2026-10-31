@@ -161,6 +161,9 @@ PUT /v1/group/eu-west-1/
 Hosts in the group inherit its SSH/Telnet settings and credentials, as in the
 apps.
 
+The icon people pick for a group in the app is not modelled by the bridge and is
+left alone on update.
+
 ### Example: Ansible
 
 ```yaml

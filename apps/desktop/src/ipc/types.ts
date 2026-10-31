@@ -747,6 +747,8 @@ export interface GroupNode {
   hostCount: number;
   groupCount: number;
   hasConfig: boolean;
+  /** User-chosen icon id; null shows the default folder. */
+  icon: string | null;
 }
 
 /** Group editor model: name, parent and the SSH defaults its hosts inherit. */
@@ -755,6 +757,8 @@ export interface GroupForm {
   vaultId: Uuid;
   label: string;
   parentId: Uuid | null;
+  /** User-chosen icon id; null shows the default folder. */
+  icon: string | null;
   port: number | null;
   username: string;
   password: string | null;
@@ -783,6 +787,7 @@ export function emptyGroupForm(vaultId: Uuid, parentId: Uuid | null): GroupForm 
     vaultId,
     label: "",
     parentId,
+    icon: null,
     port: null,
     username: "",
     password: null,

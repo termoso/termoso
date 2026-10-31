@@ -450,6 +450,8 @@ pub struct GroupNode {
     pub group_count: usize,
     /// The group carries SSH defaults its hosts inherit.
     pub has_config: bool,
+    /// User-chosen icon id (`None` = default folder).
+    pub icon: Option<String>,
 }
 
 /// Editor model for a group: name, parent and the SSH defaults hosts inherit.
@@ -460,6 +462,9 @@ pub struct GroupForm {
     pub vault_id: Uuid,
     pub label: String,
     pub parent_id: Option<Uuid>,
+    /// User-chosen icon id (`None` = default folder).
+    #[serde(default)]
+    pub icon: Option<String>,
     pub port: Option<u16>,
     pub username: String,
     /// `None` keeps the stored password when editing; `Some("")` clears it.
@@ -635,6 +640,7 @@ pub fn groups(store: &Store, vault_id: Option<Uuid>) -> Result<Vec<GroupNode>> {
                 .filter(|c| c.data.parent_id == Some(g.id))
                 .count(),
             has_config: g.data.ssh_config_id.is_some(),
+            icon: g.data.icon.clone(),
             id: g.id,
             vault_id: g.vault_id,
             label: g.data.label.clone(),
@@ -1533,6 +1539,7 @@ pub fn group_form(store: &Store, id: Uuid) -> Result<GroupForm> {
         vault_id: g.vault_id,
         label: g.data.label,
         parent_id: g.data.parent_id,
+        icon: g.data.icon,
         port: ssh.port,
         username: inline
             .as_ref()
@@ -1630,6 +1637,7 @@ pub fn save_group_form(store: &Store, f: &GroupForm) -> Result<GroupNode> {
         .unwrap_or_default();
     data.label = label.to_string();
     data.parent_id = f.parent_id;
+    data.icon = clean_icon(&f.icon);
     data.ssh_config_id = ssh_config_id;
     let gid = match &existing {
         Some(e) => {
@@ -2675,6 +2683,27 @@ mod tests {
     }
 
     #[test]
+    fn group_icon_round_trips_and_survives_duplicate() {
+        let s = store();
+        let vault = s.local_vault().unwrap().id;
+        let base = save_group(&s, vault, None, "servers", None).unwrap();
+        let mut f = group_form(&s, base.id).unwrap();
+        f.icon = Some(" server ".into());
+        let g = save_group_form(&s, &f).unwrap();
+        assert_eq!(g.icon.as_deref(), Some("server"));
+        assert_eq!(
+            group_form(&s, g.id).unwrap().icon.as_deref(),
+            Some("server")
+        );
+        let copy = duplicate_group(&s, g.id).unwrap();
+        assert_eq!(copy.icon.as_deref(), Some("server"));
+        // "auto" / blank clears it again.
+        let mut f = group_form(&s, g.id).unwrap();
+        f.icon = Some("auto".into());
+        assert_eq!(save_group_form(&s, &f).unwrap().icon, None);
+    }
+
+    #[test]
     fn group_defaults_are_inherited_and_editable() {
         let s = store();
         let vault = s.local_vault().unwrap().id;
@@ -2685,6 +2714,7 @@ mod tests {
                 vault_id: vault,
                 label: "dc1".into(),
                 parent_id: None,
+                icon: None,
                 port: Some(2200),
                 username: "ops".into(),
                 password: Some("pw".into()),

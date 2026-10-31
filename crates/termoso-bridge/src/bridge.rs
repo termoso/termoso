@@ -969,6 +969,7 @@ fn plan_group(v: &VaultState, external_id: &str, req: &GroupRequest) -> Result<P
         ssh_config_id,
         telnet_config_id,
         sort_order: old.sort_order,
+        icon: old.icon,
         external_id: Some(external_id.to_string()),
     };
     plan.put("group", group_id, &group)?;
