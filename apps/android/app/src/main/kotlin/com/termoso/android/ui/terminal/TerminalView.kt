@@ -104,6 +104,20 @@ fun TerminalView(
 
     var selection by remember(session) { mutableStateOf<TermSelection?>(null) }
     var dragSelecting by remember { mutableStateOf(false) }
+    var dragPos by remember { mutableStateOf<Offset?>(null) }
+
+    /** Scroll one line when [p] is within a cell of the top/bottom edge; true when it did. */
+    fun autoScrollAt(p: Offset, m: CellMetrics, viewport: IntSize): Boolean {
+        val alt = grid?.frame?.altScreen == true
+        if (alt || viewport.height == 0) return false
+        val lines = when {
+            p.y < m.height -> 1
+            p.y > viewport.height - m.height -> -1
+            else -> return false
+        }
+        controller.scrollBy(lines, altScreen = false)
+        return true
+    }
     // Long-press arrow mode: set by the tap detector, consumed by the drag loop below.
     var arrowGesture by remember { mutableStateOf<ArrowGesture?>(null) }
     var arrowOrigin by remember { mutableStateOf(Offset.Zero) }
@@ -238,6 +252,15 @@ fun TerminalView(
                                 a.repeatTick()?.let { controller.arrowKeys(it) }
                                 currentOnArrowGesture(ArrowHint(a.direction, a.gear))
                             }
+                            if (dragSelecting) {
+                                dragPos?.let { p ->
+                                    if (autoScrollAt(p, currentMetrics, size)) {
+                                        val sel = selection
+                                        val grid = currentGrid
+                                        if (sel != null && grid != null) selection = TermSelection(sel.anchor, currentMetrics.cellAt(p, grid))
+                                    }
+                                }
+                            }
                             continue
                         }
                         val pressed = event.changes.count { it.pressed }
@@ -250,12 +273,16 @@ fun TerminalView(
                         } else if (!dragSelecting && event.changes.all { it.isConsumed }) {
                             // A selection handle or the action bar owns this gesture.
                         } else if (dragSelecting) {
-                            // Long press keeps selecting while the finger moves.
+                            // Long press keeps selecting while the finger moves; at the top or
+                            // bottom edge the view scrolls so the selection can run on into
+                            // scrollback (the frame tick shifts the selection with the text).
                             val p = event.changes.firstOrNull { it.pressed }?.position
                             val sel = selection
                             val grid = currentGrid
                             if (p != null && sel != null && grid != null) {
+                                dragPos = p
                                 selection = TermSelection(sel.anchor, currentMetrics.cellAt(p, grid))
+                                autoScrollAt(p, currentMetrics, size)
                             }
                             event.changes.forEach { it.consume() }
                         } else if (pressed >= 2) {
@@ -318,6 +345,7 @@ fun TerminalView(
                     }
                     arrowGesture = null
                     dragSelecting = false
+                    dragPos = null
                 }
             },
     ) {
@@ -365,8 +393,9 @@ fun TerminalView(
                 metrics = metrics,
                 viewport = size,
                 onChange = { selection = it },
+                onDragAt = { p -> autoScrollAt(p, metrics, size) },
                 onCopy = {
-                    onCopy(g.textIn(sel))
+                    onCopy(g.textAcross(sel) { a, b, c, d -> session.rust.textRange(a, b, c, d) })
                     selection = null
                 },
                 onPaste = {

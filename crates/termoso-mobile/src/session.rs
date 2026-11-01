@@ -1295,6 +1295,23 @@ impl SshSession {
             .search(&query, 2000)
     }
 
+    /// Text between two scrollback-absolute cells (see
+    /// [`SshSession::search`] for the line numbering), for copying a
+    /// selection that spans more than the visible screen.
+    pub fn text_range(
+        &self,
+        start_line: i64,
+        start_col: u32,
+        end_line: i64,
+        end_col: u32,
+    ) -> String {
+        self.inner
+            .emulator
+            .lock()
+            .expect("emulator poisoned")
+            .text_range(start_line, start_col, end_line, end_col)
+    }
+
     /// Scrollback and screen as plain text (last `max_lines` lines), to carry
     /// over into a reconnected session with [`SshSession::preload`].
     pub fn dump_text(&self, max_lines: u32) -> String {

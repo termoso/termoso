@@ -1156,6 +1156,8 @@
     <string name="line_copied">Строка скопирована</string>
     <string name="copy_screen">Копировать экран</string>
     <string name="screen_copied">Экран скопирован</string>
+    <string name="copy_all">Копировать всё</string>
+    <string name="all_copied">Всё скопировано</string>
     <string name="send_file">Отправить файл…</string>
     <string name="send_file_to">Отправить файл на %1$s?</string>
     <string name="send_files_to">Отправить файлы (%1$s) на %2$s?</string>
