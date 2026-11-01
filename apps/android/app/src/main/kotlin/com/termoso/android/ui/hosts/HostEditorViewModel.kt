@@ -431,7 +431,7 @@ class HostEditorViewModel(
         _state.update { it.copy(saving = true) }
         viewModelScope.launch {
             val clean = draft.copy(
-                label = draft.label.trim(),
+                label = draft.label.trim().ifBlank { draft.address.trim() },
                 address = draft.address.trim(),
                 username = draft.username.trim(),
                 telnet = draft.telnet?.let { it.copy(username = it.username.trim()) },

@@ -128,7 +128,7 @@ export function HostList(p: HostCollectionProps) {
               <TableCell>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   <Typography variant="body1" sx={{ fontWeight: 500 }} noWrap>
-                    {h.label}
+                    {h.label || h.address}
                   </Typography>
                   {p.presence?.has(h.id) && (
                     <PresenceStack viewers={p.presence.get(h.id) ?? []} size={18} />
