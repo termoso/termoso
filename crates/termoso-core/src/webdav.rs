@@ -940,10 +940,10 @@ fn connection_was_aborted(e: &reqwest::Error) -> bool {
 /// Did the server close the handshake because of *our* certificate (missing
 /// or not accepted)? Returns the alert name for the message.
 fn client_certificate_alert(e: &reqwest::Error) -> Option<String> {
-    if let Some(error) = rustls_error(e) {
-        match error {
-            rustls::Error::AlertReceived(a) => match a {
-                AlertDescription::CertificateRequired
+    if let Some(rustls::Error::AlertReceived(a)) = rustls_error(e)
+        && matches!(
+            a,
+            AlertDescription::CertificateRequired
                 | AlertDescription::BadCertificate
                 | AlertDescription::UnknownCA
                 | AlertDescription::CertificateUnknown
@@ -951,11 +951,10 @@ fn client_certificate_alert(e: &reqwest::Error) -> Option<String> {
                 | AlertDescription::CertificateExpired
                 | AlertDescription::UnsupportedCertificate
                 | AlertDescription::AccessDenied
-                | AlertDescription::HandshakeFailure => return Some(format!("{a:?}")),
-                _ => {}
-            },
-            _ => {}
-        }
+                | AlertDescription::HandshakeFailure
+        )
+    {
+        return Some(format!("{a:?}"));
     }
     #[cfg(windows)]
     if e.url().is_some_and(|url| url.scheme() == "https") && connection_was_aborted(e) {

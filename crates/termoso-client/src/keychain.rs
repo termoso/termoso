@@ -875,6 +875,7 @@ macro_rules! authorized_keys_script {
 }
 
 #[cfg(test)]
+#[cfg_attr(not(unix), allow(dead_code))]
 const AUTHORIZED_KEYS_SCRIPT: &str = authorized_keys_script!();
 
 /// Command sent over `exec`: forces POSIX sh regardless of the login shell.

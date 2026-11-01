@@ -10,9 +10,11 @@ use bytes::Bytes;
 use russh::keys::ssh_key::{Algorithm, PrivateKey, PublicKey};
 use russh::server::{Auth, ChannelOpenHandle, Msg, Server as _, Session};
 use russh::{Channel, ChannelId, MethodSet};
+#[cfg(unix)]
+use termoso_mobile::LocalShell;
 use termoso_mobile::{
     ConnectStage, HostKeyChoice, IdentityDraft, KeyAlgorithm, KeyGenerateDraft, KeyImportDraft,
-    LiveEndReason, LiveListener, LiveParticipantCard, LocalShell, MobileError, PfKind, PfRuleDraft,
+    LiveEndReason, LiveListener, LiveParticipantCard, MobileError, PfKind, PfRuleDraft,
     PromptAnswer, PromptRequest, QuickTarget, SessionListener, SessionState, SftpListener,
     SshIdKeyKind, SshSession, TelnetDraft, TerminalOptions, TermosoApp, TransferCard, Transport,
     TunnelListener, TunnelState, VaultKind, WebDavDraft, flag, generate_master_key, is_live_link,

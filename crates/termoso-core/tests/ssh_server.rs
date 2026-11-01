@@ -20,9 +20,9 @@ use termoso_core::hostkey::{
     self, FixedPrompt, HostKeyDecision, HostKeyPrompt, HostKeyVerdict, KnownHosts, StrictPrompt,
 };
 use termoso_core::sftp::{OpenMode, Sftp, TransferOptions};
-use termoso_core::ssh::{
-    AuthMethod, ConnectOptions, PasswordResponder, SshClient, SshTarget, X11Forward,
-};
+#[cfg(unix)]
+use termoso_core::ssh::X11Forward;
+use termoso_core::ssh::{AuthMethod, ConnectOptions, PasswordResponder, SshClient, SshTarget};
 use termoso_core::store::Store;
 use termoso_core::terminal::{TermEvent, TermSize, TerminalSession};
 use termoso_crypto::keys::SymmetricKey;
