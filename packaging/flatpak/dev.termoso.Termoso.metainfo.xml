@@ -17,19 +17,20 @@
   <content_rating type="oars-1.1" />
   <screenshots>
     <screenshot type="default">
-      <image>https://raw.githubusercontent.com/termoso/termoso/v0.11.6/docs/screenshots/desktop-terminal.png</image>
+      <image>https://raw.githubusercontent.com/termoso/termoso/v0.11.7/docs/screenshots/desktop-terminal.png</image>
       <caption>Terminal with the host sidebar</caption>
     </screenshot>
     <screenshot>
-      <image>https://raw.githubusercontent.com/termoso/termoso/v0.11.6/docs/screenshots/desktop-hosts.png</image>
+      <image>https://raw.githubusercontent.com/termoso/termoso/v0.11.7/docs/screenshots/desktop-hosts.png</image>
       <caption>Hosts grouped in the vault</caption>
     </screenshot>
     <screenshot>
-      <image>https://raw.githubusercontent.com/termoso/termoso/v0.11.6/docs/screenshots/desktop-sftp.png</image>
+      <image>https://raw.githubusercontent.com/termoso/termoso/v0.11.7/docs/screenshots/desktop-sftp.png</image>
       <caption>SFTP with resume and folder sync</caption>
     </screenshot>
   </screenshots>
   <releases>
+    <release version="0.11.7" date="2026-11-01" />
     <release version="0.11.6" date="2026-11-01" />
     <release version="0.11.5" date="2026-11-01" />
     <release version="0.11.4" date="2026-10-31" />
