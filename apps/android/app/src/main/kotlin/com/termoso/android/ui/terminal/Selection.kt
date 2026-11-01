@@ -211,6 +211,9 @@ private fun SelectionHandle(
     val x = (if (left) at.x - size else at.x).coerceIn(0f, maxOf(0, viewport.width - size).toFloat())
     val y = at.y.coerceIn(0f, maxOf(0, viewport.height - size).toFloat())
     val anchor by rememberUpdatedState(at)
+    // The gesture outlives recompositions; always call the latest callback so the
+    // fixed end of the selection follows the text while the view auto-scrolls.
+    val currentOnDrag by rememberUpdatedState(onDrag)
     var finger by remember { mutableStateOf(Offset.Zero) }
     Canvas(
         Modifier
@@ -222,7 +225,7 @@ private fun SelectionHandle(
                     onDrag = { change, delta ->
                         change.consume()
                         finger += delta
-                        onDrag(finger)
+                        currentOnDrag(finger)
                     },
                 )
             },
