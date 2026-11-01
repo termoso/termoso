@@ -21,7 +21,7 @@ use termoso_core::sftp::{
     self, OpenMode, Progress, ProgressFn, RemoteEntry, Sftp, TransferOptions,
 };
 use termoso_core::ssh::{SshClient, SshTarget};
-use termoso_core::store::{ConnectionHistory, Store};
+use termoso_core::store::{CachedEntry, ConnectionHistory, Store};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
@@ -39,7 +39,7 @@ const PROGRESS_INTERVAL: Duration = Duration::from_millis(120);
 /// Transfers moving bytes at once; the rest wait as `Queued`.
 const MAX_PARALLEL: usize = 3;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum, serde::Serialize, serde::Deserialize)]
 pub enum EntryKind {
     Dir,
     File,
@@ -95,7 +95,7 @@ pub struct FileCapabilities {
 }
 
 /// One directory entry, ready to display.
-#[derive(Debug, Clone, uniffi::Record)]
+#[derive(Debug, Clone, uniffi::Record, serde::Serialize, serde::Deserialize)]
 pub struct SftpEntry {
     pub name: String,
     pub path: String,
@@ -143,18 +143,55 @@ impl From<FileMode> for OpenMode {
 #[derive(uniffi::Object)]
 pub struct SftpFile {
     file: Mutex<Option<Box<dyn RemoteFile>>>,
-    _live: Arc<Live>,
+    /// Whole body when served through the offline cache (read-only).
+    cached: Option<Arc<Vec<u8>>>,
+    /// `None` for a file served from the offline cache.
+    _live: Option<Arc<Live>>,
     runtime: tokio::runtime::Handle,
 }
 
 impl SftpFile {
     fn with<T>(&self, f: impl FnOnce(&dyn RemoteFile) -> Result<T>) -> Result<T> {
+        if let Some(bytes) = &self.cached {
+            return f(&CachedBody(bytes.clone()));
+        }
         let guard = self.file.lock().expect("file poisoned");
         match guard.as_ref() {
             Some(file) => f(file.as_ref()),
             None => Err(MobileError::Closed),
         }
     }
+}
+
+/// A file served from the offline cache: whole body in memory, read-only.
+struct CachedBody(Arc<Vec<u8>>);
+
+#[async_trait::async_trait]
+impl RemoteFile for CachedBody {
+    async fn size(&self) -> termoso_core::error::Result<u64> {
+        Ok(self.0.len() as u64)
+    }
+    async fn read_at(&self, offset: u64, len: usize) -> termoso_core::error::Result<Vec<u8>> {
+        let start = (offset as usize).min(self.0.len());
+        let end = start.saturating_add(len).min(self.0.len());
+        Ok(self.0[start..end].to_vec())
+    }
+    async fn write_at(&self, _offset: u64, _data: &[u8]) -> termoso_core::error::Result<()> {
+        Err(read_only())
+    }
+    async fn truncate(&self, _size: u64) -> termoso_core::error::Result<()> {
+        Err(read_only())
+    }
+    async fn sync(&self) -> termoso_core::error::Result<()> {
+        Ok(())
+    }
+    async fn close(self: Box<Self>) -> termoso_core::error::Result<()> {
+        Ok(())
+    }
+}
+
+fn read_only() -> termoso_core::error::CoreError {
+    termoso_core::error::CoreError::Invalid("read-only while offline".into())
 }
 
 #[uniffi::export]
@@ -671,6 +708,49 @@ struct Inner {
     rate_limit_kib: u32,
     /// Team presence registration for a saved team-vault host.
     presence: Option<Slot>,
+    /// Offline file cache of the saved host this session opens, when the
+    /// host has one enabled and its team policy allows it.
+    cache: Option<CacheCtx>,
+}
+
+struct CacheCtx {
+    host_id: Uuid,
+    vault_id: Uuid,
+    dir: PathBuf,
+}
+
+impl CacheCtx {
+    fn resolve(store: &Store, backend: &Backend, dir: PathBuf) -> Option<Self> {
+        let (host_id, vault_id) = match backend {
+            Backend::Sftp {
+                resolved: Some(r), ..
+            } => (r.host.id, r.host.vault_id),
+            Backend::WebDav { resolved, .. } => (resolved.host.id, resolved.host.vault_id),
+            Backend::Session {
+                host_id: Some(h), ..
+            } => {
+                let host = store
+                    .get::<termoso_proto::entities::payload::Host>(*h)
+                    .ok()
+                    .flatten()?;
+                (host.id, host.vault_id)
+            }
+            _ => return None,
+        };
+        if termoso_core::policy::offline_cache_denied(store, vault_id) {
+            // Policy flipped to deny since the copies were taken.
+            let _ = store.clear_file_cache(Some(host_id));
+            return None;
+        }
+        if !store.file_cache_config(host_id).ok()?.enabled {
+            return None;
+        }
+        Some(Self {
+            host_id,
+            vault_id,
+            dir,
+        })
+    }
 }
 
 /// A remote file system (SFTP or WebDAV). Drop-safe: dropping the last
@@ -689,6 +769,8 @@ pub(crate) struct SftpLaunch {
     pub settings: MobileSettings,
     pub listener: Arc<dyn SftpListener>,
     pub presence: Option<Slot>,
+    /// Where encrypted offline copies live (profile directory).
+    pub cache_dir: PathBuf,
 }
 
 impl SftpSession {
@@ -700,7 +782,9 @@ impl SftpSession {
             settings,
             listener,
             presence,
+            cache_dir,
         } = launch;
+        let cache = CacheCtx::resolve(&store, &backend, cache_dir);
         let state = Arc::new(Mutex::new(SessionState::connecting(
             ConnectStage::Connecting,
             None,
@@ -727,6 +811,7 @@ impl SftpSession {
             closed,
             rate_limit_kib: settings.transfer_rate_limit_kib,
             presence,
+            cache,
         });
         let session = Arc::new(Self {
             id: Uuid::new_v4(),
@@ -745,6 +830,134 @@ impl SftpSession {
                 _ => Err(MobileError::Closed),
             },
         }
+    }
+
+    /// The host is unreachable (connect failed or the link dropped) and the
+    /// session may fall back to offline copies.
+    fn offline(&self) -> Option<&CacheCtx> {
+        if self.inner.live.lock().expect("live poisoned").is_some() {
+            return None;
+        }
+        match self.state() {
+            SessionState::Failed { .. } | SessionState::Closed { .. } => self.inner.cache.as_ref(),
+            _ => None,
+        }
+    }
+
+    /// Whether offline copies of this host can be browsed right now: the
+    /// connection failed and the cache holds something for it.
+    pub fn offline_copies_available(&self) -> bool {
+        self.offline().is_some_and(|c| {
+            self.inner
+                .store
+                .file_cache_usage(Some(c.host_id))
+                .is_ok_and(|u| u.files + u.dirs > 0)
+        })
+    }
+
+    /// True while requests are served from the offline cache.
+    pub fn is_offline(&self) -> bool {
+        self.offline().is_some()
+    }
+
+    /// Cached files of this host (newest first), for the "local copies" list.
+    pub fn offline_copies(&self) -> Result<Vec<OfflineCopy>> {
+        let Some(c) = self.inner.cache.as_ref() else {
+            return Ok(Vec::new());
+        };
+        Ok(self
+            .inner
+            .store
+            .cached_files(c.host_id)?
+            .into_iter()
+            .map(OfflineCopy::from)
+            .collect())
+    }
+
+    /// When the copy of `path` was taken, if there is one.
+    pub fn cached_at(&self, path: String) -> Result<Option<i64>> {
+        let Some(c) = self.inner.cache.as_ref() else {
+            return Ok(None);
+        };
+        Ok(self
+            .inner
+            .store
+            .cached_file(c.host_id, &path)?
+            .map(|e| e.cached_at.timestamp_millis()))
+    }
+
+    fn cache_listing(&self, dir: &str, entries: &[SftpEntry]) {
+        if let Some(c) = &self.inner.cache {
+            let _ = self
+                .inner
+                .store
+                .cache_dir(c.host_id, c.vault_id, dir, entries, &c.dir);
+        }
+    }
+
+    fn cache_body(&self, path: &str, mtime: Option<i64>, body: &[u8]) {
+        if let Some(c) = &self.inner.cache {
+            let _ = self
+                .inner
+                .store
+                .cache_file(c.host_id, c.vault_id, path, mtime, body, &c.dir);
+        }
+    }
+
+    /// Serve `path` from the cache when the remote still matches (`stat`
+    /// says same size and mtime); refetch and replace otherwise.
+    async fn read_through(&self, live: &Live, path: &str) -> Result<Vec<u8>> {
+        let Some(c) = &self.inner.cache else {
+            return Ok(live.fs.read(path).await?);
+        };
+        let st = live.fs.stat(path).await?;
+        let mtime = st.mtime.map(i64::from);
+        if let (Some(size), Ok(Some(e))) = (st.size, self.inner.store.cached_file(c.host_id, path))
+            && e.is_fresh(size, mtime)
+            && let Ok(body) = self.inner.store.read_cached_file(c.host_id, path)
+        {
+            return Ok(body);
+        }
+        let body = live.fs.read(path).await?;
+        self.cache_body(path, mtime, &body);
+        Ok(body)
+    }
+
+    fn offline_stat(&self, c: &CacheCtx, path: &str) -> Result<SftpEntry> {
+        let p = if path.len() > 1 {
+            path.trim_end_matches('/')
+        } else {
+            path
+        };
+        if let Some(parent) = termoso_core::remote::parent(p)
+            && let Ok(entries) = self
+                .inner
+                .store
+                .read_cached_dir::<SftpEntry>(c.host_id, &parent)
+            && let Some(e) = entries.into_iter().find(|e| e.path == p)
+        {
+            return Ok(e);
+        }
+        if let Some(e) = self.inner.store.cached_file(c.host_id, p)? {
+            return Ok(offline_entry(&e));
+        }
+        if self.inner.store.cached_dir(c.host_id, p)?.is_some() {
+            return Ok(SftpEntry {
+                name: p.rsplit('/').next().unwrap_or(p).to_string(),
+                path: p.to_string(),
+                kind: EntryKind::Dir,
+                target_kind: EntryKind::Dir,
+                is_dir: true,
+                size: None,
+                mode: None,
+                permissions: None,
+                owner: None,
+                modified_ms: None,
+                link_target: None,
+                hidden: false,
+            });
+        }
+        Err(MobileError::not_found(format!("{p}: no offline copy")))
     }
 
     fn queue(&self, direction: TransferDirection, remote: String, local: String) -> u64 {
@@ -809,8 +1022,11 @@ impl SftpSession {
 
     /// Directory listing, directories first, then by name; `.`/`..` excluded.
     pub fn list(&self, dir: String) -> Result<Vec<SftpEntry>> {
+        if let Some(c) = self.offline() {
+            return Ok(self.inner.store.read_cached_dir(c.host_id, &dir)?);
+        }
         let live = self.live()?;
-        self.runtime.block_on(async move {
+        let entries = self.runtime.block_on(async {
             let mut entries: Vec<SftpEntry> = live
                 .fs
                 .list(&dir)
@@ -823,11 +1039,16 @@ impl SftpSession {
                     .cmp(&a.is_dir)
                     .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
             });
-            Ok(entries)
-        })
+            Ok::<_, MobileError>(entries)
+        })?;
+        self.cache_listing(&dir, &entries);
+        Ok(entries)
     }
 
     pub fn stat(&self, path: String) -> Result<SftpEntry> {
+        if let Some(c) = self.offline() {
+            return self.offline_stat(c, &path);
+        }
         let live = self.live()?;
         self.runtime
             .block_on(async move { Ok(entry_from(live.fs.stat(&path).await?)) })
@@ -900,14 +1121,20 @@ impl SftpSession {
 
     /// Small text files for previews; refuses anything over 64 MiB.
     pub fn read(&self, path: String) -> Result<Vec<u8>> {
+        if let Some(c) = self.offline() {
+            return Ok(self.inner.store.read_cached_file(c.host_id, &path)?);
+        }
         let live = self.live()?;
         self.runtime
-            .block_on(async move { Ok(live.fs.read(&path).await?) })
+            .block_on(async { self.read_through(&live, &path).await })
     }
 
     /// Overwrite (or create) `path` with `data`; for saving edited text
     /// files. The file's mode is preserved when it already exists.
     pub fn write(&self, path: String, data: Vec<u8>) -> Result<()> {
+        if self.offline().is_some() {
+            return Err(MobileError::ReadOnlyOffline);
+        }
         let live = self.live()?;
         self.runtime
             .block_on(async move { Ok(live.fs.write(&path, &data).await?) })
@@ -916,13 +1143,49 @@ impl SftpSession {
     /// Open `path` for positional access (see [`SftpFile`]); directories
     /// are refused.
     pub fn open_file(&self, path: String, mode: FileMode) -> Result<Arc<SftpFile>> {
+        if let Some(c) = self.offline() {
+            if mode != FileMode::Read {
+                return Err(MobileError::ReadOnlyOffline);
+            }
+            let body = self.inner.store.read_cached_file(c.host_id, &path)?;
+            return Ok(Arc::new(SftpFile {
+                file: Mutex::new(None),
+                cached: Some(Arc::new(body)),
+                _live: None,
+                runtime: self.runtime.clone(),
+            }));
+        }
         let live = self.live()?;
+        // A read of a cacheable file goes through the cache: whole body
+        // fetched once, served from memory, kept for offline use.
+        if mode == FileMode::Read
+            && let Some(c) = &self.inner.cache
+            && let Ok(st) = self.runtime.block_on(live.fs.stat(&path))
+            && st.kind != sftp::EntryKind::Dir
+            && let Some(size) = st.size
+            && self
+                .inner
+                .store
+                .file_cache_config(c.host_id)
+                .is_ok_and(|cfg| cfg.accepts(&path, size))
+        {
+            let body = self
+                .runtime
+                .block_on(async { self.read_through(&live, &path).await })?;
+            return Ok(Arc::new(SftpFile {
+                file: Mutex::new(None),
+                cached: Some(Arc::new(body)),
+                _live: Some(live),
+                runtime: self.runtime.clone(),
+            }));
+        }
         let file = self
             .runtime
             .block_on(async { live.fs.open_file(&path, mode.into()).await })?;
         Ok(Arc::new(SftpFile {
             file: Mutex::new(Some(file)),
-            _live: live,
+            cached: None,
+            _live: Some(live),
             runtime: self.runtime.clone(),
         }))
     }
@@ -1171,6 +1434,47 @@ fn permissions(mode: Option<u32>, kind: EntryKind) -> Option<String> {
         });
     }
     Some(out)
+}
+
+/// A file kept in the offline cache.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct OfflineCopy {
+    pub path: String,
+    pub size: u64,
+    pub modified_ms: Option<i64>,
+    pub cached_at_ms: i64,
+}
+
+impl From<CachedEntry> for OfflineCopy {
+    fn from(e: CachedEntry) -> Self {
+        Self {
+            path: e.path,
+            size: e.size,
+            modified_ms: e.mtime.map(|t| t * 1000),
+            cached_at_ms: e.cached_at.timestamp_millis(),
+        }
+    }
+}
+
+fn offline_entry(e: &CachedEntry) -> SftpEntry {
+    SftpEntry {
+        name: e.path.rsplit('/').next().unwrap_or(&e.path).to_string(),
+        path: e.path.clone(),
+        kind: EntryKind::File,
+        target_kind: EntryKind::File,
+        is_dir: false,
+        size: Some(e.size),
+        mode: None,
+        permissions: None,
+        owner: None,
+        modified_ms: e.mtime.map(|t| t * 1000),
+        link_target: None,
+        hidden: e
+            .path
+            .rsplit('/')
+            .next()
+            .is_some_and(|n| n.starts_with('.')),
+    }
 }
 
 fn entry_from(e: RemoteEntry) -> SftpEntry {

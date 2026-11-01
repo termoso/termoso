@@ -35,6 +35,10 @@ pub enum MobileError {
     Cancelled,
     #[error("connection closed")]
     Closed,
+    /// The host is unreachable and the file is served from the offline
+    /// cache: reads only.
+    #[error("read-only while offline")]
+    ReadOnlyOffline,
     /// The server wants the password (and second factor) proved again
     /// before this account change; see `TermosoApp::reauth_start`.
     #[error("re-authentication required")]
@@ -69,6 +73,7 @@ impl MobileError {
             Self::SecurityKey { kind, .. } => kind.clone(),
             Self::Cancelled => "cancelled".into(),
             Self::Closed => "closed".into(),
+            Self::ReadOnlyOffline => "read_only_offline".into(),
             Self::ReauthRequired => "reauth_required".into(),
             Self::Other { kind, .. } => kind.clone(),
         }
