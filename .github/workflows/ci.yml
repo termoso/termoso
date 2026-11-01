@@ -364,7 +364,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libudev-dev
-      - uses: dtolnay/rust-toolchain@nightly
+      # Pinned: the 2026-11-01 nightly fails on zvariant_utils (E0391 async-drop cycle);
+      # move the date forward once rustc is fixed.
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-10-31
         with:
           components: rust-src
       - uses: taiki-e/install-action@v2
