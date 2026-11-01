@@ -1,21 +1,26 @@
 {
-  "version": "0.11.5",
+  "version": "0.11.6",
   "description": "SSH, SFTP and terminal client with an encrypted vault",
   "homepage": "https://termoso.dev",
   "license": "AGPL-3.0-only",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/termoso/termoso/releases/download/v0.11.5/Termoso_0.11.5_x64-setup.exe#/dl.7z",
-      "hash": "93d250a9779d150cf41528f980d23166a2be46058cd96e7858161ec5a9371fb1"
+      "url": "https://github.com/termoso/termoso/releases/download/v0.11.6/Termoso_0.11.6_x64-setup.exe#/dl.7z",
+      "hash": "REPLACE_WITH_SHA256_FROM_RELEASE_SHA256SUMS"
     },
     "arm64": {
-      "url": "https://github.com/termoso/termoso/releases/download/v0.11.5/Termoso_0.11.5_arm64-setup.exe#/dl.7z",
-      "hash": "f0bb2163046c1a8274d7dd6ea414c8984f10a1bc1f89d6a00aeeced0321e8dd2"
+      "url": "https://github.com/termoso/termoso/releases/download/v0.11.6/Termoso_0.11.6_arm64-setup.exe#/dl.7z",
+      "hash": "REPLACE_WITH_SHA256_FROM_RELEASE_SHA256SUMS"
     }
   },
   "innosetup": false,
   "bin": "termoso-desktop.exe",
-  "shortcuts": [["termoso-desktop.exe", "Termoso"]],
+  "shortcuts": [
+    [
+      "termoso-desktop.exe",
+      "Termoso"
+    ]
+  ],
   "checkver": {
     "github": "https://github.com/termoso/termoso"
   },
