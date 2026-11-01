@@ -315,6 +315,9 @@ pub struct Settings {
     pub confirm_close_tab: bool,
     pub confirm_paste_multiline: bool,
     pub autocomplete: bool,
+    /// Show the resource monitor (CPU, memory, network, disks) under SSH
+    /// terminals. Off by default: it opens an extra exec channel on the server.
+    pub remote_monitor: bool,
     /// Install the OSC 133 prompt markers into bash / zsh / fish after
     /// connecting: powers command history, autocomplete and prompt navigation.
     pub shell_integration: bool,
@@ -448,6 +451,7 @@ impl Default for Settings {
             confirm_close_tab: true,
             confirm_paste_multiline: true,
             autocomplete: true,
+            remote_monitor: false,
             shell_integration: true,
             triggers: Vec::new(),
             restore_commands: "type".into(),

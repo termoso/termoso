@@ -41,6 +41,7 @@ import type {
   DiffResult,
   DiffSide,
   DirEntry,
+  MonitorReply,
   Direction,
   EditEvent,
   EditInfo,
@@ -277,6 +278,10 @@ export const historyClearConnections = () => invoke<null>("history_clear_connect
 /** Directory listing as the session sees it (path completion). */
 export const terminalListDir = (id: Uuid, cwd: string | null, path: string) =>
   invoke<DirEntry[]>("terminal_list_dir", { id, cwd, path });
+/** One read-only resource probe of the machine behind an SSH session. */
+export const terminalMonitor = (id: Uuid) => invoke<MonitorReply>("terminal_monitor", { id });
+/** Drop the stored counters of a session (bar switched off). */
+export const terminalMonitorReset = (id: Uuid) => invoke<null>("terminal_monitor_reset", { id });
 /** Type a stored password (+ Enter) into the session; `null` = the host's own identity. */
 export const terminalInsertPassword = (id: Uuid, identityId: Uuid | null) =>
   invoke<null>("terminal_insert_password", { id, identityId });

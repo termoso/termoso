@@ -813,9 +813,18 @@ function Terminal({ s, update }: SectionProps) {
           hint={tr(
             "Offline suggestions from ~500 commands, their options, paths, snippets and your encrypted history. Tab inserts, Esc dismisses. Can be paused per session from the terminal menu.",
           )}
-          last
           control={
             <Toggle checked={s.autocomplete} onChange={(v) => update({ autocomplete: v })} />
+          }
+        />
+        <SettingRow
+          label={tr("Remote monitoring")}
+          hint={tr(
+            "Show CPU, memory, network, uptime, users and disk usage of the server in a bar under SSH terminals. Linux servers only. Can be switched per session from the terminal side panel.",
+          )}
+          last
+          control={
+            <Toggle checked={s.remoteMonitor} onChange={(v) => update({ remoteMonitor: v })} />
           }
         />
       </SectionCard>
