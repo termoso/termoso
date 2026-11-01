@@ -201,7 +201,7 @@ export function HostGrid(p: HostCollectionProps) {
                       size={40}
                     />
                   }
-                  title={h.label}
+                  title={h.label || h.address}
                   subtitle={
                     p.showPath && h.groupPath.length > 0
                       ? `${hostSubtitle(h)} · ${h.groupPath.join(" / ")}`
