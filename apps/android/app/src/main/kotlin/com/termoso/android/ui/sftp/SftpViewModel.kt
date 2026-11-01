@@ -45,6 +45,10 @@ data class SftpUiState(
     val query: String = "",
     /** Selected entry paths (long-press mode). */
     val selected: Set<String> = emptySet(),
+    /** The host is unreachable and the cache has copies to browse. */
+    val offlineAvailable: Boolean = false,
+    /** Browsing offline copies: read-only, listings and files come from the cache. */
+    val offline: Boolean = false,
 ) {
     val selecting: Boolean get() = selected.isNotEmpty()
     /** Filtered + sorted view of [entries]; computed once per state instance. */
@@ -111,7 +115,12 @@ class SftpViewModel(private val appContext: Context, val conn: SftpConnection) :
             conn.state.collect { s ->
                 if (s is SessionState.Connected && !started) {
                     started = true
+                    _state.update { it.copy(offline = false, offlineAvailable = false) }
                     navigate(conn.io { home() })
+                }
+                if (s is SessionState.Failed) {
+                    val available = runCatching { conn.io { offlineCopiesAvailable() } }.getOrDefault(false)
+                    _state.update { it.copy(offlineAvailable = available) }
                 }
             }
         }
@@ -122,11 +131,22 @@ class SftpViewModel(private val appContext: Context, val conn: SftpConnection) :
 
     // ───────────────────────────── navigation ─────────────────────────────
 
+    /** Switch to the offline copies of this host (read-only); starts at the folder of the newest copy. */
+    fun browseOffline() {
+        viewModelScope.launch {
+            val start = runCatching { conn.io { offlineCopies() } }.getOrDefault(emptyList())
+                .firstOrNull()?.path?.substringBeforeLast('/')?.ifBlank { "/" } ?: "/"
+            _state.update { it.copy(offline = true) }
+            navigate(start)
+        }
+    }
+
     fun navigate(path: String) {
         viewModelScope.launch {
             _state.update { it.copy(loading = true, selected = emptySet(), query = "") }
+            val offline = _state.value.offline
             val result = runCatching {
-                val canonical = conn.io { canonicalize(path) }
+                val canonical = if (offline) path.trimEnd('/').ifBlank { "/" } else conn.io { canonicalize(path) }
                 canonical to conn.io { list(canonical) }
             }
             result.onSuccess { (p, entries) -> _state.update { it.copy(path = p, entries = entries, loading = false) } }

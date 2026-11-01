@@ -51,6 +51,39 @@ use crate::themes::TerminalTheme;
 
 const DB_FILE: &str = "vault.db";
 const AVATARS_DIR: &str = "avatars";
+/// Encrypted offline copies of remote files (see `Store::cache_file`).
+const FCACHE_DIR: &str = "fcache";
+const MIB: u64 = 1024 * 1024;
+
+/// Per-host offline-copy settings as the UI edits them.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct FileCacheSettings {
+    /// False when the team policy forbids offline copies for this host.
+    pub allowed: bool,
+    pub enabled: bool,
+    pub max_file_mib: u32,
+    pub max_total_mib: u32,
+    pub include_paths: Vec<String>,
+    pub exclude_paths: Vec<String>,
+    /// Documents provider: serve copies right away instead of failing so
+    /// the app can ask first.
+    pub serve_offline_without_asking: bool,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct FileCacheUsage {
+    pub files: u64,
+    pub dirs: u64,
+    pub bytes: u64,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct FileCacheHost {
+    pub host_id: String,
+    pub label: String,
+    pub files: u64,
+    pub bytes: u64,
+}
 
 pub(crate) static RUNTIME: LazyLock<tokio::runtime::Runtime> = LazyLock::new(|| {
     tokio::runtime::Builder::new_multi_thread()
@@ -315,14 +348,125 @@ impl TermosoApp {
     }
 
     pub fn delete_host(&self, id: String) -> Result<()> {
-        Ok(hosts::delete(&self.store, parse_id(&id)?)?)
+        let id = parse_id(&id)?;
+        hosts::delete(&self.store, id)?;
+        let _ = self.store.clear_file_cache(Some(id));
+        Ok(())
     }
 
     pub fn delete_hosts(&self, ids: Vec<String>) -> Result<()> {
         for id in parse_ids(&ids)? {
             hosts::delete(&self.store, id)?;
+            let _ = self.store.clear_file_cache(Some(id));
         }
         Ok(())
+    }
+
+    // ---- offline file cache -------------------------------------------------
+
+    /// Offline-copy settings of a host. `allowed = false` when the team
+    /// policy forbids offline copies: the UI hides the switch.
+    pub fn file_cache_settings(&self, host_id: String) -> Result<FileCacheSettings> {
+        let id = parse_id(&host_id)?;
+        let cfg = self.store.file_cache_config(id)?;
+        let allowed = self
+            .store
+            .get::<termoso_proto::entities::payload::Host>(id)?
+            .is_none_or(|h| !termoso_core::policy::offline_cache_denied(&self.store, h.vault_id));
+        Ok(FileCacheSettings {
+            allowed,
+            enabled: cfg.enabled && allowed,
+            max_file_mib: (cfg.max_file_bytes / MIB) as u32,
+            max_total_mib: (cfg.max_total_bytes / MIB) as u32,
+            include_paths: cfg.include_paths,
+            exclude_paths: cfg.exclude_paths,
+            serve_offline_without_asking: cfg.saf_offline
+                == termoso_core::store::SafOfflineMode::Serve,
+        })
+    }
+
+    /// Save offline-copy settings; disabling drops the host's copies.
+    pub fn set_file_cache_settings(&self, host_id: String, s: FileCacheSettings) -> Result<()> {
+        let id = parse_id(&host_id)?;
+        if s.enabled
+            && let Some(h) = self
+                .store
+                .get::<termoso_proto::entities::payload::Host>(id)?
+            && termoso_core::policy::offline_cache_denied(&self.store, h.vault_id)
+        {
+            return Err(MobileError::invalid(
+                "team policy forbids offline copies of files from this host",
+            ));
+        }
+        let cfg = termoso_core::store::FileCacheConfig {
+            enabled: s.enabled,
+            max_file_bytes: u64::from(s.max_file_mib.max(1)) * MIB,
+            max_total_bytes: u64::from(s.max_total_mib.max(1)) * MIB,
+            include_paths: s.include_paths,
+            exclude_paths: s.exclude_paths,
+            saf_offline: if s.serve_offline_without_asking {
+                termoso_core::store::SafOfflineMode::Serve
+            } else {
+                termoso_core::store::SafOfflineMode::Ask
+            },
+        };
+        Ok(self.store.set_file_cache_config(id, &cfg)?)
+    }
+
+    /// Footprint of one host's copies, or of all (`None`).
+    pub fn file_cache_usage(&self, host_id: Option<String>) -> Result<FileCacheUsage> {
+        let id = host_id.map(|h| parse_id(&h)).transpose()?;
+        let u = self.store.file_cache_usage(id)?;
+        Ok(FileCacheUsage {
+            files: u.files,
+            dirs: u.dirs,
+            bytes: u.bytes,
+        })
+    }
+
+    /// Hosts that have offline copies, with their footprint.
+    pub fn file_cache_hosts(&self) -> Result<Vec<FileCacheHost>> {
+        let mut out = Vec::new();
+        for (id, u) in self.store.file_cache_hosts()? {
+            let label = self
+                .store
+                .get::<termoso_proto::entities::payload::Host>(id)?
+                .map(|h| h.data.label.clone())
+                .unwrap_or_default();
+            out.push(FileCacheHost {
+                host_id: id.to_string(),
+                label,
+                files: u.files,
+                bytes: u.bytes,
+            });
+        }
+        Ok(out)
+    }
+
+    /// Delete the copies of one host, or of all hosts (`None`). Returns how
+    /// many entries were removed.
+    pub fn clear_file_cache(&self, host_id: Option<String>) -> Result<u64> {
+        let id = host_id.map(|h| parse_id(&h)).transpose()?;
+        let n = self.store.clear_file_cache(id)?;
+        if id.is_none() {
+            let _ = std::fs::remove_dir_all(self.profile_dir.join(FCACHE_DIR));
+        }
+        Ok(n)
+    }
+
+    /// Drop copies that a team policy no longer allows (called after sync).
+    pub fn enforce_file_cache_policy(&self) -> Result<u64> {
+        let mut n = 0;
+        for (id, _) in self.store.file_cache_hosts()? {
+            if let Some(h) = self
+                .store
+                .get::<termoso_proto::entities::payload::Host>(id)?
+                && termoso_core::policy::offline_cache_denied(&self.store, h.vault_id)
+            {
+                n += self.store.clear_file_cache(Some(id))?;
+            }
+        }
+        Ok(n)
     }
 
     pub fn duplicate_host(&self, id: String) -> Result<HostItem> {
@@ -1130,6 +1274,8 @@ impl TermosoApp {
     pub fn account_sign_out(&self) -> Result<()> {
         self.secrets.clear();
         let _ = std::fs::remove_dir_all(self.profile_dir.join(AVATARS_DIR));
+        let _ = self.store.clear_file_cache(None);
+        let _ = std::fs::remove_dir_all(self.profile_dir.join(FCACHE_DIR));
         RUNTIME.block_on(self.account.sign_out())
     }
 
@@ -1786,6 +1932,7 @@ impl TermosoApp {
                 settings: MobileSettings::load(&self.store)?,
                 listener,
                 presence,
+                cache_dir: self.profile_dir.join(FCACHE_DIR),
             },
         ))
     }
@@ -1824,6 +1971,7 @@ impl TermosoApp {
                 settings: MobileSettings::load(&self.store)?,
                 listener,
                 presence,
+                cache_dir: self.profile_dir.join(FCACHE_DIR),
             },
         ))
     }
@@ -1851,6 +1999,7 @@ impl TermosoApp {
                 settings: MobileSettings::load(&self.store)?,
                 listener,
                 presence,
+                cache_dir: self.profile_dir.join(FCACHE_DIR),
             },
         ))
     }
@@ -1882,6 +2031,7 @@ impl TermosoApp {
                 settings: MobileSettings::load(&self.store)?,
                 listener,
                 presence: None,
+                cache_dir: self.profile_dir.join(FCACHE_DIR),
             },
         ))
     }
@@ -1904,6 +2054,7 @@ impl TermosoApp {
                 settings: MobileSettings::load(&self.store)?,
                 listener,
                 presence: None,
+                cache_dir: self.profile_dir.join(FCACHE_DIR),
             },
         ))
     }

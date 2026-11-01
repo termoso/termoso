@@ -71,6 +71,8 @@ import com.termoso.core.terminalTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.compose.runtime.LaunchedEffect
+import com.termoso.android.ui.sftp.formatSize
 
 private val themes = listOf("system" to R.string.system, "dark" to R.string.dark, "light" to R.string.light)
 
@@ -119,6 +121,9 @@ fun SettingsScreen(
     var termTypePicker by remember { mutableStateOf(false) }
     var scrollbackPicker by remember { mutableStateOf(false) }
     var rateLimitPicker by remember { mutableStateOf(false) }
+    var clearCopies by remember { mutableStateOf(false) }
+    var copiesBytes by remember { mutableStateOf<ULong?>(null) }
+    LaunchedEffect(clearCopies) { copiesBytes = runCatching { shell.repo.read { fileCacheUsage(null).bytes } }.getOrNull() }
     var keepAlivePicker by remember { mutableStateOf(false) }
     var privacy by remember { mutableStateOf(false) }
     var licenses by remember { mutableStateOf(false) }
@@ -426,6 +431,13 @@ fun SettingsScreen(
                     badge = rateLimitLabel(settings.transferRateLimitKib),
                     modifier = Modifier.clickable { rateLimitPicker = true },
                 )
+                RowDivider()
+                ChevronRow(
+                    title = stringResource(R.string.local_copies),
+                    subtitle = stringResource(R.string.local_copies_settings_summary),
+                    badge = formatSize(copiesBytes),
+                    modifier = Modifier.clickable { clearCopies = true },
+                )
             }
 
             SectionLabel(stringResource(R.string.about))
@@ -482,6 +494,20 @@ fun SettingsScreen(
             settings.termType,
             onPick = { set { s -> s.copy(termType = it) } },
         ) { termTypePicker = false }
+    }
+    if (clearCopies) {
+        AlertDialog(
+            onDismissRequest = { clearCopies = false },
+            title = { Text(stringResource(R.string.clear_local_copies)) },
+            text = { Text(stringResource(R.string.clear_local_copies_text, formatSize(copiesBytes))) },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch { runCatching { shell.repo.write { clearFileCache(null) } } }
+                    clearCopies = false
+                }) { Text(stringResource(R.string.clear)) }
+            },
+            dismissButton = { TextButton(onClick = { clearCopies = false }) { Text(stringResource(R.string.cancel)) } },
+        )
     }
     if (rateLimitPicker) {
         ChoiceSheet(

@@ -290,6 +290,14 @@ fun SftpScreen(
         Box(Modifier.fillMaxSize().padding(padding)) {
             Column(Modifier.fillMaxSize()) {
                 Breadcrumbs(path = state.path, onNavigate = vm::navigate)
+                if (state.offline) {
+                    Text(
+                        stringResource(R.string.files_offline_read_only),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    )
+                }
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -324,12 +332,15 @@ fun SftpScreen(
                     )
                 }
             }
-            StateOverlay(
-                state = connState,
-                target = conn.target,
-                onRetry = { scope.launch { shell.sftp.reconnect(conn.id)?.let { currentId = it.id } } },
-                onClose = { scope.launch { shell.sftp.close(conn.id); leave() } },
-            )
+            if (!state.offline) {
+                StateOverlay(
+                    state = connState,
+                    target = conn.target,
+                    onRetry = { scope.launch { shell.sftp.reconnect(conn.id)?.let { currentId = it.id } } },
+                    onClose = { scope.launch { shell.sftp.close(conn.id); leave() } },
+                    onBrowseOffline = if (state.offlineAvailable) vm::browseOffline else null,
+                )
+            }
         }
     }
 
@@ -808,7 +819,13 @@ private fun NameDialog(title: String, initial: String, confirm: String, onConfir
 }
 
 @Composable
-private fun StateOverlay(state: SessionState, target: String, onRetry: () -> Unit, onClose: () -> Unit) {
+private fun StateOverlay(
+    state: SessionState,
+    target: String,
+    onRetry: () -> Unit,
+    onClose: () -> Unit,
+    onBrowseOffline: (() -> Unit)? = null,
+) {
     val card: (@Composable () -> Unit)? = when (val s = state) {
         is SessionState.Connected -> null
         is SessionState.Connecting -> {
@@ -841,6 +858,9 @@ private fun StateOverlay(state: SessionState, target: String, onRetry: () -> Uni
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TextButton(onClick = onClose) { Text(stringResource(R.string.close)) }
                     Button(onClick = onRetry) { Text(stringResource(R.string.retry)) }
+                }
+                if (onBrowseOffline != null) {
+                    TextButton(onClick = onBrowseOffline) { Text(stringResource(R.string.files_browse_local_copies)) }
                 }
             }
         }

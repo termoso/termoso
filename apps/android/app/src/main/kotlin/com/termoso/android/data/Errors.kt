@@ -16,6 +16,7 @@ fun Throwable.userMessage(): String = when (this) {
     is MobileException.Key -> detail
     is MobileException.Cancelled -> str(R.string.cancelled)
     is MobileException.Closed -> str(R.string.connection_closed)
+    is MobileException.ReadOnlyOffline -> str(R.string.files_read_only_offline)
     is MobileException.ReauthRequired -> str(R.string.confirm_your_password_to_make_this_change)
     is MobileException.SecurityKey -> securityKeyMessage(kind, detail, retries)
     is MobileException.Other -> when (kind) {

@@ -16,6 +16,7 @@
 //! the keychain fallback file is kept next to the database.
 
 mod entities;
+mod file_cache;
 mod history;
 mod logs;
 
@@ -35,12 +36,13 @@ use crate::error::{CoreError, Result};
 
 pub use entities::EntityFilter;
 pub use entities::EntityRow;
+pub use file_cache::{CacheKind, CachedEntry, FileCacheConfig, FileCacheUsage, SafOfflineMode};
 pub use history::{CommandHistory, ConnectionHistory, HistoryItem, VaultConnection};
 pub use logs::{LogItem, LogMeta, LogRow, MAX_CAPTURE_BYTES, Recorder};
 
 const SCHEMA: &str = include_str!("schema.sql");
 const ACCOUNT_AVATAR: &str = "account_avatar";
-const SCHEMA_VERSION: i64 = 3;
+const SCHEMA_VERSION: i64 = 4;
 
 /// Schema 1 → 2: team session logs (per-vault logging flag and cursor,
 /// author / pin / note on log rows).
@@ -60,6 +62,9 @@ const MIGRATE_V3: &str = "
 BEGIN;
 ALTER TABLE vaults ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0;
 COMMIT;";
+
+/// v4 only adds tables; the `CREATE TABLE IF NOT EXISTS` schema covers it.
+const MIGRATE_V4: &str = SCHEMA;
 
 /// A vault as seen by this device.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -249,6 +254,9 @@ impl Store {
                 }
                 if from < 3 {
                     store.conn().execute_batch(MIGRATE_V3)?;
+                }
+                if from < 4 {
+                    store.conn().execute_batch(MIGRATE_V4)?;
                 }
                 store.set_meta("schema_version", &SCHEMA_VERSION.to_string())?;
             }

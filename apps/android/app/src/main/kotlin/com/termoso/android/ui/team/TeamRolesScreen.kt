@@ -183,6 +183,7 @@ private fun PolicyRows(p: TeamPoliciesCard) {
         stringResource(R.string.policy_keys_only) to onOff(p.auth == "keys_only"),
         stringResource(R.string.policy_jump_host_required) to onOff(p.jumpHostRequired),
         stringResource(R.string.policy_no_export) to onOff(p.export == "deny"),
+        stringResource(R.string.policy_no_offline_cache) to onOff(p.offlineCache == "deny"),
         stringResource(R.string.policy_forwarded_ports) to (p.forwardPorts.joinToString(", ").ifEmpty { stringResource(R.string.any_port) }),
         stringResource(R.string.policy_require_disk_encryption) to onOff(p.postureDiskEncryption),
         stringResource(R.string.policy_require_screen_lock) to onOff(p.postureScreenLock),

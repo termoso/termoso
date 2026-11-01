@@ -81,6 +81,7 @@ function PoliciesForm({
         password_max_age_days: p.password_max_age_days,
         ip_allowlist: parseList(ipList),
         device_admin_approval: p.device_admin_approval,
+        offline_cache: p.offline_cache,
       };
       return teamsApi.updatePolicies(team.id, patch);
     },
@@ -358,12 +359,25 @@ function PoliciesForm({
         description={tr(
           "A member's new device waits in Devices until an owner, admin or devices.approve holder approves it; rejection signs it out.",
         )}
-        divider={false}
         control={
           <Switch
             checked={p.device_admin_approval}
             disabled={ro}
             onChange={(e) => setP({ ...p, device_admin_approval: e.target.checked })}
+          />
+        }
+      />
+      <SettingRow
+        label={tr("No offline file copies")}
+        description={tr(
+          "Members cannot keep local copies of files read from team hosts for offline browsing; existing copies are removed on the next sync.",
+        )}
+        divider={false}
+        control={
+          <Switch
+            checked={p.offline_cache === "deny"}
+            disabled={ro}
+            onChange={(e) => setP({ ...p, offline_cache: e.target.checked ? "deny" : "allow" })}
           />
         }
       />

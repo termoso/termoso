@@ -1578,6 +1578,7 @@
     <string name="policy_keys_only">Key-based authentication only</string>
     <string name="policy_jump_host_required">Jump host required</string>
     <string name="policy_no_export">No local export</string>
+    <string name="policy_no_offline_cache">No offline file copies</string>
     <string name="policy_forwarded_ports">Forwarded ports</string>
     <string name="any_port">Any</string>
     <string name="policy_require_disk_encryption">Require disk encryption</string>
@@ -1742,4 +1743,20 @@
     <string name="wake">Wake</string>
     <string name="magic_packet_sent">Magic packet sent on the local network</string>
     <string name="backspace">Backspace</string>
+    <string name="files_read_only_offline">Read-only while offline</string>
+    <string name="files_offline_open_termoso">Host unreachable. Open Termoso to browse its local copies.</string>
+    <string name="files_offline_read_only">Offline: local copies, read-only</string>
+    <string name="files_browse_local_copies">Browse local copies</string>
+    <string name="keep_local_copies">Keep local copies</string>
+    <string name="keep_local_copies_summary">Files you open are kept encrypted on this device and can be browsed when the host is unreachable.</string>
+    <string name="local_copies_max_file_mib">Max file size (MiB)</string>
+    <string name="local_copies_max_total_mib">Total size limit (MiB)</string>
+    <string name="local_copies_include_paths">Only these paths (comma-separated, empty = all)</string>
+    <string name="local_copies_exclude_paths">Never these paths</string>
+    <string name="local_copies_serve_in_files">Serve copies in Files without asking</string>
+    <string name="local_copies_serve_in_files_summary">When the host is unreachable, the system file picker shows the local copies right away.</string>
+    <string name="local_copies">Local copies</string>
+    <string name="local_copies_settings_summary">Encrypted offline copies of remote files</string>
+    <string name="clear_local_copies">Clear local copies?</string>
+    <string name="clear_local_copies_text">Removes all offline copies of remote files from this device (%1$s). Hosts keep their settings.</string>
 </resources>

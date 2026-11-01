@@ -82,6 +82,7 @@ function PoliciesForm({
         auth: p.auth,
         jump_host_required: p.jump_host_required,
         export: p.export,
+        offline_cache: p.offline_cache,
         forward_ports: parseDomains(fwdPorts),
         posture_disk_encryption: p.posture_disk_encryption,
         posture_screen_lock: p.posture_screen_lock,
@@ -364,6 +365,19 @@ function PoliciesForm({
             checked={p.export === "deny"}
             disabled={ro}
             onChange={(e) => setP({ ...p, export: e.target.checked ? "deny" : "allow" })}
+          />
+        }
+      />
+      <SettingRow
+        label={tr("No offline file copies")}
+        hint={tr(
+          "Members cannot keep local copies of files read from team hosts for offline browsing; existing copies are removed on the next sync.",
+        )}
+        control={
+          <Switch
+            checked={p.offline_cache === "deny"}
+            disabled={ro}
+            onChange={(e) => setP({ ...p, offline_cache: e.target.checked ? "deny" : "allow" })}
           />
         }
       />

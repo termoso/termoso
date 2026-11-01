@@ -254,6 +254,8 @@ export interface TeamPolicies {
   jump_host_required: boolean;
   /** `deny` = no local export/backup of team vault data (client-enforced). */
   export: "allow" | "deny";
+  /** `deny` = no offline copies of files read from team hosts (client-enforced). */
+  offline_cache: "allow" | "deny";
   /** Remote ports members may forward from team hosts (`22`, `8000-8999`); empty = any. */
   forward_ports: string[];
   /** Sign-in requires the device to prove disk encryption / a screen lock / a hardware-backed key. */

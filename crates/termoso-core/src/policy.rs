@@ -144,6 +144,12 @@ pub fn export_denied(store: &Store, vault_id: Uuid) -> bool {
     for_vault(store, vault_id).is_some_and(|p| p.export == "deny")
 }
 
+/// `offline_cache = deny` for the vault: no local copies of files read from
+/// its hosts.
+pub fn offline_cache_denied(store: &Store, vault_id: Uuid) -> bool {
+    for_vault(store, vault_id).is_some_and(|p| p.offline_cache == "deny")
+}
+
 /// Check a port-forwarding rule of kind `kind` (`local` / `remote` /
 /// `dynamic`) reaching `remote_port` on a host of `vault_id`.
 pub fn check_forward(

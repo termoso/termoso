@@ -352,6 +352,8 @@ export interface TeamPolicies {
   ip_allowlist: string[];
   /** New member devices wait for an admin's approval. */
   device_admin_approval: boolean;
+  /** `deny` = no offline copies of files read from team hosts (client-enforced). */
+  offline_cache: "allow" | "deny";
   updated_at: string;
 }
 

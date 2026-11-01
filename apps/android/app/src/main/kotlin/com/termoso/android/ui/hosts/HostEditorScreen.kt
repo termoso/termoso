@@ -476,7 +476,7 @@ private fun HostForm(
 
         if (draft.ssh || webdav != null) {
             Spacer(Modifier.height(12.dp))
-            FilesSection(draft, vm, files)
+            FilesSection(state, draft, vm, files)
         }
 
         if (draft.ssh || draft.telnet != null || draft.webdav != null) {
@@ -808,7 +808,7 @@ private fun PinRow(pin: HostKeyPinItem, where: String?, onRemove: (() -> Unit)?,
  * master: a host is listed only when both are on.
  */
 @Composable
-private fun FilesSection(draft: HostDraft, vm: HostEditorViewModel, files: FilesIntegration?) {
+private fun FilesSection(state: HostEditorState, draft: HostDraft, vm: HostEditorViewModel, files: FilesIntegration?) {
     val filesEnabled = files?.enabled?.collectAsStateWithLifecycle()?.value ?: true
     SectionCard {
         SwitchRow(
@@ -821,8 +821,55 @@ private fun FilesSection(draft: HostDraft, vm: HostEditorViewModel, files: Files
             checked = draft.filesProvider,
             onCheckedChange = { v -> vm.update { it.copy(filesProvider = v) } },
         )
+        val fc = state.fileCache
+        if (fc != null && fc.allowed) {
+            RowDivider()
+            SwitchRow(
+                title = stringResource(R.string.keep_local_copies),
+                subtitle = stringResource(R.string.keep_local_copies_summary),
+                checked = fc.enabled,
+                onCheckedChange = { v -> vm.updateFileCache { it.copy(enabled = v) } },
+            )
+            if (fc.enabled) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    FormField(
+                        fc.maxFileMib.toString(),
+                        { v -> v.filter(Char::isDigit).take(6).toUIntOrNull()?.let { n -> vm.updateFileCache { it.copy(maxFileMib = n) } } },
+                        stringResource(R.string.local_copies_max_file_mib),
+                        keyboard = KeyboardType.Number,
+                    )
+                    FormField(
+                        fc.maxTotalMib.toString(),
+                        { v -> v.filter(Char::isDigit).take(7).toUIntOrNull()?.let { n -> vm.updateFileCache { it.copy(maxTotalMib = n) } } },
+                        stringResource(R.string.local_copies_max_total_mib),
+                        keyboard = KeyboardType.Number,
+                    )
+                    FormField(
+                        fc.includePaths.joinToString(", "),
+                        { v -> vm.updateFileCache { it.copy(includePaths = splitPaths(v)) } },
+                        stringResource(R.string.local_copies_include_paths),
+                        placeholder = "/var/www, /home/me/docs",
+                    )
+                    FormField(
+                        fc.excludePaths.joinToString(", "),
+                        { v -> vm.updateFileCache { it.copy(excludePaths = splitPaths(v)) } },
+                        stringResource(R.string.local_copies_exclude_paths),
+                        placeholder = "/home/me/.ssh",
+                    )
+                }
+                SwitchRow(
+                    title = stringResource(R.string.local_copies_serve_in_files),
+                    subtitle = stringResource(R.string.local_copies_serve_in_files_summary),
+                    checked = fc.serveOfflineWithoutAsking,
+                    onCheckedChange = { v -> vm.updateFileCache { it.copy(serveOfflineWithoutAsking = v) } },
+                )
+            }
+        }
     }
 }
+
+private fun splitPaths(v: String): List<String> =
+    v.split(',', '\n').map { it.trim() }.filter { it.isNotEmpty() }
 
 @Composable
 private fun CodingAgentRow(state: HostEditorState, draft: HostDraft, onPick: (String?) -> Unit) {

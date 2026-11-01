@@ -788,6 +788,10 @@ schema! {
         /// `allow` or `deny`: local export/backup of team vault data.
         #[serde(default = "default_export")]
         pub export: String,
+        /// `allow` or `deny`: offline copies of files read from team hosts
+        /// (SFTP cache). `deny` hides the host setting and purges copies.
+        #[serde(default = "default_export")]
+        pub offline_cache: String,
         /// Remote ports (`22`, `8000-8999`) members may forward from team
         /// hosts; empty means any port.
         #[serde(default)]
@@ -864,6 +868,9 @@ schema! {
         pub jump_host_required: Option<bool>,
         /// `allow` or `deny`.
         pub export: Option<String>,
+        /// `allow` or `deny`: offline file copies of team hosts.
+        #[serde(default)]
+        pub offline_cache: Option<String>,
         /// Port allowlist (`22`, `8000-8999`); empty = any.
         pub forward_ports: Option<Vec<String>>,
         /// Require disk encryption on members' devices.
