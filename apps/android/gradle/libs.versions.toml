@@ -8,6 +8,7 @@ navigation = "2.9.8"
 coreKtx = "1.17.0"
 appcompat = "1.7.1"
 biometric = "1.1.0"
+androidsvg = "1.4"
 browser = "1.10.0"
 camerax = "1.4.2"
 mlkitBarcode = "17.3.0"
@@ -38,6 +39,8 @@ compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-mani
 compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
 compose-material3 = { group = "androidx.compose.material3", name = "material3" }
 compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
+# Custom host/group icons may be SVG (`custom:data:` values, see CustomIcon.kt).
+androidsvg = { group = "com.caverock", name = "androidsvg-aar", version.ref = "androidsvg" }
 androidx-annotation = { group = "androidx.annotation", name = "annotation", version.ref = "annotation" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 jna = { group = "net.java.dev.jna", name = "jna", version.ref = "jna" }
