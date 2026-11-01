@@ -227,6 +227,11 @@ export const openWebDavForHost = (
 export const connCapabilities = (c: SftpConn | undefined): RemoteCapabilities =>
   c?.info?.capabilities ?? SFTP_CAPABILITIES;
 
+/** Browse a host's offline copies (read-only) instead of connecting. */
+export function openSftpOffline(hostId: Uuid, title: string, side: PaneSide = "right"): Uuid {
+  return openSftp({ kind: "offline", host_id: hostId }, title, hostId, side);
+}
+
 export function reconnectSftp(id: Uuid) {
   const c = sftpStore.get().conns[id];
   if (!c) return;

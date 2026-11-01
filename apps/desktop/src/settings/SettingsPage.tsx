@@ -26,7 +26,7 @@ import ArticleRoundedIcon from "@mui/icons-material/ArticleRounded";
 import SystemUpdateAltRoundedIcon from "@mui/icons-material/SystemUpdateAltRounded";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import ShieldRoundedIcon from "@mui/icons-material/ShieldRounded";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AccountPage } from "@/account/AccountPage";
 import {
   type SettingsPage as PageId,
@@ -62,6 +62,7 @@ import {
   type ThemeMode,
 } from "@/ipc/types";
 import { tr, trn, msg, LOCALE_NAMES, type Language } from "@/i18n";
+import { fmtBytes } from "@/hosts/LocalCopiesSection";
 
 const PAGES: { id: PageId; label: string; icon: ReactNode }[] = [
   { id: "account", label: msg("Account & sync"), icon: <PersonRoundedIcon /> },
@@ -280,6 +281,7 @@ function General({ s, update }: SectionProps) {
             />
           }
         />
+        <LocalCopiesRow />
         <SettingRow
           label={tr("Start forwarding rules on launch")}
           hint={tr("Rules marked auto-start are brought up when the app opens.")}
@@ -1007,5 +1009,39 @@ export function SettingsDialog() {
         </IconButton>
       </Box>
     </Dialog>
+  );
+}
+
+/** Settings → Connections: footprint of offline file copies, with a one-click clear. */
+function LocalCopiesRow() {
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ["fileCacheOverview"], queryFn: ipc.fileCacheOverview });
+  const clear = useMutation({
+    mutationFn: () => ipc.clearFileCache(null),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["fileCacheOverview"] }),
+  });
+  const o = q.data;
+  return (
+    <SettingRow
+      label={tr("Local copies")}
+      hint={
+        o && o.files > 0
+          ? tr("{files} files from {hosts} hosts, {size}", {
+              files: o.files,
+              hosts: o.hosts.length,
+              size: fmtBytes(o.bytes),
+            })
+          : tr("Encrypted offline copies of remote files. Turn them on per host under Files.")
+      }
+      control={
+        <Button
+          size="small"
+          disabled={!o || o.files === 0 || clear.isPending}
+          onClick={() => clear.mutate()}
+        >
+          {tr("Clear")}
+        </Button>
+      }
+    />
   );
 }

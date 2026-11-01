@@ -50,6 +50,7 @@ pub mod localfs;
 pub mod mdns;
 pub mod model;
 pub mod mosh;
+pub mod offline_fs;
 pub mod osdetect;
 pub mod policy;
 pub mod posture;
