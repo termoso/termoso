@@ -496,6 +496,51 @@ impl Emulator {
         lines[skip..].join("\r\n")
     }
 
+    /// Text between two scrollback-absolute positions (inclusive; line 0 is
+    /// the oldest history row, columns 0-based), one `\n` per row with
+    /// trailing blanks trimmed. Rows outside the kept history are skipped, so
+    /// a selection made before the scrollback was trimmed still yields what
+    /// is left of it.
+    pub fn text_range(
+        &self,
+        start_line: i64,
+        start_col: u32,
+        end_line: i64,
+        end_col: u32,
+    ) -> String {
+        let (start, end) = if (start_line, start_col) <= (end_line, end_col) {
+            ((start_line, start_col), (end_line, end_col))
+        } else {
+            ((end_line, end_col), (start_line, start_col))
+        };
+        let grid = self.term.grid();
+        let history = grid.history_size() as i64;
+        let rows = i64::from(self.size.rows);
+        let last_col = self.size.cols.saturating_sub(1) as usize;
+        let first = start.0.max(0);
+        let last = end.0.min(history + rows - 1);
+        let mut out = String::new();
+        for line in first..=last {
+            let from = if line == start.0 { start.1 as usize } else { 0 };
+            let to = if line == end.0 {
+                (end.1 as usize).min(last_col)
+            } else {
+                last_col
+            };
+            let text: String = self
+                .row_chars((line - history) as i32)
+                .into_iter()
+                .filter(|(col, _)| (from..=to).contains(col))
+                .map(|(_, c)| c)
+                .collect();
+            if !out.is_empty() {
+                out.push('\n');
+            }
+            out.push_str(text.trim_end());
+        }
+        out
+    }
+
     pub fn mode(&self) -> TermMode {
         *self.term.mode()
     }
@@ -853,6 +898,24 @@ mod tests {
         assert_eq!(e.visible_text()[0], "line5");
         e.scroll_to_bottom();
         assert_eq!(e.snapshot().display_offset, 0);
+    }
+
+    #[test]
+    fn text_range_spans_scrollback() {
+        let (mut e, _rx) = emu();
+        for i in 0..12 {
+            e.feed(format!("line{i}\r\n").as_bytes());
+        }
+        let history = e.snapshot().history as i64;
+        // From the middle of the oldest kept row to the first visible row.
+        let text = e.text_range(0, 2, history, 4);
+        let lines: Vec<&str> = text.split('\n').collect();
+        assert_eq!(lines.len() as i64, history + 1);
+        assert!(lines[0].starts_with("ne"), "{text}");
+        assert_eq!(lines.last().unwrap().len(), 5);
+        // Reversed ends and rows before the history start are tolerated.
+        assert_eq!(e.text_range(history, 4, 0, 2), text);
+        assert_eq!(e.text_range(-5, 0, -1, 3), "");
     }
 
     #[test]

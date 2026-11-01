@@ -76,6 +76,19 @@ fun CellGrid.wordAt(at: CellPoint): TermSelection? {
 
 fun CellGrid.all(): TermSelection = TermSelection(CellPoint(0, 0), CellPoint(rows - 1, cols - 1))
 
+/**
+ * Selected text including rows scrolled out of the viewport: the selection is
+ * mapped to scrollback-absolute lines (0 = oldest history row) and read back
+ * through [textRange] (the emulator). Falls back to [textIn] on the alternate
+ * screen, which has no history.
+ */
+fun CellGrid.textAcross(sel: TermSelection, textRange: (Long, UInt, Long, UInt) -> String): String {
+    if (frame.altScreen) return textIn(sel)
+    val top = frame.history.toLong() - frame.displayOffset.toLong()
+    val (s, e) = sel.start to sel.end
+    return textRange(top + s.row, s.col.coerceAtLeast(0).toUInt(), top + e.row, e.col.coerceAtLeast(0).toUInt())
+}
+
 /** Selected text; rows outside the viewport are skipped, trailing blanks trimmed per line. */
 fun CellGrid.textIn(sel: TermSelection): String {
     val (s, e) = sel.start to sel.end
@@ -118,6 +131,7 @@ internal fun SelectionOverlay(
     metrics: CellMetrics,
     viewport: IntSize,
     onChange: (TermSelection) -> Unit,
+    onDragAt: (Offset) -> Unit,
     onCopy: () -> Unit,
     onPaste: () -> Unit,
     onSelectAll: () -> Unit,
@@ -141,7 +155,10 @@ internal fun SelectionOverlay(
         color = color,
         left = true,
         visible = s.row in 0 until grid.rows,
-        onDrag = { p -> onChange(TermSelection(anchor = e, focus = metrics.cellAt(p - Offset(0f, ch / 2), grid))) },
+        onDrag = { p ->
+            onDragAt(p)
+            onChange(TermSelection(anchor = e, focus = metrics.cellAt(p - Offset(0f, ch / 2), grid)))
+        },
     )
     SelectionHandle(
         at = px(e, right = true),
@@ -150,7 +167,10 @@ internal fun SelectionOverlay(
         color = color,
         left = false,
         visible = e.row in 0 until grid.rows,
-        onDrag = { p -> onChange(TermSelection(anchor = s, focus = metrics.cellAt(p - Offset(0f, ch / 2), grid))) },
+        onDrag = { p ->
+            onDragAt(p)
+            onChange(TermSelection(anchor = s, focus = metrics.cellAt(p - Offset(0f, ch / 2), grid)))
+        },
     )
 
     var bar by remember { mutableStateOf(IntSize.Zero) }

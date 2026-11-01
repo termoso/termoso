@@ -1153,6 +1153,8 @@
     <string name="line_copied">Line copied</string>
     <string name="copy_screen">Copy screen</string>
     <string name="screen_copied">Screen copied</string>
+    <string name="copy_all">Copy all</string>
+    <string name="all_copied">Everything copied</string>
     <string name="send_file">Send file…</string>
     <string name="send_file_to">Send file to %1$s?</string>
     <string name="send_files_to">Send %1$s files to %2$s?</string>

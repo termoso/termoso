@@ -149,6 +149,9 @@ import com.termoso.core.LiveParticipantCard
 /** Lines one volume press scrolls through the history. */
 private const val VOLUME_SCROLL_LINES = 3
 
+/** Upper bound for "Copy all"; the scrollback setting never exceeds it. */
+private const val COPY_ALL_MAX_LINES = 200_000u
+
 /**
  * Terminal tab host, laid out like Termius: the terminal fills the screen, the
  * session bar (back, one pill per session, menu, new) sits at the bottom right
@@ -927,6 +930,15 @@ private fun ActiveSession(
                                     dismiss()
                                     copyToClipboard(context, controller.visibleText())
                                     scope.launch { snackbar.showSnackbar(str(R.string.screen_copied)) }
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.copy_all)) },
+                                onClick = {
+                                    dismiss()
+                                    // Whole scrollback plus screen, wrapped rows joined.
+                                    copyToClipboard(context, session.rust.dumpText(COPY_ALL_MAX_LINES).replace("\r\n", "\n"))
+                                    scope.launch { snackbar.showSnackbar(str(R.string.all_copied)) }
                                 },
                             )
                             if (FileDrop.blocker(session) == null) {
