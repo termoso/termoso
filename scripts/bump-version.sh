@@ -37,6 +37,7 @@ for (const [arch, suffix] of [["64bit", "x64"], ["arm64", "arm64"]]) {
 }
 fs.writeFileSync(p, JSON.stringify(m, null, 2) + "\n");
 JS
+(cd apps/desktop && npx --no prettier --write ../../packaging/scoop/termoso.json >/dev/null)
 
 f=packaging/flatpak/dev.termoso.Termoso.yml
 sed -i "s|/archive/refs/tags/v$old\.tar\.gz|/archive/refs/tags/v$new.tar.gz|; s|^\(        sha256: \).*|\1REPLACE_WITH_RELEASE_TARBALL_SHA256|" "$f"
