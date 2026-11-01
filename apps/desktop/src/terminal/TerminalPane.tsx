@@ -34,6 +34,7 @@ import type { TerminalTheme } from "./themes";
 import { tr } from "@/i18n";
 import { TypingBadge } from "./TypingBadge";
 import { ZmodemBar } from "./ZmodemBar";
+import { MonitorBar } from "./MonitorBar";
 
 interface Props {
   paneId: Uuid;
@@ -107,6 +108,8 @@ export function TerminalPane({ paneId, active, showFrame }: Props) {
         <ZmodemBar paneId={paneId} />
         {(connecting || failedToConnect) && <ConnectionView pane={pane} />}
       </Box>
+
+      <MonitorBar pane={pane} theme={theme} />
 
       {finished && !failedToConnect && !queued && (
         <Overlay theme={theme} dim>

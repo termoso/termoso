@@ -62,9 +62,11 @@ import {
   autocompleteOn,
   copyText,
   endOfToday,
+  monitorOn,
   pauseSuggestions,
   runCommand,
   setPaneAutocomplete,
+  setPaneMonitor,
   setSidePanel,
   setTabTheme,
   terminalStore,
@@ -352,7 +354,61 @@ function TerminalPanel({ pane }: { pane: Pane }) {
           "Offline suggestions from commands, paths, snippets and your history. Tab inserts, Esc dismisses.",
         )}
       </Typography>
+      {pane.protocol === "ssh" && <MonitorSwitch pane={pane} />}
     </Stack>
+  );
+}
+
+/** Remote monitoring: on / off for this session, defaulting to the app setting. */
+function MonitorSwitch({ pane }: { pane: Pane }) {
+  const settings = useSettings();
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const on = monitorOn(pane, settings.data);
+  const label = on ? tr("Enabled") : tr("Off in this tab");
+  return (
+    <>
+      <Divider />
+      <Stack direction="row" sx={{ alignItems: "center", gap: 1, px: 0.5 }}>
+        <Typography variant="subtitle2" sx={{ flex: 1 }}>
+          {tr("Remote monitoring")}
+        </Typography>
+        <Button
+          size="small"
+          color="inherit"
+          endIcon={<ExpandMoreRoundedIcon />}
+          onClick={(e) => setAnchor(e.currentTarget)}
+          sx={{ color: on ? "text.primary" : "text.secondary", fontWeight: 500 }}
+          aria-label={tr("Remote monitoring: {label}", { label })}
+        >
+          {label}
+        </Button>
+        <Menu open={anchor !== null} anchorEl={anchor} onClose={() => setAnchor(null)}>
+          <MenuItem
+            selected={on}
+            onClick={() => {
+              setAnchor(null);
+              setPaneMonitor(pane.id, true);
+            }}
+          >
+            {tr("Enabled")}
+          </MenuItem>
+          <MenuItem
+            selected={!on}
+            onClick={() => {
+              setAnchor(null);
+              setPaneMonitor(pane.id, false);
+            }}
+          >
+            {tr("Off in this tab")}
+          </MenuItem>
+        </Menu>
+      </Stack>
+      <Typography variant="caption" color="text.secondary" sx={{ px: 0.5 }}>
+        {tr(
+          "Shows CPU, memory, network, uptime, users and disks of the server under the terminal. Reads /proc on a separate channel every few seconds; nothing is installed or written.",
+        )}
+      </Typography>
+    </>
   );
 }
 

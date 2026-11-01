@@ -119,6 +119,8 @@ export interface Pane {
   lastExit: number | null;
   /** Per-session suggestions switch (the global one lives in settings). */
   autocomplete: boolean;
+  /** Remote monitor bar for this session; null follows the app setting. */
+  monitor: boolean | null;
   /**
    * The pane is re-establishing (or failed to re-establish) a dropped session
    * in place: the old buffer stays on screen instead of the connection view.
@@ -1213,6 +1215,16 @@ export function autocompleteOn(paneId: Uuid, s: TerminalState = terminalStore.ge
   return s.panes[paneId]?.autocomplete ?? false;
 }
 
+/** The remote monitor bar is shown: only SSH sessions, per-pane choice first, app setting otherwise. */
+export function monitorOn(pane: Pane | undefined, settings: Settings | null | undefined): boolean {
+  if (pane?.protocol !== "ssh") return false;
+  return pane.monitor ?? settings?.remoteMonitor ?? false;
+}
+
+export function setPaneMonitor(paneId: Uuid, on: boolean | null) {
+  patchPane(paneId, { monitor: on });
+}
+
 export function setPaneAutocomplete(paneId: Uuid, on: boolean) {
   patchPane(paneId, { autocomplete: on });
   if (!on) hideSuggest(paneId);
@@ -1654,6 +1666,7 @@ function newPane(paneId: Uuid, target: OpenTarget): Pane {
     command: null,
     lastExit: null,
     autocomplete: true,
+    monitor: null,
     reconnecting: false,
     zmodem: null,
   };

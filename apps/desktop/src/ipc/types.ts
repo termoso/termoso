@@ -99,6 +99,8 @@ export interface Settings {
   confirmCloseTab: boolean;
   confirmPasteMultiline: boolean;
   autocomplete: boolean;
+  /** Resource monitor bar under SSH terminals (CPU, memory, network, disks). */
+  remoteMonitor: boolean;
   /** Install OSC 133 prompt markers into bash / zsh / fish after connecting. */
   shellIntegration: boolean;
   /** Output triggers: regexes watched on every terminal. */
@@ -1940,6 +1942,30 @@ export interface DirEntry {
   name: string;
   dir: boolean;
 }
+
+/** One filesystem in the remote monitor. Sizes in KiB. */
+export interface MonitorDisk {
+  mount: string;
+  totalKb: number;
+  usedKb: number;
+}
+
+/** What one remote-monitor probe measured. Rates are null until two probes exist. */
+export interface MonitorSnapshot {
+  host: string;
+  cpuPercent: number | null;
+  memUsedKb: number;
+  memTotalKb: number;
+  rxBps: number | null;
+  txBps: number | null;
+  uptimeSecs: number;
+  load: [number, number, number] | null;
+  users: string[];
+  disks: MonitorDisk[];
+}
+
+/** `unsupported`: the remote has no /proc (BSD, macOS, network gear). */
+export type MonitorReply = { kind: "ok"; snapshot: MonitorSnapshot } | { kind: "unsupported" };
 
 export type SessionState = "connecting" | "connected";
 
