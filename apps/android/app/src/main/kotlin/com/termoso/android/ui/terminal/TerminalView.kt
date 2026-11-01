@@ -49,6 +49,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.abs
+import androidx.compose.animation.core.AnimationState
+import androidx.compose.animation.core.animateDecay
+import androidx.compose.animation.core.exponentialDecay
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 
 /** Position of a cell under a touch. */
 data class CellPoint(val row: Int, val col: Int)
@@ -118,6 +125,9 @@ fun TerminalView(
         controller.scrollBy(lines, altScreen = false)
         return true
     }
+    // Momentum after a vertical swipe through scrollback.
+    val flingScope = rememberCoroutineScope()
+    var flingJob by remember { mutableStateOf<Job?>(null) }
     // Long-press arrow mode: set by the tap detector, consumed by the drag loop below.
     var arrowGesture by remember { mutableStateOf<ArrowGesture?>(null) }
     var arrowOrigin by remember { mutableStateOf(Offset.Zero) }
@@ -236,6 +246,8 @@ fun TerminalView(
             .pointerInput(session) {
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false)
+                    flingJob?.cancel()
+                    val velocity = VelocityTracker()
                     val g = currentGestures
                     var scrollAcc = 0f
                     var arrowAcc = 0f
@@ -307,6 +319,7 @@ fun TerminalView(
                             }
                             event.changes.forEach { it.consume() }
                         } else if (!multi) {
+                            event.changes.firstOrNull { it.pressed }?.let { velocity.addPosition(it.uptimeMillis, it.position) }
                             val pan = event.calculatePan()
                             scrollAcc += pan.y
                             arrowAcc += pan.x
@@ -337,6 +350,29 @@ fun TerminalView(
                             }
                         }
                         if (event.changes.none { it.pressed }) break
+                    }
+                    // A plain vertical swipe keeps going with momentum, one line per cell height.
+                    if (axis == Axis.VERTICAL && !multi && !dragSelecting && arrowGesture == null &&
+                        currentGrid?.frame?.altScreen != true
+                    ) {
+                        val v = velocity.calculateVelocity().y
+                        val cellH = currentMetrics.height
+                        if (abs(v) > FLING_MIN_VELOCITY && cellH > 0f) {
+                            flingJob = flingScope.launch {
+                                var last = 0f
+                                var acc = 0f
+                                AnimationState(initialValue = 0f, initialVelocity = v)
+                                    .animateDecay(exponentialDecay(frictionMultiplier = 1.4f)) {
+                                        acc += value - last
+                                        last = value
+                                        val lines = (acc / cellH).toInt()
+                                        if (lines != 0) {
+                                            acc -= lines * cellH
+                                            controller.scrollBy(lines, altScreen = false)
+                                        }
+                                    }
+                            }
+                        }
                     }
                     // A long-press released without dragging still selects the word under it.
                     arrowGesture?.let {
@@ -521,3 +557,6 @@ class TerminalController(private val session: TerminalSession) {
         val NONE = KeyMods(ctrl = false, alt = false, shift = false)
     }
 }
+
+/** px/s below which a release is a stop, not a fling. */
+private const val FLING_MIN_VELOCITY = 250f

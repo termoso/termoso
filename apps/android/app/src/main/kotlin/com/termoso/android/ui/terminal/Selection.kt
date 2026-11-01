@@ -148,28 +148,34 @@ internal fun SelectionOverlay(
     fun px(c: CellPoint, right: Boolean) =
         Offset((c.col + if (right) 1 else 0) * cw, (c.row + 1).coerceIn(0, grid.rows) * ch)
 
+    // Each handle owns one end of the selection (anchor or focus) so the ends can
+    // cross without the gesture jumping to the other handle; the shape follows
+    // whichever end is currently first, like the system text selection.
+    val anchorFirst = selection.anchor <= selection.focus
     SelectionHandle(
-        at = px(s, right = false),
+        at = px(selection.anchor, right = !anchorFirst),
         size = handle,
         viewport = viewport,
         color = color,
-        left = true,
-        visible = s.row in 0 until grid.rows,
+        left = anchorFirst,
+        visible = selection.anchor.row in 0 until grid.rows,
+        key = "anchor",
         onDrag = { p ->
             onDragAt(p)
-            onChange(TermSelection(anchor = e, focus = metrics.cellAt(p - Offset(0f, ch / 2), grid)))
+            onChange(TermSelection(anchor = metrics.cellAt(p - Offset(0f, ch / 2), grid), focus = selection.focus))
         },
     )
     SelectionHandle(
-        at = px(e, right = true),
+        at = px(selection.focus, right = anchorFirst),
         size = handle,
         viewport = viewport,
         color = color,
-        left = false,
-        visible = e.row in 0 until grid.rows,
+        left = !anchorFirst,
+        visible = selection.focus.row in 0 until grid.rows,
+        key = "focus",
         onDrag = { p ->
             onDragAt(p)
-            onChange(TermSelection(anchor = s, focus = metrics.cellAt(p - Offset(0f, ch / 2), grid)))
+            onChange(TermSelection(anchor = selection.anchor, focus = metrics.cellAt(p - Offset(0f, ch / 2), grid)))
         },
     )
 
@@ -205,30 +211,38 @@ private fun SelectionHandle(
     color: Color,
     left: Boolean,
     visible: Boolean,
+    key: String,
     onDrag: (Offset) -> Unit,
 ) {
     if (!visible) return
-    val x = (if (left) at.x - size else at.x).coerceIn(0f, maxOf(0, viewport.width - size).toFloat())
+    // No room on its own side of the cell: the knob flips to the other side
+    // (as the system handles do) instead of covering the text or clipping.
+    val flipped = if (left) at.x - size < 0f else at.x + size > viewport.width
+    val drawLeft = left != flipped
+    val x = (if (drawLeft) at.x - size else at.x).coerceIn(0f, maxOf(0, viewport.width - size).toFloat())
     val y = at.y.coerceIn(0f, maxOf(0, viewport.height - size).toFloat())
     val anchor by rememberUpdatedState(at)
+    // The gesture outlives recompositions; always call the latest callback so the
+    // fixed end of the selection follows the text while the view auto-scrolls.
+    val currentOnDrag by rememberUpdatedState(onDrag)
     var finger by remember { mutableStateOf(Offset.Zero) }
     Canvas(
         Modifier
             .offset { IntOffset(x.roundToInt(), y.roundToInt()) }
             .size(with(LocalDensity.current) { size.toDp() })
-            .pointerInput(left) {
+            .pointerInput(key) {
                 detectDragGestures(
                     onDragStart = { finger = anchor },
                     onDrag = { change, delta ->
                         change.consume()
                         finger += delta
-                        onDrag(finger)
+                        currentOnDrag(finger)
                     },
                 )
             },
     ) {
         val r = this.size.width / 2
         drawCircle(color, r, Offset(r, r))
-        drawRect(color, Offset(if (left) r else 0f, 0f), Size(r, r))
+        drawRect(color, Offset(if (drawLeft) r else 0f, 0f), Size(r, r))
     }
 }
