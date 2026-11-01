@@ -6,19 +6,19 @@ GitHub Actions.
 
 ## What a release contains
 
-| Platform | Installers | Updater artifact |
-|---|---|---|
-| Linux | `_amd64.deb` / `.x86_64.rpm` / `_amd64.AppImage` (x86_64), `_arm64.deb` / `.aarch64.rpm` / `_aarch64.AppImage` (64-bit ARM) | `*.AppImage` + `*.AppImage.sig` per architecture |
-| Windows | NSIS `*-setup.exe`, `*.msi` | `*-setup.exe` + `.sig` (preferred), `*.msi` + `.sig` |
-| macOS | `*_aarch64.dmg` (Apple Silicon), `*_x64.dmg` (Intel) | `*_aarch64.app.tar.gz` / `*_x64.app.tar.gz` + `.sig` |
-| Android | `termoso-<version>-{arm64-v8a,armeabi-v7a,x86_64,universal}.apk` | — (no in-app updater on Android; the APKs carry the standard v2/v3 APK signature) |
-| iOS | `termoso-<version>-ios.ipa` (**unsigned**, sideload) | `termoso-altstore.json` — AltStore/SideStore source; the store app signs with the user's Apple ID and refreshes the 7-day profile, see [IOS_SIDELOAD.md](IOS_SIDELOAD.md) |
+| Platform | Installers                                                                                                                  | Updater artifact                                                                                                                                                          |
+| -------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Linux    | `_amd64.deb` / `.x86_64.rpm` / `_amd64.AppImage` (x86_64), `_arm64.deb` / `.aarch64.rpm` / `_aarch64.AppImage` (64-bit ARM) | `*.AppImage` + `*.AppImage.sig` per architecture                                                                                                                          |
+| Windows  | NSIS `*-setup.exe`, `*.msi`                                                                                                 | `*-setup.exe` + `.sig` (preferred), `*.msi` + `.sig`                                                                                                                      |
+| macOS    | `*_aarch64.dmg` (Apple Silicon), `*_x64.dmg` (Intel)                                                                        | `*_aarch64.app.tar.gz` / `*_x64.app.tar.gz` + `.sig`                                                                                                                      |
+| Android  | `termoso-<version>-{arm64-v8a,armeabi-v7a,x86_64,universal}.apk`                                                            | — (no in-app updater on Android; the APKs carry the standard v2/v3 APK signature)                                                                                         |
+| iOS      | `termoso-<version>-ios.ipa` (**unsigned**, sideload)                                                                        | `termoso-altstore.json` — AltStore/SideStore source; the store app signs with the user's Apple ID and refreshes the 7-day profile, see [IOS_SIDELOAD.md](IOS_SIDELOAD.md) |
 
 plus:
 
-* `latest.json` — the updater manifest: version, release notes, publication
+- `latest.json` — the updater manifest: version, release notes, publication
   date and, per platform target, the artifact URL and its signature;
-* `SHA256SUMS.txt` — checksums of every asset above.
+- `SHA256SUMS.txt` — checksums of every asset above.
 
 Signatures are [minisign](https://jedisct1.github.io/minisign/) signatures
 made with the project signing key. The matching public key is compiled into
@@ -28,10 +28,11 @@ compromised web server or mirror cannot push code to users.
 
 ## Cutting a release
 
-1. Bump the version in `apps/desktop/package.json`, the workspace
-   `Cargo.toml` and `MARKETING_VERSION` in `apps/ios/project.yml` (the
-   workflow fails if they differ, or if the tag does not match them). Run
-   `cargo check -p termoso-desktop` so `Cargo.lock` follows.
+1. `scripts/bump-version.sh X.Y.Z` bumps every file the workflow checks:
+   `Cargo.toml` (+ lock), `apps/desktop/package.json`, `web/package.json`,
+   `MARKETING_VERSION` in `apps/ios/project.yml`, the Helm chart and the store
+   manifests under `packaging/` (the workflow fails if any of them differs, or
+   if the tag does not match them).
 2. Merge to `main`, then tag and push:
 
    ```bash
@@ -39,9 +40,10 @@ compromised web server or mirror cannot push code to users.
    git push origin v0.2.0
    ```
 
-   A tag with a pre-release suffix (`v0.2.0-rc.1`) is marked *pre-release*
+   A tag with a pre-release suffix (`v0.2.0-rc.1`) is marked _pre-release_
    and never becomes `releases/latest`, so it is invisible to the default
    updater feed.
+
 3. The workflow builds Linux (x86_64, aarch64), Windows (x86_64, ARM64), macOS (two native builds rather than
    one universal binary: half the download, and the updater picks the right
    one), Android and iOS in parallel, signs the artifacts (except the iOS
@@ -63,17 +65,17 @@ that is how packaging changes are smoke-tested.
 
 ## Secrets
 
-| Secret | Purpose |
-|---|---|
-| `TAURI_SIGNING_PRIVATE_KEY` | minisign private key (contents of the `.key` file) |
-| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | its password |
-| `ANDROID_KEYSTORE_BASE64` | Android release keystore, `base64 -w0 termoso-release.jks` |
-| `ANDROID_KEYSTORE_PASSWORD` | its store password (the single key uses alias `termoso` and the same password) |
-| `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY` | *optional* — Developer ID signing, see [macOS](#macos-signing-and-gatekeeper) |
-| `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` | *optional* — notarization with `notarytool` (app-specific password) |
-| `TERMOSO_REPO_GPG_KEY` | armored RSA signing key for the apt/dnf repositories (no passphrase), see [Package channels](#package-channels) |
-| `TERMOSO_REPO_DEPLOY_KEY`, `HOMEBREW_TAP_DEPLOY_KEY` | write deploy keys (ed25519 private halves) of `termoso/termoso-repo` and `termoso/homebrew-termoso` |
-| `WINGET_TOKEN` | *optional* — GitHub token with `public_repo` for the winget-pkgs fork; without it the winget step is skipped |
+| Secret                                                                      | Purpose                                                                                                         |
+| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `TAURI_SIGNING_PRIVATE_KEY`                                                 | minisign private key (contents of the `.key` file)                                                              |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`                                        | its password                                                                                                    |
+| `ANDROID_KEYSTORE_BASE64`                                                   | Android release keystore, `base64 -w0 termoso-release.jks`                                                      |
+| `ANDROID_KEYSTORE_PASSWORD`                                                 | its store password (the single key uses alias `termoso` and the same password)                                  |
+| `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY` | _optional_ — Developer ID signing, see [macOS](#macos-signing-and-gatekeeper)                                   |
+| `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID`                               | _optional_ — notarization with `notarytool` (app-specific password)                                             |
+| `TERMOSO_REPO_GPG_KEY`                                                      | armored RSA signing key for the apt/dnf repositories (no passphrase), see [Package channels](#package-channels) |
+| `TERMOSO_REPO_DEPLOY_KEY`, `HOMEBREW_TAP_DEPLOY_KEY`                        | write deploy keys (ed25519 private halves) of `termoso/termoso-repo` and `termoso/homebrew-termoso`             |
+| `WINGET_TOKEN`                                                              | _optional_ — GitHub token with `public_repo` for the winget-pkgs fork; without it the winget step is skipped    |
 
 Generate a key pair once with
 
@@ -85,7 +87,7 @@ store the private key and password as repository Actions secrets, keep an
 offline backup (losing the key means shipping a new key and asking every
 user to reinstall), and paste the `.key.pub` contents into
 `plugins.updater.pubkey`. Rotating the key requires one release signed with
-the *old* key whose binary already carries the *new* public key.
+the _old_ key whose binary already carries the _new_ public key.
 
 The Android keystore is created once with
 
@@ -118,8 +120,8 @@ TERMOSO_ANDROID_APP_LINKS="com.termoso.android=AA:BB:…"
 ```
 
 Self-hosted servers are still reachable from the app through the same links:
-the web landing pages (`/invite/<token>`, `/join/<id>#<secret>`) offer *Open in
-Termoso*, which hands the link to the installed app over the `termoso://`
+the web landing pages (`/invite/<token>`, `/join/<id>#<secret>`) offer _Open in
+Termoso_, which hands the link to the installed app over the `termoso://`
 scheme, so App Links are an optimisation, not a requirement.
 
 ## Package channels
@@ -128,11 +130,11 @@ The `distribute` job of `release.yml` runs after `publish` for stable tags
 (no `-` in the tag) and feeds three channels from the assets that were just
 published:
 
-| Channel | Where | How |
-| --- | --- | --- |
+| Channel   | Where                                                                                            | How                                                                                                                                                                                                                                                                         |
+| --------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | apt + dnf | [termoso/termoso-repo](https://github.com/termoso/termoso-repo) → GitHub Pages `pkg.termoso.dev` | `scripts/repo/build.sh` rebuilds `deb/` (apt-ftparchive, `InRelease` + `Release.gpg`) and `rpm/<arch>/` (rpms re-signed with `rpmsign`, `createrepo_c`, `repomd.xml.asc`), keeps the two newest versions in the pools, pushes over the `TERMOSO_REPO_DEPLOY_KEY` deploy key |
-| Homebrew | [termoso/homebrew-termoso](https://github.com/termoso/homebrew-termoso) | `scripts/repo/cask.sh` renders `Casks/termoso.rb` from `SHA256SUMS.txt` (both dmg architectures), pushes over `HOMEBREW_TAP_DEPLOY_KEY` |
-| winget | `microsoft/winget-pkgs`, package `Termoso.Termoso` | [Komac](https://github.com/russellbanks/Komac) `update --submit` opens the version PR from the fork owned by `WINGET_TOKEN`; `continue-on-error`, so a winget hiccup never fails the release |
+| Homebrew  | [termoso/homebrew-termoso](https://github.com/termoso/homebrew-termoso)                          | `scripts/repo/cask.sh` renders `Casks/termoso.rb` from `SHA256SUMS.txt` (both dmg architectures), pushes over `HOMEBREW_TAP_DEPLOY_KEY`                                                                                                                                     |
+| winget    | `microsoft/winget-pkgs`, package `Termoso.Termoso`                                               | [Komac](https://github.com/russellbanks/Komac) `update --submit` opens the version PR from the fork owned by `WINGET_TOKEN`; `continue-on-error`, so a winget hiccup never fails the release                                                                                |
 
 The repositories are signed with the "Termoso Packages <packages@termoso.dev>"
 RSA key held in `TERMOSO_REPO_GPG_KEY`; its public half is served as
@@ -161,34 +163,34 @@ bundler signs the app **ad hoc** (`tauri.macos.conf.json` →
 integrity-sealed, so it runs at all on Apple Silicon (which refuses unsigned
 code), but it carries no Developer ID and is not notarized. Gatekeeper
 therefore blocks the first launch of a downloaded copy with a message such as
-*"Termoso" is damaged and can't be opened* or *Apple could not verify
-"Termoso" is free of malware*. Users clear the quarantine flag once, after
+_"Termoso" is damaged and can't be opened_ or _Apple could not verify
+"Termoso" is free of malware_. Users clear the quarantine flag once, after
 dragging the app to Applications:
 
 ```bash
 xattr -cr /Applications/Termoso.app
 ```
 
-(or right-click → *Open*, and on macOS 15+ confirm in System Settings →
-Privacy & Security → *Open Anyway*). The release notes generated by the
+(or right-click → _Open_, and on macOS 15+ confirm in System Settings →
+Privacy & Security → _Open Anyway_). The release notes generated by the
 workflow say the same. This is a one-time step per download; in-app updates
 extract the new bundle themselves, so they do not pick up the quarantine
 attribute that browsers attach. Because an ad-hoc signature identifies a
 specific build rather than a developer, macOS treats each update as a new
 application for Keychain purposes and may ask once more to allow Termoso to
-read its master key (*Always Allow*).
+read its master key (_Always Allow_).
 
 To ship builds that open without any of that, add the optional secrets and
 the same workflow signs with a Developer ID and notarizes:
 
-| Secret | Value |
-|---|---|
-| `APPLE_CERTIFICATE` | the *Developer ID Application* certificate exported from Keychain Access as `.p12`, then `base64 -i cert.p12 \| pbcopy` |
-| `APPLE_CERTIFICATE_PASSWORD` | the password chosen at export |
-| `APPLE_SIGNING_IDENTITY` | the certificate name, e.g. `Developer ID Application: Jane Doe (TEAMID1234)` |
-| `APPLE_ID` | the Apple ID e-mail of the developer account |
-| `APPLE_PASSWORD` | an [app-specific password](https://support.apple.com/102654) for that Apple ID |
-| `APPLE_TEAM_ID` | the 10-character team ID from the developer portal |
+| Secret                       | Value                                                                                                                   |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `APPLE_CERTIFICATE`          | the _Developer ID Application_ certificate exported from Keychain Access as `.p12`, then `base64 -i cert.p12 \| pbcopy` |
+| `APPLE_CERTIFICATE_PASSWORD` | the password chosen at export                                                                                           |
+| `APPLE_SIGNING_IDENTITY`     | the certificate name, e.g. `Developer ID Application: Jane Doe (TEAMID1234)`                                            |
+| `APPLE_ID`                   | the Apple ID e-mail of the developer account                                                                            |
+| `APPLE_PASSWORD`             | an [app-specific password](https://support.apple.com/102654) for that Apple ID                                          |
+| `APPLE_TEAM_ID`              | the 10-character team ID from the developer portal                                                                      |
 
 `APPLE_SIGNING_IDENTITY` overrides the ad-hoc identity from the config; the
 notarization trio is only used when all three are present (signing without
@@ -202,17 +204,17 @@ installed) cross-builds the Intel one on an Apple Silicon machine.
 
 ## How the updater behaves
 
-* **Off by default.** The app never contacts any server unless the user
-  clicks *Check for updates* or turns on *Check on startup* in Settings →
+- **Off by default.** The app never contacts any server unless the user
+  clicks _Check for updates_ or turns on _Check on startup_ in Settings →
   Updates. There is no background polling and no telemetry of any kind in the
   request — it is a plain `GET` of `latest.json`.
-* **Explicit install.** A found update is shown with its notes; download and
+- **Explicit install.** A found update is shown with its notes; download and
   installation start only when the user asks, and the app restarts only when
   the user confirms.
-* **Verified.** The downloaded artifact must carry a valid signature for the
+- **Verified.** The downloaded artifact must carry a valid signature for the
   embedded public key, and the feed URL must be `https://` — anything else is
   rejected before a request is made.
-* **Rust-owned.** Checking, downloading and verification live in
+- **Rust-owned.** Checking, downloading and verification live in
   `apps/desktop/src-tauri/src/update.rs`; the webview only renders progress and
   metadata and never sees keys or artifact bytes.
 
@@ -226,7 +228,7 @@ To keep updates entirely on infrastructure you control:
    runs `termoso-server`, an S3 bucket, nginx — anything that serves files).
 2. Rewrite the `url` fields inside `latest.json` to point at your copies.
    Signatures stay as they are: they cover the artifact bytes, not the URL.
-3. In the app, Settings → Updates → *Release feed*, enter the URL of your
+3. In the app, Settings → Updates → _Release feed_, enter the URL of your
    `latest.json`. Every device using that feed now updates only from your
    server, still verifying against the project public key.
 
@@ -267,6 +269,6 @@ Clients of a fork trust the fork's key only.
 `deploy/Dockerfile.backup` pins `postgresql-client-18` and the Compose stack
 runs `postgres:18`; `pg_dump`/`pg_restore` must be at least the server's
 major. When the stack moves to a new PostgreSQL major, bump both in the same
-release, note in the changelog that operators restore *old* dumps with the
-*new* image (allowed), and run `deploy/restore-test.sh` against a dump taken
+release, note in the changelog that operators restore _old_ dumps with the
+_new_ image (allowed), and run `deploy/restore-test.sh` against a dump taken
 on the previous major before tagging.

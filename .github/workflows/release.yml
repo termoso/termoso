@@ -75,9 +75,21 @@ jobs:
           snap=$(sed -n 's/^version: "\(.*\)"/\1/p' packaging/snap/snapcraft.yaml)
           scoop=$(node -p "require('./packaging/scoop/termoso.json').version")
           fdroid=$(sed -n 's/^CurrentVersion: \(.*\)/\1/p' packaging/fdroid/com.termoso.android.yml)
-          flatpak=$(sed -n 's|.*/archive/refs/tags/v\(.*\)\.tar\.gz|\1|p' packaging/flatpak/com.termoso.Termoso.yml)
-          for pair in "deploy/helm/termoso/Chart.yaml=$chart" "packaging/snap/snapcraft.yaml=$snap" "packaging/scoop/termoso.json=$scoop" "packaging/fdroid/com.termoso.android.yml=$fdroid" "packaging/flatpak/com.termoso.Termoso.yml=$flatpak"; do
+          flatpak=$(sed -n 's|.*/archive/refs/tags/v\(.*\)\.tar\.gz|\1|p' packaging/flatpak/dev.termoso.Termoso.yml)
+          for pair in "deploy/helm/termoso/Chart.yaml=$chart" "packaging/snap/snapcraft.yaml=$snap" "packaging/scoop/termoso.json=$scoop" "packaging/fdroid/com.termoso.android.yml=$fdroid" "packaging/flatpak/dev.termoso.Termoso.yml=$flatpak"; do
             [ "${pair#*=}" = "$ws" ] || { echo "::error::${pair%%=*} carries version ${pair#*=}, Cargo.toml has $ws"; exit 1; }
+          done
+          # The version field alone is not enough: download URLs, the F-Droid
+          # build list and the AppStream release list carry it too.
+          grep -q "releases/download/v$ws/Termoso_${ws}_x64-setup.exe" packaging/scoop/termoso.json \
+            || { echo "::error::packaging/scoop/termoso.json download URLs are not at $ws"; exit 1; }
+          grep -q "^  - versionName: $ws\$" packaging/fdroid/com.termoso.android.yml \
+            || { echo "::error::packaging/fdroid/com.termoso.android.yml has no Builds entry for $ws"; exit 1; }
+          grep -q "<release version=\"$ws\"" packaging/flatpak/dev.termoso.Termoso.metainfo.xml \
+            || { echo "::error::metainfo.xml has no <release> for $ws"; exit 1; }
+          lic=$(sed -n 's/^license = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          for f in packaging/snap/snapcraft.yaml packaging/scoop/termoso.json packaging/fdroid/com.termoso.android.yml packaging/flatpak/dev.termoso.Termoso.metainfo.xml; do
+            grep -q "$lic" "$f" || { echo "::error::$f does not carry the $lic license"; exit 1; }
           done
           if [ "$GITHUB_REF_TYPE" = tag ]; then
             [ "$GITHUB_REF_NAME" = "v$pkg" ] || { echo "::error::tag $GITHUB_REF_NAME does not match version $pkg"; exit 1; }
