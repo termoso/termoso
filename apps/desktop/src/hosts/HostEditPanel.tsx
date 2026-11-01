@@ -74,6 +74,7 @@ import { ChainDialog, ProxyDialog } from "./HostAdvancedDialogs";
 import { ConnectedNowCard, useVaultPresence } from "./PresenceViews";
 import { tr, trn, msg } from "@/i18n";
 import { requirePerm } from "@/team/perms";
+import { LocalCopiesSection } from "./LocalCopiesSection";
 
 const IP_VERSIONS: { value: IpVersion; label: string }[] = [
   { value: "auto", label: msg("Auto") },
@@ -1125,6 +1126,7 @@ function HostEditor({
               onClick={() => set("webdav", emptyWebDav())}
             />
           )}
+          {id !== null && !readOnly && <LocalCopiesSection hostId={id} />}
         </Box>
 
         <TagsPopover

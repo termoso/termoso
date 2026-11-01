@@ -13,9 +13,11 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use termoso_core::error::CoreError;
+use termoso_core::offline_fs::{CacheTarget, CachingFs, OfflineFs};
 use termoso_core::remote::{RemoteCapabilities, RemoteFs, RemoteProtocol, relay_file};
 use termoso_core::sftp::{EntryKind, Progress, RemoteEntry, Sftp, TransferOptions};
 use termoso_core::ssh::SshClient;
+use termoso_proto::entities::payload::Host;
 use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
@@ -52,6 +54,8 @@ pub enum SftpTarget {
         #[serde(default)]
         vault_id: Option<Uuid>,
     },
+    /// Browse the offline copies of a saved host (read-only, no connection).
+    Offline { host_id: Uuid },
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -464,7 +468,57 @@ async fn connect<R: Runtime>(
                 keepalive: Vec::new(),
             })
         }
+        SftpTarget::Offline { host_id } => {
+            let store = state.store()?;
+            let host = store.require::<Host>(*host_id)?;
+            if !CacheTarget::has_copies(&store, *host_id) {
+                return Err(DesktopError::not_found("no offline copies for this host"));
+            }
+            Ok(Connected {
+                title: format!("{} (offline)", host.data.label),
+                display: host.data.address.clone(),
+                host_id: Some(*host_id),
+                fs: Arc::new(OfflineFs::new(store, *host_id)),
+                keepalive: Vec::new(),
+            })
+        }
     }
+    .map(|conn| with_cache(state.inner(), conn))
+}
+
+/// Route reads through the offline cache when the host keeps local copies.
+fn with_cache(state: &AppState, mut conn: Connected) -> Connected {
+    let Some(host_id) = conn.host_id else {
+        return conn;
+    };
+    if conn.fs.protocol() == RemoteProtocol::Sftp && conn.fs.capabilities() == OfflineFs::caps() {
+        return conn; // already offline
+    }
+    let Ok(store) = state.store() else {
+        return conn;
+    };
+    let Ok(Some(host)) = store.get::<Host>(host_id) else {
+        return conn;
+    };
+    if let Some(cache) = CacheTarget::for_host(
+        store,
+        host_id,
+        host.vault_id,
+        state.profile_dir.join(FCACHE_DIR),
+    ) {
+        conn.fs = Arc::new(CachingFs::new(conn.fs, cache));
+    }
+    conn
+}
+
+/// Encrypted offline copies live next to the session logs.
+pub const FCACHE_DIR: &str = "fcache";
+
+/// Whether the SFTP pane can offer "Browse local copies" for a host.
+pub fn offline_available(state: &AppState, host_id: Uuid) -> bool {
+    state
+        .store()
+        .is_ok_and(|s| CacheTarget::has_copies(&s, host_id))
 }
 
 /// Drop every transfer (running ones are interrupted, paused ones

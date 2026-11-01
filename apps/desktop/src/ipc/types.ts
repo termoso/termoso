@@ -2185,7 +2185,33 @@ export interface Listing {
 export type SftpTarget =
   | { kind: "host"; host_id: Uuid; vault_id?: Uuid | null; sudo_password?: string | null }
   | { kind: "session"; session_id: Uuid }
-  | { kind: "webdav"; host_id: Uuid; vault_id?: Uuid | null };
+  | { kind: "webdav"; host_id: Uuid; vault_id?: Uuid | null }
+  /** Read-only view of the host's offline copies; no connection is made. */
+  | { kind: "offline"; host_id: Uuid };
+
+/** Per-host offline-copy settings (device-local). */
+export interface FileCacheSettings {
+  /** False when the team policy forbids offline copies for this host. */
+  allowed: boolean;
+  enabled: boolean;
+  maxFileMib: number;
+  maxTotalMib: number;
+  includePaths: string[];
+  excludePaths: string[];
+}
+
+export interface FileCacheHost {
+  hostId: Uuid;
+  label: string;
+  files: number;
+  bytes: number;
+}
+
+export interface FileCacheOverview {
+  files: number;
+  bytes: number;
+  hosts: FileCacheHost[];
+}
 
 export type RemoteProtocol = "sftp" | "webdav";
 

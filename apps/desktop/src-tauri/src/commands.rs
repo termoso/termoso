@@ -585,6 +585,122 @@ pub async fn sftp_close<R: Runtime>(app: AppHandle<R>, id: Uuid) -> Result<()> {
     sftp::close(&app, id).await
 }
 
+/// True when the host has offline copies to browse.
+#[tauri::command]
+pub fn sftp_offline_available(state: State<'_, AppState>, host_id: Uuid) -> bool {
+    sftp::offline_available(&state, host_id)
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileCacheSettings {
+    /// False when the team policy forbids offline copies for this host.
+    pub allowed: bool,
+    pub enabled: bool,
+    pub max_file_mib: u32,
+    pub max_total_mib: u32,
+    pub include_paths: Vec<String>,
+    pub exclude_paths: Vec<String>,
+}
+
+const MIB: u64 = 1024 * 1024;
+
+#[tauri::command]
+pub fn file_cache_settings(state: State<'_, AppState>, host_id: Uuid) -> Result<FileCacheSettings> {
+    let store = state.store()?;
+    let cfg = store.file_cache_config(host_id)?;
+    let allowed = store
+        .get::<termoso_proto::entities::payload::Host>(host_id)?
+        .is_none_or(|h| !termoso_core::policy::offline_cache_denied(&store, h.vault_id));
+    Ok(FileCacheSettings {
+        allowed,
+        enabled: cfg.enabled && allowed,
+        max_file_mib: (cfg.max_file_bytes / MIB) as u32,
+        max_total_mib: (cfg.max_total_bytes / MIB) as u32,
+        include_paths: cfg.include_paths,
+        exclude_paths: cfg.exclude_paths,
+    })
+}
+
+#[tauri::command]
+pub fn set_file_cache_settings(
+    state: State<'_, AppState>,
+    host_id: Uuid,
+    settings: FileCacheSettings,
+) -> Result<()> {
+    let store = state.store()?;
+    if settings.enabled
+        && let Some(h) = store.get::<termoso_proto::entities::payload::Host>(host_id)?
+        && termoso_core::policy::offline_cache_denied(&store, h.vault_id)
+    {
+        return Err(DesktopError::invalid(
+            "team policy forbids offline copies of files from this host",
+        ));
+    }
+    let current = store.file_cache_config(host_id)?;
+    let cfg = termoso_core::store::FileCacheConfig {
+        enabled: settings.enabled,
+        max_file_bytes: u64::from(settings.max_file_mib.max(1)) * MIB,
+        max_total_bytes: u64::from(settings.max_total_mib.max(1)) * MIB,
+        include_paths: settings.include_paths,
+        exclude_paths: settings.exclude_paths,
+        saf_offline: current.saf_offline,
+    };
+    Ok(store.set_file_cache_config(host_id, &cfg)?)
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileCacheHost {
+    pub host_id: Uuid,
+    pub label: String,
+    pub files: u64,
+    pub bytes: u64,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileCacheOverview {
+    pub files: u64,
+    pub bytes: u64,
+    pub hosts: Vec<FileCacheHost>,
+}
+
+#[tauri::command]
+pub fn file_cache_overview(state: State<'_, AppState>) -> Result<FileCacheOverview> {
+    let store = state.store()?;
+    let total = store.file_cache_usage(None)?;
+    let mut hosts = Vec::new();
+    for (id, u) in store.file_cache_hosts()? {
+        let label = store
+            .get::<termoso_proto::entities::payload::Host>(id)?
+            .map(|h| h.data.label.clone())
+            .unwrap_or_default();
+        hosts.push(FileCacheHost {
+            host_id: id,
+            label,
+            files: u.files,
+            bytes: u.bytes,
+        });
+    }
+    Ok(FileCacheOverview {
+        files: total.files,
+        bytes: total.bytes,
+        hosts,
+    })
+}
+
+/// Drop the copies of one host, or of all hosts (`None`).
+#[tauri::command]
+pub fn clear_file_cache(state: State<'_, AppState>, host_id: Option<Uuid>) -> Result<u64> {
+    let store = state.store()?;
+    let n = store.clear_file_cache(host_id)?;
+    if host_id.is_none() {
+        let _ = std::fs::remove_dir_all(state.profile_dir.join(sftp::FCACHE_DIR));
+    }
+    Ok(n)
+}
+
 #[tauri::command]
 pub async fn sftp_list(
     state: State<'_, AppState>,

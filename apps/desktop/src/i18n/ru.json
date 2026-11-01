@@ -2827,5 +2827,15 @@
   "↑↓ select": "↑↓ выбор",
   "✓ I have stored it safely": "✓ Я надёжно сохранил",
   "No offline file copies": "Без офлайн-копий файлов",
-  "Members cannot keep local copies of files read from team hosts for offline browsing; existing copies are removed on the next sync.": "Участники не могут хранить локальные копии файлов с хостов команды для офлайн-просмотра; существующие копии удаляются при следующей синхронизации."
+  "Members cannot keep local copies of files read from team hosts for offline browsing; existing copies are removed on the next sync.": "Участники не могут хранить локальные копии файлов с хостов команды для офлайн-просмотра; существующие копии удаляются при следующей синхронизации.",
+  "Browse local copies": "Просмотреть локальные копии",
+  "Local copies": "Локальные копии",
+  "Keep local copies": "Хранить локальные копии",
+  "Files you open are kept encrypted on this device and can be browsed when the host is unreachable.": "Открытые файлы сохраняются на этом устройстве в зашифрованном виде и доступны, когда хост недоступен.",
+  "Max file size (MiB)": "Макс. размер файла (МиБ)",
+  "Total size limit (MiB)": "Общий лимит (МиБ)",
+  "Only these paths (comma-separated, empty = all)": "Только эти пути (через запятую, пусто = все)",
+  "Never these paths": "Никогда эти пути",
+  "{files} files from {hosts} hosts, {size}": "{files} файлов с {hosts} хостов, {size}",
+  "Encrypted offline copies of remote files. Turn them on per host under Files.": "Зашифрованные офлайн-копии удалённых файлов. Включаются для каждого хоста в его настройках."
 }

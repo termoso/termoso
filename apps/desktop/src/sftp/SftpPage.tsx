@@ -56,6 +56,7 @@ import {
   openSftpForHost,
   openSftpForHostAsRoot,
   openSftpForSession,
+  openSftpOffline,
   openWebDavForHost,
   reconnectSftp,
   setActiveSftp,
@@ -67,6 +68,7 @@ import {
   useSftp,
 } from "./store";
 import { tr } from "@/i18n";
+import { skipToken, useQuery } from "@tanstack/react-query";
 
 interface Planned {
   entry: FsEntry;
@@ -370,6 +372,7 @@ export function SftpPage() {
         </PaneFrame>
       );
     }
+    const hid = conn?.hostId ?? null;
     return (
       <PaneFrame title={picking ? tr("Remote") : conn?.title} menu={menu}>
         <RemotePlaceholder
@@ -378,6 +381,15 @@ export function SftpPage() {
           webdav={conn?.target.kind === "webdav"}
           message={picking ? null : (conn?.message ?? null)}
           onRetry={conn && !picking ? () => reconnectSftp(conn.id) : undefined}
+          onBrowseOffline={
+            conn && !picking && hid && conn.target.kind !== "offline"
+              ? () => {
+                  void closeSftp(conn.id);
+                  openSftpOffline(hid, conn.title, pane);
+                }
+              : undefined
+          }
+          hostId={conn && !picking ? conn.hostId : null}
         />
       </PaneFrame>
     );
@@ -539,13 +551,24 @@ function RemotePlaceholder({
   webdav,
   message,
   onRetry,
+  onBrowseOffline,
+  hostId,
 }: {
   side: PaneKey;
   status: "connecting" | "open" | "error" | "closed" | null;
   webdav?: boolean;
   message: string | null;
   onRetry?: () => void;
+  onBrowseOffline?: () => void;
+  hostId?: Uuid | null;
 }) {
+  const offline = useQuery({
+    queryKey: ["sftpOffline", hostId],
+    queryFn:
+      hostId && (status === "error" || status === "closed")
+        ? () => ipc.sftpOfflineAvailable(hostId)
+        : skipToken,
+  });
   return (
     <Stack
       spacing={1.5}
@@ -574,6 +597,11 @@ function RemotePlaceholder({
           {onRetry && (status === "error" || status === "closed") && (
             <Button startIcon={<ReplayRoundedIcon />} onClick={onRetry}>
               {tr("Retry")}
+            </Button>
+          )}
+          {onBrowseOffline && offline.data && (status === "error" || status === "closed") && (
+            <Button size="small" onClick={onBrowseOffline}>
+              {tr("Browse local copies")}
             </Button>
           )}
           {side === "left" && (

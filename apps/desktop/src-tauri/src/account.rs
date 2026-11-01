@@ -850,6 +850,10 @@ pub async fn sign_out<R: Runtime>(app: &AppHandle<R>) -> Result<()> {
     };
     core::sign_out(&api, &*state.store()?).await?;
     crate::avatars::clear_cache(&state);
+    if let Ok(store) = state.store() {
+        let _ = store.clear_file_cache(None);
+    }
+    let _ = std::fs::remove_dir_all(state.profile_dir.join(crate::sftp::FCACHE_DIR));
     state.account.update_status(|s| *s = SyncStatus::default());
     let _ = app.emit(SYNC_EVENT, SyncNotice::SignedOut);
     Ok(())
