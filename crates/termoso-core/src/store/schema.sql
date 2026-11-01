@@ -89,3 +89,26 @@ CREATE TABLE IF NOT EXISTS session_logs (
     note         TEXT NOT NULL DEFAULT '',
     note_by      TEXT
 );
+
+-- Offline copies of remote files (SFTP). Content is an encrypted file on
+-- disk (vault key, AAD termoso/v1/fcache/<host>/<path>); the index below is
+-- device-local and never synced. Populated only when a file is read.
+CREATE TABLE IF NOT EXISTS file_cache_config (
+    host_id      TEXT PRIMARY KEY,
+    config       TEXT NOT NULL                -- JSON FileCacheConfig
+);
+
+CREATE TABLE IF NOT EXISTS file_cache (
+    host_id      TEXT NOT NULL,
+    vault_id     TEXT NOT NULL REFERENCES vaults(id) ON DELETE CASCADE,
+    path         TEXT NOT NULL,
+    kind         TEXT NOT NULL,               -- file | dir
+    size         INTEGER NOT NULL,            -- remote size (file) / entry count (dir)
+    mtime        INTEGER,                     -- remote mtime, unix seconds
+    cached_at    TEXT NOT NULL,
+    last_used    TEXT NOT NULL,
+    local_path   TEXT NOT NULL,               -- encrypted body on disk
+    bytes        INTEGER NOT NULL,            -- size of the encrypted body
+    PRIMARY KEY (host_id, path)
+);
+CREATE INDEX IF NOT EXISTS file_cache_lru ON file_cache(host_id, last_used);
