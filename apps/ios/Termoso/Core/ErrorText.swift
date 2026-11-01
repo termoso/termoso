@@ -19,6 +19,8 @@ extension MobileError {
             return "Cancelled"
         case .Closed:
             return "Connection closed"
+        case .ReadOnlyOffline:
+            return "Read-only while offline"
         case .ReauthRequired:
             return "Please sign in again"
         case let .Other(kind, detail):
