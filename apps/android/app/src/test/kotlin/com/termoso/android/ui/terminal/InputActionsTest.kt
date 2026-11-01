@@ -17,7 +17,7 @@ class InputActionsTest : ResourceTest() {
         val k = KeyActions.parse("ctrl+shift+key:tab") as PanelKey.Special
         assertEquals(SpecialKey.TAB, k.key)
         assertTrue(k.mods.ctrl && k.mods.shift && !k.mods.alt)
-        assertEquals("^⇧Tab", k.label)
+        assertEquals("^shift+tab", k.label)
         assertEquals("ctrl+shift+key:TAB", KeyActions.encode(k))
     }
 
@@ -64,10 +64,10 @@ class InputActionsTest : ResourceTest() {
     @Test
     fun defaultRowsMatchTheFormerStaticPanel() {
         val rows = KeyGroups.rows(emptyList())
-        assertEquals(7, rows.size)
-        assertEquals(listOf("←", "↑", "↓", "→", "Alt", "Tab", "Insert", "Delete"), rows[0].map { it.label })
-        assertEquals(listOf("F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12"), rows[5].map { it.label })
-        assertTrue(rows[6].all { it.label.startsWith("^B") })
+        assertEquals(8, rows.size)
+        assertEquals(listOf("shift+tab", "esc", "ctrl", "←", "↑", "↓", "→"), rows[0].map { it.label })
+        assertTrue(rows[1].all { it.label.startsWith("ctrl+B") })
+        assertEquals(listOf("F9", "F10", "F11", "F12"), rows[7].map { it.label })
         assertEquals(KeyGroups.defaults, KeyGroups.editable(emptyList()))
     }
 
@@ -80,7 +80,7 @@ class InputActionsTest : ResourceTest() {
         )
         val rows = KeyGroups.rows(stored)
         assertEquals(1, rows.size)
-        assertEquals(listOf("Esc"), rows[0].map { it.label })
+        assertEquals(listOf("esc"), rows[0].map { it.label })
         assertEquals(stored, KeyGroups.editable(stored))
     }
 
@@ -100,7 +100,7 @@ class InputActionsTest : ResourceTest() {
         assertEquals(InputAction.Ui(UiAction.FONT_UP), InputAction.parse("font_up"))
         assertEquals("scroll_down", InputAction.encode(InputAction.Ui(UiAction.SCROLL_DOWN)))
         val esc = InputAction.parse("key:ESCAPE") as InputAction.Key
-        assertEquals("Esc", InputAction.title(esc))
+        assertEquals("esc", InputAction.title(esc))
         assertEquals("key:ESCAPE", InputAction.encode(esc))
         assertEquals(InputAction.Disabled, InputAction.choices.first())
         assertEquals(InputAction.choices.size, InputAction.choices.distinct().size)
