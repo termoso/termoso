@@ -31,7 +31,19 @@ export function ConfirmDialog({
   onConfirm,
 }: Props) {
   return (
-    <Dialog open={open} onClose={busy ? undefined : onCancel} maxWidth="xs" fullWidth>
+    <Dialog
+      open={open}
+      onClose={busy ? undefined : onCancel}
+      maxWidth="xs"
+      fullWidth
+      onKeyDown={(e) => {
+        // Enter confirms from anywhere in the dialog (focus may sit on the text).
+        if (e.key === "Enter" && !busy && !(e.target instanceof HTMLTextAreaElement)) {
+          e.preventDefault();
+          onConfirm();
+        }
+      }}
+    >
       <DialogTitle>{title}</DialogTitle>
       <DialogContent>
         <DialogContentText component="div">{children}</DialogContentText>
@@ -45,6 +57,7 @@ export function ConfirmDialog({
           variant="contained"
           color={danger ? "error" : "primary"}
           disabled={busy}
+          autoFocus
         >
           {confirmLabel}
         </Button>
