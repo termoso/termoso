@@ -27,9 +27,15 @@ import com.termoso.android.service.SessionService
 import com.termoso.android.ui.TermosoRoot
 import com.termoso.android.ui.keychain.LocalFido2
 import com.termoso.android.ui.theme.TermosoTheme
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /** [FragmentActivity] rather than ComponentActivity because BiometricPrompt hosts a fragment. */
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class MainActivity : FragmentActivity() {
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(AppLanguage.wrap(newBase))
@@ -39,9 +45,13 @@ class MainActivity : FragmentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         val container = (application as TermosoApplication).container
-        // With app lock on, keep terminal contents out of Recents thumbnails and screen capture.
+        // With app lock on, keep terminal contents out of Recents thumbnails and
+        // screen capture unless Settings → Security → Allow screenshots says otherwise.
         lifecycleScope.launch {
-            container.appLock.collect { secure ->
+            val allowScreenshots = container.vault.flatMapLatest { state ->
+                (state as? VaultState.Open)?.repo?.settings?.map { it.allowScreenshots } ?: flowOf(false)
+            }
+            combine(container.appLock, allowScreenshots) { lock, allow -> lock && !allow }.distinctUntilChanged().collect { secure ->
                 if (secure) {
                     window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
                 } else {

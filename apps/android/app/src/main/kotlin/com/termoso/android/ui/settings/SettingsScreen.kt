@@ -364,6 +364,14 @@ fun SettingsScreen(
                     onCheckedChange = { v -> set { it.copy(lockOnBackground = v) } },
                 )
                 RowDivider()
+                SwitchRow(
+                    title = stringResource(R.string.allow_screenshots),
+                    subtitle = stringResource(R.string.allow_screenshots_hint),
+                    checked = !appLock || settings.allowScreenshots,
+                    enabled = appLock,
+                    onCheckedChange = { v -> set { it.copy(allowScreenshots = v) } },
+                )
+                RowDivider()
                 ChevronRow(
                     title = stringResource(R.string.lock_after),
                     badge = lockDelays.firstOrNull { it.first == settings.lockAfterSeconds }?.let { stringResource(it.second) } ?: stringResource(R.string.n_seconds_short, settings.lockAfterSeconds.toLong()),
