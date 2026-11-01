@@ -295,11 +295,54 @@ fn ip_version_of(stored: &str) -> String {
     }
 }
 
-fn clean_icon(icon: &Option<String>) -> Option<String> {
-    icon.as_deref()
+const MAX_CUSTOM_ICON_DATA_LENGTH: usize = 32 * 1024;
+
+fn valid_custom_icon(value: &str) -> bool {
+    let Some(data_url) = value.strip_prefix("custom:data:") else {
+        return false;
+    };
+    if data_url.len() > MAX_CUSTOM_ICON_DATA_LENGTH {
+        return false;
+    }
+    let Some((header, payload)) = data_url.split_once(',') else {
+        return false;
+    };
+    let Some(mime) = header
+        .strip_prefix("data:")
+        .and_then(|h| h.strip_suffix(";base64"))
+    else {
+        return false;
+    };
+    if !matches!(
+        mime.to_ascii_lowercase().as_str(),
+        "image/png"
+            | "image/jpeg"
+            | "image/gif"
+            | "image/webp"
+            | "image/svg+xml"
+            | "image/x-icon"
+            | "image/avif"
+    ) {
+        return false;
+    }
+    !payload.is_empty()
+        && payload
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'+' | b'/' | b'='))
+}
+
+fn clean_icon(icon: &Option<String>) -> Result<Option<String>> {
+    let value = icon
+        .as_deref()
         .map(str::trim)
-        .filter(|s| !s.is_empty() && *s != "auto")
-        .map(str::to_string)
+        .filter(|s| !s.is_empty() && *s != "auto");
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    if value.starts_with("custom:") && !valid_custom_icon(value) {
+        return Err(ClientError::invalid("invalid custom icon"));
+    }
+    Ok(Some(value.to_string()))
 }
 
 /// Empty / whitespace scheme ids mean "follow the app setting".
@@ -1166,7 +1209,7 @@ pub fn save(store: &Store, f: &HostForm) -> Result<HostCard> {
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .map(str::to_string);
-    host.icon = clean_icon(&f.icon);
+    host.icon = clean_icon(&f.icon)?;
     host.backspace = clean_scheme(&f.backspace);
     host.ip_version = match f.ip_version.as_str() {
         "4" | "6" => f.ip_version.clone(),
@@ -1637,7 +1680,7 @@ pub fn save_group_form(store: &Store, f: &GroupForm) -> Result<GroupNode> {
         .unwrap_or_default();
     data.label = label.to_string();
     data.parent_id = f.parent_id;
-    data.icon = clean_icon(&f.icon);
+    data.icon = clean_icon(&f.icon)?;
     data.ssh_config_id = ssh_config_id;
     let gid = match &existing {
         Some(e) => {
@@ -2701,6 +2744,42 @@ mod tests {
         let mut f = group_form(&s, g.id).unwrap();
         f.icon = Some("auto".into());
         assert_eq!(save_group_form(&s, &f).unwrap().icon, None);
+    }
+
+    #[test]
+    fn custom_icons_round_trip_and_reject_invalid_values() {
+        let s = store();
+        let vault = s.local_vault().unwrap().id;
+        let mut host = new_form(vault);
+        host.icon = Some("custom:data:data:image/png;base64,AAECAw==".into());
+        let card = save(&s, &host).unwrap();
+        assert_eq!(
+            form(&s, card.id).unwrap().icon.as_deref(),
+            Some("custom:data:data:image/png;base64,AAECAw==")
+        );
+
+        host.icon = Some("custom:data:data:image/png;base64,AAECAw==".into());
+        assert_eq!(
+            save(&s, &host).unwrap().icon.as_deref(),
+            Some("custom:data:data:image/png;base64,AAECAw==")
+        );
+        host.icon = Some("custom:unsupported:https://example.com/server.png".into());
+        assert!(save(&s, &host).is_err());
+        host.icon = Some(format!(
+            "custom:data:data:image/png;base64,{}",
+            "A".repeat(32 * 1024)
+        ));
+        assert!(save(&s, &host).is_err());
+        host.icon = Some("custom:data:data:text/html;base64,PGh0bWw+".into());
+        assert!(save(&s, &host).is_err());
+
+        let group = save_group(&s, vault, None, "custom", None).unwrap();
+        let mut group_form = group_form(&s, group.id).unwrap();
+        group_form.icon = Some("custom:data:data:image/png;base64,AAECAw==".into());
+        assert_eq!(
+            save_group_form(&s, &group_form).unwrap().icon.as_deref(),
+            Some("custom:data:data:image/png;base64,AAECAw==")
+        );
     }
 
     #[test]

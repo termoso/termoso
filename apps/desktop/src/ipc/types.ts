@@ -428,7 +428,7 @@ export interface HostCard {
   useMosh: boolean;
   tags: string[];
   osName: string | null;
-  /** User-chosen icon id; overrides `osName` for display. */
+  /** User-chosen icon id or `custom:data:`; overrides `osName`. */
   icon: string | null;
   ipVersion: IpVersion;
   notes: string;
@@ -464,7 +464,7 @@ export interface HostForm {
   tagIds: Uuid[];
   notes: string;
   osName: string | null;
-  /** User-chosen icon id; null follows OS detection. */
+  /** User-chosen icon id or `custom:data:`; null follows OS detection. */
   icon: string | null;
   ipVersion: IpVersion;
   agentForwarding: boolean;
@@ -749,7 +749,7 @@ export interface GroupNode {
   hostCount: number;
   groupCount: number;
   hasConfig: boolean;
-  /** User-chosen icon id; null shows the default folder. */
+  /** User-chosen icon id or `custom:data:`; null shows the default folder. */
   icon: string | null;
 }
 
@@ -759,7 +759,7 @@ export interface GroupForm {
   vaultId: Uuid;
   label: string;
   parentId: Uuid | null;
-  /** User-chosen icon id; null shows the default folder. */
+  /** User-chosen icon id or `custom:data:`; null shows the default folder. */
   icon: string | null;
   port: number | null;
   username: string;
