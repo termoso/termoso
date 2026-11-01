@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import com.termoso.core.terminalThemes
+import com.termoso.core.FileCacheSettings
 
 /** [WebDavDraft.auth] values, as the store spells them. */
 const val WEBDAV_AUTH_PASSWORD = "password"
@@ -107,6 +108,8 @@ data class HostEditorState(
     val saved: Boolean = false,
     /** Id of the host just written by [HostEditorViewModel.save], for "save, then connect" flows. */
     val savedId: String? = null,
+    /** Offline-copy settings (device-local, saved with the host); null until loaded. */
+    val fileCache: FileCacheSettings? = null,
     val error: String? = null,
     /** Leaf SHA-256 of the WebDAV client certificate typed into the form, once it validated. */
     val clientCertificateFingerprint: String? = null,
@@ -130,6 +133,16 @@ data class HostEditorState(
  * New/edit host form over [HostDraft]. The draft is the only thing that holds a
  * password, and only when the user typed one; `null` keeps the stored secret.
  */
+private val DEFAULT_FILE_CACHE = FileCacheSettings(
+    allowed = true,
+    enabled = false,
+    maxFileMib = 32u,
+    maxTotalMib = 512u,
+    includePaths = emptyList(),
+    excludePaths = emptyList(),
+    serveOfflineWithoutAsking = false,
+)
+
 class HostEditorViewModel(
     private val repo: VaultRepository,
     private val hostId: String?,
@@ -171,10 +184,15 @@ class HostEditorViewModel(
                     chains = hostChains(draft.vaultId),
                     hosts = hosts(draft.vaultId),
                     inherited = inherited(draft.groupId),
+                    fileCache = if (hostId != null) fileCacheSettings(hostId) else DEFAULT_FILE_CACHE,
                 )
             }
         }.onSuccess { s -> _state.value = s }
             .onFailure { e -> _state.update { it.copy(loading = false, error = e.userMessage()) } }
+    }
+
+    fun updateFileCache(transform: (FileCacheSettings) -> FileCacheSettings) {
+        _state.update { s -> s.copy(fileCache = s.fileCache?.let(transform)) }
     }
 
     fun update(transform: (HostDraft) -> HostDraft) {
@@ -452,7 +470,16 @@ class HostEditorViewModel(
                 },
                 envVariables = draft.envVariables.filter { it.name.isNotBlank() },
             )
-            runCatching { repo.write { saveHost(clean) } }
+            val fileCache = _state.value.fileCache
+            runCatching {
+                repo.write {
+                    val host = saveHost(clean)
+                    if (fileCache != null && (fileCache.enabled || hostId != null)) {
+                        runCatching { setFileCacheSettings(host.id, fileCache) }
+                    }
+                    host
+                }
+            }
                 .onSuccess { host -> _state.update { it.copy(saving = false, saved = true, savedId = host.id) } }
                 .onFailure { e -> _state.update { it.copy(saving = false, error = e.userMessage()) } }
         }

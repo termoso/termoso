@@ -844,48 +844,6 @@ impl SftpSession {
         }
     }
 
-    /// Whether offline copies of this host can be browsed right now: the
-    /// connection failed and the cache holds something for it.
-    pub fn offline_copies_available(&self) -> bool {
-        self.offline().is_some_and(|c| {
-            self.inner
-                .store
-                .file_cache_usage(Some(c.host_id))
-                .is_ok_and(|u| u.files + u.dirs > 0)
-        })
-    }
-
-    /// True while requests are served from the offline cache.
-    pub fn is_offline(&self) -> bool {
-        self.offline().is_some()
-    }
-
-    /// Cached files of this host (newest first), for the "local copies" list.
-    pub fn offline_copies(&self) -> Result<Vec<OfflineCopy>> {
-        let Some(c) = self.inner.cache.as_ref() else {
-            return Ok(Vec::new());
-        };
-        Ok(self
-            .inner
-            .store
-            .cached_files(c.host_id)?
-            .into_iter()
-            .map(OfflineCopy::from)
-            .collect())
-    }
-
-    /// When the copy of `path` was taken, if there is one.
-    pub fn cached_at(&self, path: String) -> Result<Option<i64>> {
-        let Some(c) = self.inner.cache.as_ref() else {
-            return Ok(None);
-        };
-        Ok(self
-            .inner
-            .store
-            .cached_file(c.host_id, &path)?
-            .map(|e| e.cached_at.timestamp_millis()))
-    }
-
     fn cache_listing(&self, dir: &str, entries: &[SftpEntry]) {
         if let Some(c) = &self.inner.cache {
             let _ = self
@@ -1434,6 +1392,52 @@ fn permissions(mode: Option<u32>, kind: EntryKind) -> Option<String> {
         });
     }
     Some(out)
+}
+
+/// Offline copies (see `Store::cache_file`).
+#[uniffi::export]
+impl SftpSession {
+    /// Whether offline copies of this host can be browsed right now: the
+    /// connection failed and the cache holds something for it.
+    pub fn offline_copies_available(&self) -> bool {
+        self.offline().is_some_and(|c| {
+            self.inner
+                .store
+                .file_cache_usage(Some(c.host_id))
+                .is_ok_and(|u| u.files + u.dirs > 0)
+        })
+    }
+
+    /// True while requests are served from the offline cache.
+    pub fn is_offline(&self) -> bool {
+        self.offline().is_some()
+    }
+
+    /// Cached files of this host (newest first), for the "local copies" list.
+    pub fn offline_copies(&self) -> Result<Vec<OfflineCopy>> {
+        let Some(c) = self.inner.cache.as_ref() else {
+            return Ok(Vec::new());
+        };
+        Ok(self
+            .inner
+            .store
+            .cached_files(c.host_id)?
+            .into_iter()
+            .map(OfflineCopy::from)
+            .collect())
+    }
+
+    /// When the copy of `path` was taken, if there is one.
+    pub fn cached_at(&self, path: String) -> Result<Option<i64>> {
+        let Some(c) = self.inner.cache.as_ref() else {
+            return Ok(None);
+        };
+        Ok(self
+            .inner
+            .store
+            .cached_file(c.host_id, &path)?
+            .map(|e| e.cached_at.timestamp_millis()))
+    }
 }
 
 /// A file kept in the offline cache.

@@ -1781,4 +1781,20 @@
     <string name="wake">Разбудить</string>
     <string name="magic_packet_sent">Magic packet отправлен в локальную сеть</string>
     <string name="backspace">Стереть символ</string>
+    <string name="files_read_only_offline">Только чтение в офлайне</string>
+    <string name="files_offline_open_termoso">Хост недоступен. Откройте Termoso, чтобы просмотреть локальные копии.</string>
+    <string name="files_offline_read_only">Офлайн: локальные копии, только чтение</string>
+    <string name="files_browse_local_copies">Просмотреть локальные копии</string>
+    <string name="keep_local_copies">Хранить локальные копии</string>
+    <string name="keep_local_copies_summary">Открытые файлы сохраняются на устройстве в зашифрованном виде и доступны, когда хост недоступен.</string>
+    <string name="local_copies_max_file_mib">Макс. размер файла (МиБ)</string>
+    <string name="local_copies_max_total_mib">Общий лимит (МиБ)</string>
+    <string name="local_copies_include_paths">Только эти пути (через запятую, пусто = все)</string>
+    <string name="local_copies_exclude_paths">Никогда эти пути</string>
+    <string name="local_copies_serve_in_files">Отдавать копии в «Файлы» без вопроса</string>
+    <string name="local_copies_serve_in_files_summary">Когда хост недоступен, системный выбор файлов сразу показывает локальные копии.</string>
+    <string name="local_copies">Локальные копии</string>
+    <string name="local_copies_settings_summary">Зашифрованные офлайн-копии удалённых файлов</string>
+    <string name="clear_local_copies">Очистить локальные копии?</string>
+    <string name="clear_local_copies_text">Удаляет все офлайн-копии удалённых файлов с этого устройства (%1$s). Настройки хостов сохраняются.</string>
 </resources>

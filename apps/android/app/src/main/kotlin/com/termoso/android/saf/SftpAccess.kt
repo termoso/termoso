@@ -112,7 +112,7 @@ class SftpAccess(private val container: AppContainer) {
                 // itself is available: turning the host off must cut Files access.
                 host(vault, hostId, protocol)
                 vault.sftp.forHost(hostId)
-                    .firstOrNull { it.protocol == protocol && it.state.value is SessionState.Connected }
+                    .firstOrNull { it.protocol == protocol && (it.state.value is SessionState.Connected || it.servesOffline()) }
                     ?.also { touch(it) }
                     ?: open(vault, hostId, protocol)
             }
@@ -156,7 +156,23 @@ class SftpAccess(private val container: AppContainer) {
                     scheduleReaper(vault)
                     return conn
                 }
-                is SessionState.Failed -> fail(vault, conn, s.message)
+                is SessionState.Failed -> {
+                    // Unreachable host with local copies: serve them when the host
+                    // is set to, otherwise point at the app, which asks first.
+                    if (conn.servesOffline()) {
+                        val hostId = conn.hostId
+                        val serve = hostId != null && runCatching {
+                            vault.repo.read { fileCacheSettings(hostId) }.serveOfflineWithoutAsking
+                        }.getOrDefault(false)
+                        if (serve) {
+                            synchronized(owned) { owned[conn.id] = System.currentTimeMillis() }
+                            scheduleReaper(vault)
+                            return conn
+                        }
+                        fail(vault, conn, str(R.string.files_offline_open_termoso))
+                    }
+                    fail(vault, conn, s.message)
+                }
                 is SessionState.Closed -> fail(vault, conn, s.reason ?: str(R.string.connection_closed))
                 is SessionState.Connecting -> fail(vault, conn, str(R.string.files_connection_timed_out))
             }
@@ -172,6 +188,10 @@ class SftpAccess(private val container: AppContainer) {
         vault.sftp.close(conn.id)
         throw ProviderException(message)
     }
+
+    /** The connection failed but the session can answer from offline copies. */
+    private fun SftpConnection.servesOffline(): Boolean =
+        state.value is SessionState.Failed && runCatching { rust.offlineCopiesAvailable() }.getOrDefault(false)
 
     private fun touch(conn: SftpConnection) {
         synchronized(owned) { if (conn.id in owned) owned[conn.id] = System.currentTimeMillis() }
