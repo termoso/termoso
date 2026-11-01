@@ -2,7 +2,7 @@
 Name=Termoso
 Comment=SSH, SFTP and terminal client with an encrypted vault
 Exec=termoso %U
-Icon=com.termoso.Termoso
+Icon=dev.termoso.Termoso
 Terminal=false
 Type=Application
 Categories=Network;RemoteAccess;System;TerminalEmulator;

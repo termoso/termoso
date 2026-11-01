@@ -2,9 +2,9 @@
 # builds the Rust core with cargo-ndk inside its own builder, so the recipe
 # mirrors the android job of .github/workflows/release.yml.
 Categories:
-  - Connectivity
+  - Remote Access
   - System
-License: AGPL-3.0-or-later
+License: AGPL-3.0-only
 AuthorName: Termoso
 WebSite: https://termoso.dev
 SourceCode: https://github.com/termoso/termoso
@@ -25,7 +25,7 @@ Repo: https://github.com/termoso/termoso
 
 Builds:
   - versionName: 0.11.3
-    versionCode: 11003
+    versionCode: 1103
     commit: v0.11.3
     subdir: apps/android/app
     gradle:
@@ -38,13 +38,13 @@ Builds:
       - curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
       - . $HOME/.cargo/env && rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
       - . $HOME/.cargo/env && cargo install cargo-ndk --version 4.1.2 --locked
-    ndk: r28
+    ndk: r27c
     scandelete:
       - apps/desktop
       - apps/ios
       - web
   - versionName: 0.11.4
-    versionCode: 11004
+    versionCode: 1104
     commit: v0.11.4
     subdir: apps/android/app
     gradle:
@@ -57,13 +57,13 @@ Builds:
       - curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
       - . $HOME/.cargo/env && rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
       - . $HOME/.cargo/env && cargo install cargo-ndk --version 4.1.2 --locked
-    ndk: r28
+    ndk: r27c
     scandelete:
       - apps/desktop
       - apps/ios
       - web
   - versionName: 0.11.5
-    versionCode: 11005
+    versionCode: 1105
     commit: v0.11.5
     subdir: apps/android/app
     gradle:
@@ -76,7 +76,7 @@ Builds:
       - curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
       - . $HOME/.cargo/env && rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
       - . $HOME/.cargo/env && cargo install cargo-ndk --version 4.1.2 --locked
-    ndk: r28
+    ndk: r27c
     scandelete:
       - apps/desktop
       - apps/ios
@@ -85,4 +85,4 @@ Builds:
 AutoUpdateMode: Version
 UpdateCheckMode: Tags ^v[0-9.]+$
 CurrentVersion: 0.11.5
-CurrentVersionCode: 11005
+CurrentVersionCode: 1105

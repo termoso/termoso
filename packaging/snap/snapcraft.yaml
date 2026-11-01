@@ -1,5 +1,6 @@
 # Snap of the desktop app, built from the release .deb so the Store gets
-# exactly the binary that was signed for GitHub releases.
+# exactly the binary that was signed for GitHub releases. The .deb is fetched
+# in override-pull: snapcraft does not expand variables inside `source`.
 name: termoso
 base: core24
 version: "0.11.5"
@@ -10,7 +11,7 @@ description: |
   with resume and folder sync, port forwarding, Mosh, Telnet and serial consoles.
 grade: stable
 confinement: strict
-license: AGPL-3.0-or-later
+license: AGPL-3.0-only
 website: https://termoso.dev
 source-code: https://github.com/termoso/termoso
 issues: https://github.com/termoso/termoso/issues
@@ -23,7 +24,7 @@ apps:
   termoso:
     command: usr/bin/termoso-desktop
     extensions: [gnome]
-    desktop: usr/share/applications/termoso.desktop
+    desktop: usr/share/applications/Termoso.desktop
     plugs:
       - network
       - network-bind
@@ -38,14 +39,17 @@ apps:
 
 parts:
   termoso:
-    plugin: dump
-    source:
-      - on amd64: https://github.com/termoso/termoso/releases/download/v$SNAPCRAFT_PROJECT_VERSION/termoso_$SNAPCRAFT_PROJECT_VERSION_amd64.deb
-      - on arm64: https://github.com/termoso/termoso/releases/download/v$SNAPCRAFT_PROJECT_VERSION/termoso_$SNAPCRAFT_PROJECT_VERSION_arm64.deb
-    source-type: deb
+    plugin: nil
+    build-packages:
+      - curl
     stage-packages:
       - libwebkit2gtk-4.1-0
       - libayatana-appindicator3-1
+    override-pull: |
+      version="$(craftctl get version)"
+      curl -fsSL -o termoso.deb \
+        "https://github.com/termoso/termoso/releases/download/v${version}/Termoso_${version}_${CRAFT_ARCH_BUILD_FOR}.deb"
     override-build: |
-      craftctl default
-      sed -i 's|^Icon=.*|Icon=${SNAP}/usr/share/icons/hicolor/128x128/apps/termoso-desktop.png|' $CRAFT_PART_INSTALL/usr/share/applications/termoso.desktop || true
+      dpkg -x termoso.deb "$CRAFT_PART_INSTALL"
+      sed -i 's|^Icon=.*|Icon=${SNAP}/usr/share/icons/hicolor/128x128/apps/termoso-desktop.png|' \
+        "$CRAFT_PART_INSTALL/usr/share/applications/Termoso.desktop"
