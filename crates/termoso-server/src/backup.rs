@@ -193,6 +193,22 @@ async fn wait_ok(mut child: tokio::process::Child, what: &str) -> anyhow::Result
     Ok(())
 }
 
+fn child_stdout_to_stdio(stdout: tokio::process::ChildStdout) -> anyhow::Result<Stdio> {
+    #[cfg(unix)]
+    {
+        Ok(Stdio::from(stdout.into_owned_fd()?))
+    }
+    #[cfg(windows)]
+    {
+        Ok(Stdio::from(stdout.into_owned_handle()?))
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = stdout;
+        anyhow::bail!("piping child stdout is unsupported on this platform")
+    }
+}
+
 /// Dump the database into `out_dir`; returns the dump path.
 pub async fn backup(
     ctx: &Ctx,
@@ -232,7 +248,7 @@ pub async fn backup(
         Some(recipient) => {
             let mut age = tokio::process::Command::new(&ctx.age)
                 .args(["-r", recipient])
-                .stdin(Stdio::from(dump_out.into_owned_fd()?))
+                .stdin(child_stdout_to_stdio(dump_out)?)
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
                 .spawn()
@@ -403,7 +419,7 @@ pub async fn restore(
                 .with_context(|| format!("spawning {}", ctx.age))?;
             let out = age.stdout.take().expect("piped");
             let child = restore
-                .stdin(Stdio::from(out.into_owned_fd()?))
+                .stdin(child_stdout_to_stdio(out)?)
                 .spawn()
                 .with_context(|| format!("spawning {}", ctx.pg_restore))?;
             wait_ok(age, "age").await?;
