@@ -682,6 +682,8 @@
     <string name="protect_the_vault_with_your_fingerprint_or_screen">Защитите хранилище отпечатком пальца или блокировкой экрана</string>
     <string name="lock_when_in_background">Блокировать в фоне</string>
     <string name="ask_again_after_leaving_the_app_sessions_keep">Запрашивать снова после выхода из приложения; сессии продолжают работать</string>
+    <string name="allow_screenshots">Разрешить скриншоты</string>
+    <string name="allow_screenshots_hint">Скриншоты, трансляция экрана и превью в недавних приложениях работают при включённой блокировке</string>
     <string name="remember_key_passphrases_in_memory">Помнить пароли ключей в памяти</string>
     <string name="key_passphrases_kept_in_ram_until_vault_locked">Пароль ключа, введённый при подключении, хранится только в оперативной памяти и забывается при блокировке хранилища или выходе из приложения; ничего не сохраняется и не синхронизируется</string>
     <string name="lock_after">Блокировать через</string>

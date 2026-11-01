@@ -676,6 +676,8 @@
     <string name="protect_the_vault_with_your_fingerprint_or_screen">Protect the vault with your fingerprint or screen lock</string>
     <string name="lock_when_in_background">Lock when in background</string>
     <string name="ask_again_after_leaving_the_app_sessions_keep">Ask again after leaving the app; sessions keep running</string>
+    <string name="allow_screenshots">Allow screenshots</string>
+    <string name="allow_screenshots_hint">Let screenshots, screen sharing and the Recents preview show the app while app lock is on</string>
     <string name="remember_key_passphrases_in_memory">Remember key passphrases in memory</string>
     <string name="key_passphrases_kept_in_ram_until_vault_locked">Passphrases typed at connect time are kept only in RAM and forgotten when the vault is locked or the app exits; nothing is saved or synced</string>
     <string name="lock_after">Lock after</string>

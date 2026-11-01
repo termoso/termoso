@@ -142,6 +142,11 @@ pub struct MobileSettings {
     pub lock_on_background: bool,
     /// Seconds in background before the lock kicks in.
     pub lock_after_seconds: u32,
+    /// Let the OS capture the window (screenshots, Recents thumbnail, screen
+    /// sharing) while app lock is on. Without app lock capture is always
+    /// allowed.
+    #[serde(default)]
+    pub allow_screenshots: bool,
     /// Sync identities, keys and certificates of the Personal vault. Off
     /// keeps them on this phone (hosts etc. still sync); they are removed
     /// together with the account on sign-out.
@@ -236,6 +241,7 @@ impl Default for MobileSettings {
             import_shell_history: false,
             lock_on_background: false,
             lock_after_seconds: 0,
+            allow_screenshots: false,
             sync_credentials: true,
             cache_passphrases: false,
             record_sessions: false,
