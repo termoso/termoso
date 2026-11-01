@@ -2825,5 +2825,7 @@
   "… {n} unchanged lines": "… {n} строк без изменений",
   "…and {count} more": "…и ещё {count}",
   "↑↓ select": "↑↓ выбор",
-  "✓ I have stored it safely": "✓ Я надёжно сохранил"
+  "✓ I have stored it safely": "✓ Я надёжно сохранил",
+  "No offline file copies": "Без офлайн-копий файлов",
+  "Members cannot keep local copies of files read from team hosts for offline browsing; existing copies are removed on the next sync.": "Участники не могут хранить локальные копии файлов с хостов команды для офлайн-просмотра; существующие копии удаляются при следующей синхронизации."
 }

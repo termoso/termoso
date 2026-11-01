@@ -120,6 +120,7 @@ async fn policies_are_validated_and_enforced() {
             Some(&serde_json::json!({
                 "auth": "keys_only",
                 "jump_host_required": true,
+                "offline_cache": "deny",
                 "export": "deny",
                 "forward_ports": [" 22 ", "8000 - 8999", "22", "443"],
                 "posture_disk_encryption": true,
@@ -129,6 +130,7 @@ async fn policies_are_validated_and_enforced() {
         .await;
     assert_eq!(p["policies"]["auth"], "keys_only");
     assert_eq!(p["policies"]["jump_host_required"], true);
+    assert_eq!(p["policies"]["offline_cache"], "deny");
     assert_eq!(p["policies"]["export"], "deny");
     assert_eq!(p["policies"]["posture_disk_encryption"], true);
     assert_eq!(p["policies"]["posture_screen_lock"], false);

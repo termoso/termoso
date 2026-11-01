@@ -1578,6 +1578,7 @@
     <string name="policy_keys_only">Key-based authentication only</string>
     <string name="policy_jump_host_required">Jump host required</string>
     <string name="policy_no_export">No local export</string>
+    <string name="policy_no_offline_cache">No offline file copies</string>
     <string name="policy_forwarded_ports">Forwarded ports</string>
     <string name="any_port">Any</string>
     <string name="policy_require_disk_encryption">Require disk encryption</string>

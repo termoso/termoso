@@ -1610,6 +1610,7 @@
     <string name="policy_keys_only">Только аутентификация по ключу</string>
     <string name="policy_jump_host_required">Обязательный jump-хост</string>
     <string name="policy_no_export">Без локального экспорта</string>
+    <string name="policy_no_offline_cache">Без офлайн-копий файлов</string>
     <string name="policy_forwarded_ports">Пробрасываемые порты</string>
     <string name="any_port">Любые</string>
     <string name="policy_require_disk_encryption">Требовать шифрование диска</string>
