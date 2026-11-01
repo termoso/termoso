@@ -7,8 +7,9 @@ import CloudSyncOutlinedIcon from "@mui/icons-material/CloudSyncOutlined";
 import type { MouseEvent, ReactNode } from "react";
 import { hasWebDav, hostProtocols, type GroupNode, type HostCard } from "@/ipc/types";
 import { CardGrid, CheckTile, EntityCard, IconTile, SectionTitle } from "@/components/ui";
-import { CustomIconGlyph, HostAvatar } from "./HostAvatar";
+import { DistroGlyph, CustomIconGlyph, HostAvatar } from "./HostAvatar";
 import { customIconSource } from "./customIcon";
+import { pickedIcon } from "./icons";
 import type { HostDnd } from "./dnd";
 import type { HostViewer } from "./presence";
 import { PresenceStack } from "./PresenceViews";
@@ -100,10 +101,17 @@ export function SelectableTile({
 }
 
 export function GroupTile({ g, size, cloud }: { g: GroupNode; size?: number; cloud?: boolean }) {
-  const custom = customIconSource(g.icon) ? g.icon : null;
+  const picked = pickedIcon(g.icon);
+  const custom = !picked && customIconSource(g.icon) ? g.icon : null;
   return (
-    <IconTile size={size} sx={{ position: "relative" }}>
-      {custom ? <CustomIconGlyph value={custom} /> : <FolderRoundedIcon />}
+    <IconTile size={size} color={picked?.color} sx={{ position: "relative" }}>
+      {picked ? (
+        <DistroGlyph icon={picked} />
+      ) : custom ? (
+        <CustomIconGlyph value={custom} />
+      ) : (
+        <FolderRoundedIcon />
+      )}
       {cloud ? (
         <Tooltip title={tr("Synced with a cloud account")}>
           <CloudSyncOutlinedIcon

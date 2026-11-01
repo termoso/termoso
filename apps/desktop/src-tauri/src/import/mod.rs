@@ -163,21 +163,11 @@ fn inspect_public_file(path: &Path) -> Result<Option<ImportedKey>> {
     }))
 }
 
-fn same_key_path(stored: &str, path: &Path) -> bool {
-    if stored == display(path) {
-        return true;
-    }
-    let Some(path) = std::fs::canonicalize(path).ok() else {
-        return false;
-    };
-    std::fs::canonicalize(stored).is_ok_and(|stored| stored == path)
-}
-
 fn add_public_key_file(preview: &mut ImportPreview, path: &Path) {
-    if preview.keys.iter().any(|k| same_key_path(&k.path, path)) {
+    let shown = display(path);
+    if preview.keys.iter().any(|k| k.path == shown) {
         return;
     }
-    let shown = display(path);
     match inspect_public_file(path) {
         Ok(Some(k)) => preview.keys.push(k),
         Ok(None) => {}
@@ -211,7 +201,7 @@ fn add_identity_file(preview: &mut ImportPreview, path: &Path) {
 /// warnings instead of failing the whole import.
 fn add_key_file(preview: &mut ImportPreview, path: &Path) {
     let shown = display(path);
-    if preview.keys.iter().any(|k| same_key_path(&k.path, path)) {
+    if preview.keys.iter().any(|k| k.path == shown) {
         return;
     }
     match inspect_key_file(path) {
@@ -1033,21 +1023,10 @@ fn resolve_key(path: &str, by_path: &HashMap<String, Uuid>) -> Option<Uuid> {
         return Some(*id);
     }
     // PuTTY / ssh_config may reference `key.pub`; the private key is next to it.
-    let mut candidates = vec![PathBuf::from(&expanded)];
     if let Some(stem) = expanded.strip_suffix(".pub") {
-        if let Some(id) = by_path.get(stem) {
-            return Some(*id);
-        }
-        candidates.push(PathBuf::from(stem));
+        return by_path.get(stem).copied();
     }
-    by_path
-        .iter()
-        .find(|(stored, _)| {
-            candidates
-                .iter()
-                .any(|candidate| same_key_path(stored, candidate))
-        })
-        .map(|(_, id)| *id)
+    None
 }
 
 fn ensure_group_path(

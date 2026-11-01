@@ -479,9 +479,6 @@ mod tests {
             AUTH_PROTOCOL,
             b"local-0",
         ));
-        #[cfg(windows)]
-        assert_eq!(find_cookie(&file, &unix0).as_deref(), Some(&b"inet-0"[..]));
-        #[cfg(not(windows))]
         assert_eq!(find_cookie(&file, &unix0).as_deref(), Some(&b"local-0"[..]));
         assert_eq!(find_cookie(&file, &tcp0).as_deref(), Some(&b"inet-0"[..]));
         let unix1 = LocalDisplay::parse(":1").unwrap();

@@ -1,12 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   customIconFromDataUrl,
-  customIconFromUrl,
   customIconSource,
-  customIconUrl,
   isCustomIcon,
   MAX_CUSTOM_ICON_DATA_URL_LENGTH,
+  resizeCustomIconFile,
 } from "./customIcon";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("custom icons", () => {
   it("stores and reads supported embedded image data", () => {
@@ -24,12 +27,60 @@ describe("custom icons", () => {
     expect(customIconSource("custom:data:data:image/png;base64,not valid")).toBeNull();
   });
 
-  it("accepts HTTP(S) image URLs and rejects local or credentialed URLs", () => {
-    const stored = customIconFromUrl(" https://example.com/server.png ");
-    expect(stored).toBe("custom:url:https://example.com/server.png");
-    expect(customIconSource(stored)).toBe("https://example.com/server.png");
-    expect(customIconUrl(stored)).toBe("https://example.com/server.png");
-    expect(customIconFromUrl("file:///C:/server.png")).toBeNull();
-    expect(customIconFromUrl("https://user:password@example.com/server.png")).toBeNull();
+  it("resizes an oversized raster image to a 64x64 PNG", async () => {
+    const context = {
+      clearRect: vi.fn(),
+      drawImage: vi.fn(),
+    };
+    const canvas = {
+      width: 0,
+      height: 0,
+      getContext: vi.fn(() => context),
+      toDataURL: vi.fn(() => "data:image/png;base64,AA=="),
+    };
+    class MockImage {
+      naturalWidth = 128;
+      naturalHeight = 64;
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      set src(_value: string) {
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+    vi.stubGlobal("document", { createElement: vi.fn(() => canvas) });
+    vi.stubGlobal("Image", MockImage);
+    vi.stubGlobal("URL", {
+      createObjectURL: vi.fn(() => "blob:custom-icon"),
+      revokeObjectURL: vi.fn(),
+    });
+
+    const file = new File([new Uint8Array(100_000)], "wide.png", { type: "image/png" });
+    const stored = await resizeCustomIconFile(file);
+
+    expect(stored).toBe("custom:data:data:image/png;base64,AA==");
+    expect(canvas.width).toBe(64);
+    expect(canvas.height).toBe(64);
+    expect(context.drawImage).toHaveBeenCalledWith(expect.any(MockImage), 0, 16, 64, 32);
+  });
+
+  it("keeps SVG data intact while accepting only supported files", async () => {
+    class MockFileReader {
+      result = "data:image/svg+xml;base64,PHN2Zy8+";
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      readAsDataURL() {
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+    vi.stubGlobal("FileReader", MockFileReader);
+
+    const svg = new File(['<svg xmlns="http://www.w3.org/2000/svg" />'], "icon.svg", {
+      type: "image/svg+xml",
+    });
+    const stored = await resizeCustomIconFile(svg);
+    expect(stored).toMatch(/^custom:data:data:image\/svg\+xml;base64,/);
+
+    const text = new File(["not an image"], "icon.txt", { type: "text/plain" });
+    expect(await resizeCustomIconFile(text)).toBeNull();
   });
 });

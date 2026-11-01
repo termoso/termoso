@@ -10,7 +10,6 @@ import {
   DialogTitle,
   Popover,
   Stack,
-  TextField,
   Tooltip,
   Typography,
 } from "@mui/material";
@@ -18,13 +17,12 @@ import { IconTile } from "@/components/ui";
 import { sizes } from "@/theme/theme";
 import { tr } from "@/i18n";
 import {
-  customIconFromDataUrl,
-  customIconFromUrl,
   customIconSource,
-  customIconUrl,
   isCustomIcon,
   isSupportedImageMime,
   MAX_CUSTOM_ICON_FILE_BYTES,
+  MAX_CUSTOM_ICON_SVG_BYTES,
+  resizeCustomIconFile,
 } from "./customIcon";
 import { CustomIconGlyph, DistroGlyph } from "./HostAvatar";
 import { iconSections, pickedIcon } from "./icons";
@@ -53,15 +51,15 @@ function CustomIconDialog({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [draft, setDraft] = useState<string | null>(() => (isCustomIcon(value) ? value : null));
-  const [url, setUrl] = useState(() => customIconUrl(value) ?? "");
   const [fileName, setFileName] = useState<string | null>(() =>
     value?.startsWith("custom:data:") ? tr("Local image selected") : null,
   );
   const [error, setError] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   const chooseFile = () => inputRef.current?.click();
-  const onFile = (file: File | undefined) => {
+  const onFile = async (file: File | undefined) => {
     if (!file) return;
     setError(null);
     setPreviewError(false);
@@ -73,28 +71,33 @@ function CustomIconDialog({
       );
       return;
     }
+    if (file.type.toLowerCase() === "image/svg+xml" && file.size > MAX_CUSTOM_ICON_SVG_BYTES) {
+      setError(
+        tr("SVG images must be smaller than {size}.", {
+          size: formatLimit(MAX_CUSTOM_ICON_SVG_BYTES),
+        }),
+      );
+      return;
+    }
     if (!isSupportedImageMime(file.type)) {
       setError(tr("This image format is not supported."));
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const encoded =
-        typeof reader.result === "string" ? customIconFromDataUrl(reader.result) : null;
+    setBusy(true);
+    try {
+      const encoded = await resizeCustomIconFile(file);
       if (!encoded) {
         setError(tr("The image could not be read."));
         return;
       }
       setDraft(encoded);
-      setUrl("");
       setFileName(file.name);
-    };
-    reader.onerror = () => setError(tr("The image could not be read."));
-    reader.readAsDataURL(file);
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const candidate = draft ?? customIconFromUrl(url);
-  const preview = customIconSource(candidate);
+  const preview = customIconSource(draft);
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
@@ -103,7 +106,7 @@ function CustomIconDialog({
         <Stack spacing={1.5}>
           <Typography variant="body2" color="text.secondary">
             {tr(
-              "Choose an image from your computer or paste an HTTP(S) image URL. Local images are embedded in the vault; remote images load from their URL when shown.",
+              "Choose a local image. Raster images are resized to 64×64 PNG; SVG files are kept as SVG.",
             )}
           </Typography>
           <Box
@@ -126,9 +129,10 @@ function CustomIconDialog({
           <Button
             variant="outlined"
             onClick={chooseFile}
+            disabled={busy}
             startIcon={<AddPhotoAlternateRoundedIcon />}
           >
-            {tr("Choose image…")}
+            {busy ? tr("Processing image…") : tr("Choose image…")}
           </Button>
           <input
             ref={inputRef}
@@ -136,7 +140,7 @@ function CustomIconDialog({
             type="file"
             accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml,image/x-icon,image/avif"
             onChange={(e) => {
-              onFile(e.target.files?.[0]);
+              void onFile(e.target.files?.[0]);
               e.currentTarget.value = "";
             }}
           />
@@ -145,21 +149,6 @@ function CustomIconDialog({
               {fileName}
             </Typography>
           )}
-          <TextField
-            label={tr("Image URL")}
-            type="url"
-            value={url}
-            onChange={(e) => {
-              setUrl(e.target.value);
-              setDraft(null);
-              setFileName(null);
-              setError(null);
-              setPreviewError(false);
-            }}
-            placeholder="https://example.com/server.png"
-            helperText={tr("Use an HTTP or HTTPS URL that points to an image.")}
-            fullWidth
-          />
           {error && (
             <Typography variant="caption" color="error">
               {error}
@@ -167,7 +156,7 @@ function CustomIconDialog({
           )}
           {previewError && (
             <Typography variant="caption" color="error">
-              {tr("The image preview could not be loaded. You can still save this URL.")}
+              {tr("The image preview could not be loaded.")}
             </Typography>
           )}
         </Stack>
@@ -188,10 +177,10 @@ function CustomIconDialog({
         <Button onClick={onClose}>{tr("Cancel")}</Button>
         <Button
           variant="contained"
-          disabled={candidate === null}
+          disabled={draft === null}
           onClick={() => {
-            if (candidate) {
-              onChange(candidate);
+            if (draft) {
+              onChange(draft);
               onClose();
             }
           }}

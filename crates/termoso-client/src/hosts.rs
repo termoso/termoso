@@ -13,7 +13,6 @@ use termoso_core::model::{
 use termoso_core::store::Store;
 use termoso_core::webdav::client_certificate_fingerprint;
 use termoso_proto::sshid::SshIdKeyType;
-use url::Url;
 use uuid::Uuid;
 
 use crate::error::{ClientError, Result};
@@ -296,53 +295,40 @@ fn ip_version_of(stored: &str) -> String {
     }
 }
 
-const MAX_CUSTOM_ICON_DATA_LENGTH: usize = 1024 * 1024;
-const MAX_CUSTOM_ICON_URL_LENGTH: usize = 2048;
+const MAX_CUSTOM_ICON_DATA_LENGTH: usize = 32 * 1024;
 
 fn valid_custom_icon(value: &str) -> bool {
-    if let Some(data_url) = value.strip_prefix("custom:data:") {
-        if data_url.len() > MAX_CUSTOM_ICON_DATA_LENGTH {
-            return false;
-        }
-        let Some((header, payload)) = data_url.split_once(',') else {
-            return false;
-        };
-        let Some(mime) = header
-            .strip_prefix("data:")
-            .and_then(|h| h.strip_suffix(";base64"))
-        else {
-            return false;
-        };
-        if !matches!(
-            mime.to_ascii_lowercase().as_str(),
-            "image/png"
-                | "image/jpeg"
-                | "image/gif"
-                | "image/webp"
-                | "image/svg+xml"
-                | "image/x-icon"
-                | "image/avif"
-        ) {
-            return false;
-        }
-        !payload.is_empty()
-            && payload
-                .bytes()
-                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'+' | b'/' | b'='))
-    } else if let Some(raw_url) = value.strip_prefix("custom:url:") {
-        if raw_url.len() > MAX_CUSTOM_ICON_URL_LENGTH {
-            return false;
-        }
-        let Ok(url) = Url::parse(raw_url) else {
-            return false;
-        };
-        matches!(url.scheme(), "http" | "https")
-            && url.host_str().is_some()
-            && url.username().is_empty()
-            && url.password().is_none()
-    } else {
-        false
+    let Some(data_url) = value.strip_prefix("custom:data:") else {
+        return false;
+    };
+    if data_url.len() > MAX_CUSTOM_ICON_DATA_LENGTH {
+        return false;
     }
+    let Some((header, payload)) = data_url.split_once(',') else {
+        return false;
+    };
+    let Some(mime) = header
+        .strip_prefix("data:")
+        .and_then(|h| h.strip_suffix(";base64"))
+    else {
+        return false;
+    };
+    if !matches!(
+        mime.to_ascii_lowercase().as_str(),
+        "image/png"
+            | "image/jpeg"
+            | "image/gif"
+            | "image/webp"
+            | "image/svg+xml"
+            | "image/x-icon"
+            | "image/avif"
+    ) {
+        return false;
+    }
+    !payload.is_empty()
+        && payload
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'+' | b'/' | b'='))
 }
 
 fn clean_icon(icon: &Option<String>) -> Result<Option<String>> {
@@ -2772,24 +2758,27 @@ mod tests {
             Some("custom:data:data:image/png;base64,AAECAw==")
         );
 
-        let mut host = form(&s, card.id).unwrap();
-        host.icon = Some("custom:url:https://example.com/server.png".into());
+        host.icon = Some("custom:data:data:image/png;base64,AAECAw==".into());
         assert_eq!(
             save(&s, &host).unwrap().icon.as_deref(),
-            Some("custom:url:https://example.com/server.png")
+            Some("custom:data:data:image/png;base64,AAECAw==")
         );
-
-        host.icon = Some("custom:url:file:///C:/server.png".into());
+        host.icon = Some("custom:unsupported:https://example.com/server.png".into());
+        assert!(save(&s, &host).is_err());
+        host.icon = Some(format!(
+            "custom:data:data:image/png;base64,{}",
+            "A".repeat(32 * 1024)
+        ));
         assert!(save(&s, &host).is_err());
         host.icon = Some("custom:data:data:text/html;base64,PGh0bWw+".into());
         assert!(save(&s, &host).is_err());
 
         let group = save_group(&s, vault, None, "custom", None).unwrap();
         let mut group_form = group_form(&s, group.id).unwrap();
-        group_form.icon = Some("custom:url:https://example.com/group.png".into());
+        group_form.icon = Some("custom:data:data:image/png;base64,AAECAw==".into());
         assert_eq!(
             save_group_form(&s, &group_form).unwrap().icon.as_deref(),
-            Some("custom:url:https://example.com/group.png")
+            Some("custom:data:data:image/png;base64,AAECAw==")
         );
     }
 

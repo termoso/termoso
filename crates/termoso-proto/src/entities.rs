@@ -124,8 +124,8 @@ pub mod payload {
             /// Sort order.
             #[serde(default)]
             pub sort_order: i32,
-            /// Icon chosen by the user (`server`, `zabbix`, `custom:data:…` or
-            /// `custom:url:…`); `None` shows the default folder.
+            /// Icon chosen by the user (`server`, `zabbix` or `custom:data:…`);
+            /// `None` shows the default folder.
             #[serde(default, skip_serializing_if = "Option::is_none")]
             pub icon: Option<String>,
             /// Id of the group in the system that created it through an API
@@ -170,8 +170,8 @@ pub mod payload {
             /// Detected OS name.
             #[serde(default, skip_serializing_if = "Option::is_none")]
             pub os_name: Option<String>,
-            /// Icon chosen by the user (`ubuntu`, `zabbix`, `custom:data:…` or
-            /// `custom:url:…`); overrides the detected `os_name` for display.
+            /// Icon chosen by the user (`ubuntu`, `zabbix` or `custom:data:…`);
+            /// overrides the detected `os_name` for display.
             #[serde(default, skip_serializing_if = "Option::is_none")]
             pub icon: Option<String>,
             /// Preferred IP version: `auto`, `4`, `6`.

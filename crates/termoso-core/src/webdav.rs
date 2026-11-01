@@ -919,52 +919,24 @@ fn rustls_error(e: &reqwest::Error) -> Option<&rustls::Error> {
     None
 }
 
-#[cfg(windows)]
-fn connection_was_aborted(e: &reqwest::Error) -> bool {
-    let mut src: Option<&(dyn std::error::Error + 'static)> = Some(e);
-    while let Some(s) = src {
-        if let Some(io) = s.downcast_ref::<std::io::Error>() {
-            if io.raw_os_error() == Some(10053) {
-                return true;
-            }
-            src = io
-                .get_ref()
-                .map(|inner| inner as &(dyn std::error::Error + 'static));
-        } else {
-            src = s.source();
-        }
-    }
-    false
-}
-
 /// Did the server close the handshake because of *our* certificate (missing
 /// or not accepted)? Returns the alert name for the message.
 fn client_certificate_alert(e: &reqwest::Error) -> Option<String> {
-    if let Some(error) = rustls_error(e) {
-        match error {
-            rustls::Error::AlertReceived(a) => match a {
-                AlertDescription::CertificateRequired
-                | AlertDescription::BadCertificate
-                | AlertDescription::UnknownCA
-                | AlertDescription::CertificateUnknown
-                | AlertDescription::CertificateRevoked
-                | AlertDescription::CertificateExpired
-                | AlertDescription::UnsupportedCertificate
-                | AlertDescription::AccessDenied
-                | AlertDescription::HandshakeFailure => return Some(format!("{a:?}")),
-                _ => {}
-            },
-            _ => {}
-        }
+    match rustls_error(e)? {
+        rustls::Error::AlertReceived(a) => match a {
+            AlertDescription::CertificateRequired
+            | AlertDescription::BadCertificate
+            | AlertDescription::UnknownCA
+            | AlertDescription::CertificateUnknown
+            | AlertDescription::CertificateRevoked
+            | AlertDescription::CertificateExpired
+            | AlertDescription::UnsupportedCertificate
+            | AlertDescription::AccessDenied
+            | AlertDescription::HandshakeFailure => Some(format!("{a:?}")),
+            _ => None,
+        },
+        _ => None,
     }
-    #[cfg(windows)]
-    if e.url().is_some_and(|url| url.scheme() == "https") && connection_was_aborted(e) {
-        // Windows reports WSAECONNABORTED instead of forwarding the TLS
-        // CertificateRequired alert when a server rejects a missing client
-        // certificate.
-        return Some("connection aborted during client-certificate handshake".into());
-    }
-    None
 }
 
 /// Is this transport error a certificate rejection? Walks the source chain,
