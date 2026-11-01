@@ -119,8 +119,27 @@ Builds:
       - apps/desktop
       - apps/ios
       - web
+  - versionName: 0.11.8
+    versionCode: 1108
+    commit: v0.11.8
+    subdir: apps/android/app
+    gradle:
+      - yes
+    gradleprops:
+      - termoso.abis=arm64-v8a,armeabi-v7a,x86_64
+    sudo:
+      - apt-get update
+      - apt-get install -y curl build-essential
+      - curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+      - . $HOME/.cargo/env && rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
+      - . $HOME/.cargo/env && cargo install cargo-ndk --version 4.1.2 --locked
+    ndk: r27c
+    scandelete:
+      - apps/desktop
+      - apps/ios
+      - web
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags ^v[0-9.]+$
-CurrentVersion: 0.11.7
-CurrentVersionCode: 1107
+CurrentVersion: 0.11.8
+CurrentVersionCode: 1108

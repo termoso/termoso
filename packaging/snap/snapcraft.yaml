@@ -3,7 +3,7 @@
 # in override-pull: snapcraft does not expand variables inside `source`.
 name: termoso
 base: core24
-version: "0.11.7"
+version: "0.11.8"
 summary: SSH, SFTP and terminal client with an encrypted vault
 description: |
   Termoso keeps hosts, keys and snippets in a vault encrypted on your device,
