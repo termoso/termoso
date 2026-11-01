@@ -91,7 +91,9 @@ import com.termoso.android.R
 import com.termoso.android.data.VaultRepository
 import com.termoso.android.ui.components.EmptyState
 import com.termoso.android.ui.components.HostAvatar
+import com.termoso.android.ui.components.CustomIconTile
 import com.termoso.android.ui.components.IconTile
+import com.termoso.android.ui.components.rememberCustomIcon
 import com.termoso.android.ui.components.ListRow
 import com.termoso.android.ui.components.RowDivider
 import com.termoso.android.ui.components.SectionCard
@@ -444,10 +446,11 @@ private fun HostList(
                             subtitle = groupSubtitle(g),
                             leading = {
                                 val picked = remember(g.icon) { IconCatalog.picked(g.icon) }
-                                if (picked != null) {
-                                    IconTile(distroVector(picked), tint = Color.White, container = picked.color)
-                                } else {
-                                    IconTile(Icons.Filled.Folder)
+                                val custom = rememberCustomIcon(g.icon)
+                                when {
+                                    picked != null -> IconTile(distroVector(picked), tint = Color.White, container = picked.color)
+                                    custom != null -> CustomIconTile(custom)
+                                    else -> IconTile(Icons.Filled.Folder)
                                 }
                             },
                             modifier = Modifier.combinedClickable(

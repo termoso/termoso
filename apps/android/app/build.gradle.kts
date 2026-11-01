@@ -142,6 +142,7 @@ dependencies {
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.material3)
     implementation(libs.compose.material.icons.extended)
+    implementation(libs.androidsvg)
     // QR import: on-device scanning only (bundled model, no network).
     implementation(libs.androidx.camera.core)
     implementation(libs.androidx.camera.camera2)

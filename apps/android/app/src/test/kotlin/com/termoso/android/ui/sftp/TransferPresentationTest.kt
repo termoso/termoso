@@ -20,6 +20,7 @@ class TransferPresentationTest : ResourceTest() {
         total = total,
         bytesPerSec = rate,
         status = status,
+        toSession = null,
     )
 
     @Test
