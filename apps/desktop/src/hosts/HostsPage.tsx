@@ -130,6 +130,7 @@ import {
   quickLabel,
   type KnownSuggestion,
 } from "./links";
+import { focusFirstHostItem } from "./keyboardNav";
 import { tr, trn, msg } from "@/i18n";
 
 type Panel =
@@ -843,6 +844,7 @@ export function HostsPage() {
             onKeyDown={(e) => {
               if (e.key === "Enter") onSearchEnter();
               if (e.key === "Escape") updateSearch("");
+              if (e.key === "ArrowDown" && focusFirstHostItem()) e.preventDefault();
             }}
             sx={{ flex: 1 }}
             slotProps={{

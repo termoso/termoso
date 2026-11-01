@@ -12,6 +12,7 @@ import { customIconSource } from "./customIcon";
 import { pickedIcon } from "./icons";
 import type { HostDnd } from "./dnd";
 import type { HostViewer } from "./presence";
+import { HOST_ITEM_ATTR, hostItemKeyDown } from "./keyboardNav";
 import { PresenceStack } from "./PresenceViews";
 import { tr, trn } from "@/i18n";
 
@@ -165,6 +166,10 @@ export function HostGrid(p: HostCollectionProps) {
                 subtitle={groupSubtitle(g)}
                 onClick={() => p.onOpenGroup(g.id)}
                 onContextMenu={(e) => p.onGroupContext(g, e)}
+                extra={{
+                  [HOST_ITEM_ATTR]: "",
+                  onKeyDown: (e) => hostItemKeyDown(e, () => p.onOpenGroup(g.id)),
+                }}
                 drag={p.dnd?.dropGroup(g)}
                 dropping={p.dnd?.dropping === g.id}
                 actions={
@@ -211,6 +216,10 @@ export function HostGrid(p: HostCollectionProps) {
                   onClick={(e) => p.onOpenHost(h, e)}
                   onDoubleClick={() => p.onConnectHost(h)}
                   onContextMenu={(e) => p.onHostContext(h, e)}
+                  extra={{
+                    [HOST_ITEM_ATTR]: "",
+                    onKeyDown: (e) => hostItemKeyDown(e, () => p.onConnectHost(h)),
+                  }}
                   drag={p.dnd?.dragHost(h)}
                   sx={p.dnd?.dragging.has(h.id) ? { opacity: 0.45 } : undefined}
                   trailing={

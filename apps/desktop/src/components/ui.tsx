@@ -1,3 +1,4 @@
+import type { HTMLAttributes } from "react";
 import {
   Box,
   Button,
@@ -185,6 +186,7 @@ export function EntityCard({
   sx,
   drag,
   dropping,
+  extra,
 }: {
   tile: ReactNode;
   title: ReactNode;
@@ -206,6 +208,8 @@ export function EntityCard({
   drag?: DragHandlers;
   /** A compatible drag is hovering over this card. */
   dropping?: boolean;
+  /** Extra root attributes (data-* markers, keyboard navigation). */
+  extra?: HTMLAttributes<HTMLDivElement> & Record<`data-${string}`, string>;
 }) {
   return (
     <Box
@@ -216,7 +220,10 @@ export function EntityCard({
       onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
       {...drag}
+      {...extra}
       onKeyDown={(e) => {
+        extra?.onKeyDown?.(e);
+        if (e.defaultPrevented) return;
         if (e.key === "Enter" && onClick && e.target === e.currentTarget) e.currentTarget.click();
       }}
       sx={[
