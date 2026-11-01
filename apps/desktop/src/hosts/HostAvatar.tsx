@@ -1,3 +1,4 @@
+import { Box } from "@mui/material";
 import CloudRoundedIcon from "@mui/icons-material/CloudRounded";
 import DnsRoundedIcon from "@mui/icons-material/DnsRounded";
 import TerminalRoundedIcon from "@mui/icons-material/TerminalRounded";
@@ -7,7 +8,24 @@ import type { HostCard, SessionInfo } from "@/ipc/types";
 import { IconTile } from "@/components/ui";
 import { sizes } from "@/theme/theme";
 import { distroIcon, type DistroIcon } from "./distroIcons";
+import { customIconSource } from "./customIcon";
 import { pickedIcon } from "./icons";
+
+/** Renders an image-backed custom icon without treating its contents as markup. */
+export function CustomIconGlyph({ value, sx }: { value: string; sx?: SvgIconProps["sx"] }) {
+  const src = customIconSource(value);
+  if (!src) return null;
+  return (
+    <Box
+      component="img"
+      src={src}
+      alt=""
+      draggable={false}
+      style={{ width: "1em", height: "1em", objectFit: "contain", display: "block" }}
+      sx={sx}
+    />
+  );
+}
 
 /** Renders a distro glyph as a regular MUI icon (inherits `fontSize` / `color`). */
 export function DistroGlyph({ icon, ...props }: { icon: DistroIcon } & SvgIconProps) {
@@ -40,8 +58,12 @@ export function HostGlyph({
   icon?: string | null | undefined;
   protocol: GlyphProtocol;
 } & SvgIconProps) {
-  const icon = pickedIcon(iconId) ?? distroIcon(osName);
-  if (icon) return <DistroGlyph icon={icon} {...props} />;
+  const picked = pickedIcon(iconId);
+  if (picked) return <DistroGlyph icon={picked} {...props} />;
+  const customValue = customIconSource(iconId) ? iconId : null;
+  if (customValue) return <CustomIconGlyph value={customValue} sx={props.sx} />;
+  const detected = distroIcon(osName);
+  if (detected) return <DistroGlyph icon={detected} {...props} />;
   return <ProtocolGlyph protocol={protocol} {...props} />;
 }
 
