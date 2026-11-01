@@ -358,6 +358,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       RUSTFLAGS: ""
+      FUZZ_TOOLCHAIN: nightly-2026-10-31
       # The prebuilt cargo-fuzz binary is musl-static and defaults to its own
       # build triple; pin the target so the targets link against the host glibc std.
       FUZZ_TARGET: x86_64-unknown-linux-gnu
@@ -368,8 +369,7 @@ jobs:
       # move the date forward once rustc is fixed.
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: nightly-2026-10-31
-        with:
+          toolchain: ${{ env.FUZZ_TOOLCHAIN }}
           components: rust-src
       - uses: taiki-e/install-action@v2
         with:
@@ -377,15 +377,15 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: fuzz
-      - run: cargo +nightly fuzz check --target "$FUZZ_TARGET"
+      - run: cargo +${{ env.FUZZ_TOOLCHAIN }} fuzz check --target "$FUZZ_TARGET"
         working-directory: fuzz
-      - run: cargo +nightly run --example seed
+      - run: cargo +${{ env.FUZZ_TOOLCHAIN }} run --example seed
         working-directory: fuzz
       - name: smoke each target
         working-directory: fuzz
         run: |
-          for t in $(cargo +nightly fuzz list); do
-            cargo +nightly fuzz run --target "$FUZZ_TARGET" "$t" -- -max_total_time=20 -max_len=16384 -timeout=10 -rss_limit_mb=2048
+          for t in $(cargo +${{ env.FUZZ_TOOLCHAIN }} fuzz list); do
+            cargo +${{ env.FUZZ_TOOLCHAIN }} fuzz run --target "$FUZZ_TARGET" "$t" -- -max_total_time=20 -max_len=16384 -timeout=10 -rss_limit_mb=2048
           done
       - uses: actions/upload-artifact@v7
         if: failure()
