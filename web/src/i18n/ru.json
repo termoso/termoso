@@ -1283,5 +1283,7 @@
   "“{name}” stops working immediately: its token is invalidated and its sealed vault keys are deleted. Hosts it already created stay in the vaults.": "«{name}» перестанет работать сразу: токен аннулируется, запечатанные ключи хранилищ удаляются. Уже созданные им хосты остаются в хранилищах.",
   "“{name}” will need to sign in again and unlock with the password.": "«{name}» придётся войти заново и разблокировать паролем.",
   "“{name}” will no longer be accepted for two-factor sign-in.": "«{name}» больше не будет приниматься для двухфакторного входа.",
-  "≈ {v1} days": "≈ {v1} дн."
+  "≈ {v1} days": "≈ {v1} дн.",
+  "No offline file copies": "Без офлайн-копий файлов",
+  "Members cannot keep local copies of files read from team hosts for offline browsing; existing copies are removed on the next sync.": "Участники не могут хранить локальные копии файлов с хостов команды для офлайн-просмотра; существующие копии удаляются при следующей синхронизации."
 }
