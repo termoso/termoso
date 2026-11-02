@@ -309,7 +309,7 @@ async fn webhook_syslog_tls_delivers_cef() {
 
     let ck = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
     std::fs::write(syslog_ca_path(), ck.cert.pem()).unwrap();
-    let key = rustls::pki_types::PrivateKeyDer::Pkcs8(ck.key_pair.serialize_der().into());
+    let key = rustls::pki_types::PrivateKeyDer::Pkcs8(ck.signing_key.serialize_der().into());
     let cfg = rustls::ServerConfig::builder_with_provider(Arc::new(
         rustls::crypto::aws_lc_rs::default_provider(),
     ))

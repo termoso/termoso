@@ -58,7 +58,7 @@ pub fn parse(input: &str) -> Result<Node, String> {
                 stack.last_mut().expect("root").children.push(node);
             }
             Event::Text(t) => {
-                let text = t.xml10_content().map_err(|e| e.to_string())?;
+                let text = t.xml10_content();
                 stack.last_mut().expect("root").text.push_str(&text);
             }
             Event::GeneralRef(r) => {
@@ -66,7 +66,7 @@ pub fn parse(input: &str) -> Result<Node, String> {
                 if let Some(c) = r.resolve_char_ref().map_err(|e| e.to_string())? {
                     cur.text.push(c);
                 } else {
-                    let name = r.decode().map_err(|e| e.to_string())?;
+                    let name = r.into_inner();
                     match quick_xml::escape::resolve_predefined_entity(&name) {
                         Some(s) => cur.text.push_str(s),
                         None => return Err(format!("unknown entity &{name};")),
@@ -74,8 +74,11 @@ pub fn parse(input: &str) -> Result<Node, String> {
                 }
             }
             Event::CData(c) => {
-                let text = String::from_utf8_lossy(&c.into_inner()).into_owned();
-                stack.last_mut().expect("root").text.push_str(&text);
+                stack
+                    .last_mut()
+                    .expect("root")
+                    .text
+                    .push_str(&c.into_inner());
             }
             Event::End(_) => {
                 let mut node = stack.pop().ok_or("unbalanced xml")?;
@@ -101,8 +104,8 @@ pub fn parse(input: &str) -> Result<Node, String> {
     }
 }
 
-fn local(name: &[u8]) -> String {
-    String::from_utf8_lossy(name).into_owned()
+fn local(name: &str) -> String {
+    name.to_owned()
 }
 
 #[cfg(test)]
