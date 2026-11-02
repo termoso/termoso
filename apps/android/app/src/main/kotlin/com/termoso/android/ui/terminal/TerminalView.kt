@@ -362,7 +362,7 @@ fun TerminalView(
                                 var last = 0f
                                 var acc = 0f
                                 AnimationState(initialValue = 0f, initialVelocity = v)
-                                    .animateDecay(exponentialDecay(frictionMultiplier = 1.4f)) {
+                                    .animateDecay(exponentialDecay()) {
                                         acc += value - last
                                         last = value
                                         val lines = (acc / cellH).toInt()
