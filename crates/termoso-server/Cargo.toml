@@ -94,7 +94,7 @@ saml-test-support = []
 termoso-server = { path = ".", features = ["saml-test-support"] }
 tower = { workspace = true }
 http-body-util = "0.1"
-rcgen = "0.13"
+rcgen = "0.14"
 tokio-tungstenite = "0.29"
 # Software CTAP2 authenticator drives the WebAuthn ceremonies end to end.
 termoso-core = { workspace = true, features = ["fido2-soft"] }
