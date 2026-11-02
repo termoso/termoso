@@ -9079,7 +9079,7 @@ dependencies = [
  "p256 0.13.2",
  "percent-encoding",
  "portable-pty",
- "quick-xml 0.41.0",
+ "quick-xml 0.42.0",
  "rand 0.10.3",
  "rand_core 0.6.4",
  "reqwest 0.12.28",
