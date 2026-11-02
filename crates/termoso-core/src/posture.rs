@@ -18,6 +18,20 @@ static REPORTED: Mutex<Option<Posture>> = Mutex::new(None);
 /// How long a single probe command may run.
 pub const PROBE_TIMEOUT: Duration = Duration::from_secs(5);
 
+/// Child processes of a GUI app get their own console on Windows unless
+/// told otherwise, which shows up as a PowerShell window blinking at start.
+pub fn hide_console_window(cmd: &mut tokio::process::Command) {
+    #[cfg(windows)]
+    {
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = cmd;
+    }
+}
+
 /// Remember the posture that goes out with the next `DeviceInfo`.
 pub fn set_reported(p: Posture) {
     *REPORTED.lock().unwrap_or_else(|e| e.into_inner()) = Some(p);
@@ -42,14 +56,14 @@ pub async fn collect(secure_key_storage: Option<bool>) -> Posture {
 }
 
 async fn run(program: &str, args: &[&str]) -> Option<String> {
-    let child = tokio::process::Command::new(program)
-        .args(args)
+    let mut cmd = tokio::process::Command::new(program);
+    cmd.args(args)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
-        .kill_on_drop(true)
-        .spawn()
-        .ok()?;
+        .kill_on_drop(true);
+    hide_console_window(&mut cmd);
+    let child = cmd.spawn().ok()?;
     let out = tokio::time::timeout(PROBE_TIMEOUT, child.wait_with_output())
         .await
         .ok()?

@@ -129,10 +129,10 @@ fn zerotier_binaries() -> Vec<String> {
 /// Run the first binary that exists. `Ok(None)` when none is installed.
 async fn run_first(candidates: &[String], args: &[&str]) -> Result<Option<String>> {
     for bin in candidates {
-        let child = Command::new(bin)
-            .args(args)
-            .stdin(std::process::Stdio::null())
-            .output();
+        let mut cmd = Command::new(bin);
+        cmd.args(args).stdin(std::process::Stdio::null());
+        termoso_core::posture::hide_console_window(&mut cmd);
+        let child = cmd.output();
         let out = match tokio::time::timeout(CLI_TIMEOUT, child).await {
             Err(_) => {
                 return Err(DesktopError::invalid(format!(

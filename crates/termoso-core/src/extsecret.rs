@@ -192,20 +192,20 @@ async fn run(program: &str, _args: &[&str]) -> Result<Zeroizing<String>> {
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 async fn run(program: &str, args: &[&str]) -> Result<Zeroizing<String>> {
     use std::process::Stdio;
-    let child = tokio::process::Command::new(program)
-        .args(args)
+    let mut cmd = tokio::process::Command::new(program);
+    cmd.args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .kill_on_drop(true)
-        .spawn()
-        .map_err(|e| {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                Error::Invalid(format!("`{program}` CLI is not installed or not on PATH"))
-            } else {
-                Error::Invalid(format!("cannot start `{program}`: {e}"))
-            }
-        })?;
+        .kill_on_drop(true);
+    crate::posture::hide_console_window(&mut cmd);
+    let child = cmd.spawn().map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            Error::Invalid(format!("`{program}` CLI is not installed or not on PATH"))
+        } else {
+            Error::Invalid(format!("cannot start `{program}`: {e}"))
+        }
+    })?;
     let out = tokio::time::timeout(TIMEOUT, child.wait_with_output())
         .await
         .map_err(|_| {
