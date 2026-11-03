@@ -491,6 +491,12 @@ covers the toolchains, `scripts/check.sh`, branch and commit conventions and
 what reviewers look for; [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) applies to
 every project space. Security reports go through [SECURITY.md](SECURITY.md).
 
+Translations are done on [Hosted Weblate](https://hosted.weblate.org/projects/termoso/):
+the desktop app, the web cabinet and the Android app are separate components,
+English is the source language and new strings appear there after every push
+to `main`. Translate in the browser, Weblate sends the result back as a pull
+request; no git needed.
+
 Termoso is licensed under the [GNU AGPL v3](LICENSE): run it, change it, host
 it — and keep it free for whoever you host it for.
 
