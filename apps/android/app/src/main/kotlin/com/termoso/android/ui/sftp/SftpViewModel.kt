@@ -118,7 +118,7 @@ class SftpViewModel(private val appContext: Context, val conn: SftpConnection) :
                     _state.update { it.copy(offline = false, offlineAvailable = false) }
                     navigate(conn.io { home() })
                 }
-                if (s is SessionState.Failed) {
+                if (s is SessionState.Failed || s is SessionState.Closed) {
                     val available = runCatching { conn.io { offlineCopiesAvailable() } }.getOrDefault(false)
                     _state.update { it.copy(offlineAvailable = available) }
                 }

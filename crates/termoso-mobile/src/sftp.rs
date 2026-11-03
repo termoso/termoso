@@ -842,21 +842,12 @@ impl SftpSession {
     /// The host is unreachable (connect failed or the link dropped) and the
     /// session may fall back to offline copies.
     fn offline(&self) -> Option<&CacheCtx> {
-        if self.inner.live.lock().expect("live poisoned").is_some() {
-            return None;
-        }
-        match self.state() {
-            SessionState::Failed { .. } | SessionState::Closed { .. } => self.cache(),
-            _ => None,
-        }
+        self.inner.offline()
     }
 
     /// The offline cache of this session's saved host, when it is enabled now.
     fn cache(&self) -> Option<&CacheCtx> {
-        self.inner
-            .cache
-            .as_ref()
-            .filter(|c| c.active(&self.inner.store))
+        self.inner.cache()
     }
 
     fn cache_listing(&self, dir: &str, entries: &[SftpEntry]) {
@@ -1243,6 +1234,23 @@ impl Drop for SftpSession {
 }
 
 impl Inner {
+    /// The host is unreachable (connect failed or the link dropped) and the
+    /// session may fall back to offline copies.
+    fn offline(&self) -> Option<&CacheCtx> {
+        if self.live.lock().expect("live poisoned").is_some() {
+            return None;
+        }
+        match &*self.state.lock().expect("state poisoned") {
+            SessionState::Failed { .. } | SessionState::Closed { .. } => self.cache(),
+            _ => None,
+        }
+    }
+
+    /// The offline cache of this session's saved host, when it is enabled now.
+    fn cache(&self) -> Option<&CacheCtx> {
+        self.cache.as_ref().filter(|c| c.active(&self.store))
+    }
+
     fn rate_limit(&self) -> Option<u64> {
         (self.rate_limit_kib > 0).then(|| u64::from(self.rate_limit_kib) * 1024)
     }
@@ -1274,12 +1282,10 @@ impl Inner {
     }
 
     async fn run_transfer(self: &Arc<Self>, launch: &Launch) -> Result<()> {
-        let live = self
-            .live
-            .lock()
-            .expect("live poisoned")
-            .clone()
-            .ok_or(MobileError::Closed)?;
+        let live = self.live.lock().expect("live poisoned").clone();
+        let Some(live) = live else {
+            return self.run_offline_transfer(launch).await;
+        };
         let id = launch.id;
         let reporter = self.clone();
         let progress: ProgressFn = Arc::new(move |p: Progress| reporter.progress(id, p));
@@ -1313,6 +1319,33 @@ impl Inner {
                 .await?;
             }
         }
+        Ok(())
+    }
+
+    /// No connection: a download of a file the offline cache holds is a
+    /// local copy ("Open with" / "Download" while browsing offline copies);
+    /// anything else fails the way it always did.
+    async fn run_offline_transfer(self: &Arc<Self>, launch: &Launch) -> Result<()> {
+        let Some(c) = self.offline() else {
+            return Err(MobileError::Closed);
+        };
+        if launch.direction != TransferDirection::Download {
+            return Err(MobileError::ReadOnlyOffline);
+        }
+        let body = self.store.read_cached_file(c.host_id, &launch.remote)?;
+        let total = body.len() as u64;
+        let local = PathBuf::from(&launch.local);
+        if let Some(parent) = local.parent() {
+            tokio::fs::create_dir_all(parent).await?;
+        }
+        tokio::fs::write(&local, &body).await?;
+        self.progress(
+            launch.id,
+            Progress {
+                done: total,
+                total: Some(total),
+            },
+        );
         Ok(())
     }
 

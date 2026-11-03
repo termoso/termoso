@@ -848,6 +848,9 @@ private fun StateOverlay(
                     TextButton(onClick = onClose) { Text(stringResource(R.string.close)) }
                     Button(onClick = onRetry) { Text(stringResource(R.string.reconnect)) }
                 }
+                if (onBrowseOffline != null) {
+                    TextButton(onClick = onBrowseOffline) { Text(stringResource(R.string.files_browse_local_copies)) }
+                }
             }
         }
         is SessionState.Failed -> {

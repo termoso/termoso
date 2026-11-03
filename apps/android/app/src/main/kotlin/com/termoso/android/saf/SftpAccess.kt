@@ -173,7 +173,10 @@ class SftpAccess(private val container: AppContainer) {
                     }
                     fail(vault, conn, s.message)
                 }
-                is SessionState.Closed -> fail(vault, conn, s.reason ?: str(R.string.connection_closed))
+                is SessionState.Closed -> {
+                    if (conn.servesOffline()) fail(vault, conn, str(R.string.files_offline_open_termoso))
+                    fail(vault, conn, s.reason ?: str(R.string.connection_closed))
+                }
                 is SessionState.Connecting -> fail(vault, conn, str(R.string.files_connection_timed_out))
             }
             is Outcome.Asked -> {
@@ -191,7 +194,8 @@ class SftpAccess(private val container: AppContainer) {
 
     /** The connection failed but the session can answer from offline copies. */
     private fun SftpConnection.servesOffline(): Boolean =
-        state.value is SessionState.Failed && runCatching { rust.offlineCopiesAvailable() }.getOrDefault(false)
+        (state.value is SessionState.Failed || state.value is SessionState.Closed) &&
+            runCatching { rust.offlineCopiesAvailable() }.getOrDefault(false)
 
     private fun touch(conn: SftpConnection) {
         synchronized(owned) { if (conn.id in owned) owned[conn.id] = System.currentTimeMillis() }
