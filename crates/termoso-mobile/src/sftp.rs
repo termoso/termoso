@@ -737,19 +737,26 @@ impl CacheCtx {
             }
             _ => return None,
         };
-        if termoso_core::policy::offline_cache_denied(store, vault_id) {
-            // Policy flipped to deny since the copies were taken.
-            let _ = store.clear_file_cache(Some(host_id));
-            return None;
-        }
-        if !store.file_cache_config(host_id).ok()?.enabled {
-            return None;
-        }
         Some(Self {
             host_id,
             vault_id,
             dir,
         })
+    }
+
+    /// Whether copies may be taken and served right now. Checked per use,
+    /// not once at connect: the host setting can be turned on while a
+    /// session is already open (the Files provider reuses app sessions),
+    /// and a team policy can flip to deny meanwhile.
+    fn active(&self, store: &Store) -> bool {
+        if termoso_core::policy::offline_cache_denied(store, self.vault_id) {
+            // Policy flipped to deny since the copies were taken.
+            let _ = store.clear_file_cache(Some(self.host_id));
+            return false;
+        }
+        store
+            .file_cache_config(self.host_id)
+            .is_ok_and(|cfg| cfg.enabled)
     }
 }
 
@@ -839,13 +846,21 @@ impl SftpSession {
             return None;
         }
         match self.state() {
-            SessionState::Failed { .. } | SessionState::Closed { .. } => self.inner.cache.as_ref(),
+            SessionState::Failed { .. } | SessionState::Closed { .. } => self.cache(),
             _ => None,
         }
     }
 
+    /// The offline cache of this session's saved host, when it is enabled now.
+    fn cache(&self) -> Option<&CacheCtx> {
+        self.inner
+            .cache
+            .as_ref()
+            .filter(|c| c.active(&self.inner.store))
+    }
+
     fn cache_listing(&self, dir: &str, entries: &[SftpEntry]) {
-        if let Some(c) = &self.inner.cache {
+        if let Some(c) = self.cache() {
             let _ = self
                 .inner
                 .store
@@ -854,7 +869,7 @@ impl SftpSession {
     }
 
     fn cache_body(&self, path: &str, mtime: Option<i64>, body: &[u8]) {
-        if let Some(c) = &self.inner.cache {
+        if let Some(c) = self.cache() {
             let _ = self
                 .inner
                 .store
@@ -865,7 +880,7 @@ impl SftpSession {
     /// Serve `path` from the cache when the remote still matches (`stat`
     /// says same size and mtime); refetch and replace otherwise.
     async fn read_through(&self, live: &Live, path: &str) -> Result<Vec<u8>> {
-        let Some(c) = &self.inner.cache else {
+        let Some(c) = self.cache() else {
             return Ok(live.fs.read(path).await?);
         };
         let st = live.fs.stat(path).await?;
@@ -1117,7 +1132,7 @@ impl SftpSession {
         // A read of a cacheable file goes through the cache: whole body
         // fetched once, served from memory, kept for offline use.
         if mode == FileMode::Read
-            && let Some(c) = &self.inner.cache
+            && let Some(c) = self.cache()
             && let Ok(st) = self.runtime.block_on(live.fs.stat(&path))
             && st.kind != sftp::EntryKind::Dir
             && let Some(size) = st.size
@@ -1415,7 +1430,7 @@ impl SftpSession {
 
     /// Cached files of this host (newest first), for the "local copies" list.
     pub fn offline_copies(&self) -> Result<Vec<OfflineCopy>> {
-        let Some(c) = self.inner.cache.as_ref() else {
+        let Some(c) = self.cache() else {
             return Ok(Vec::new());
         };
         Ok(self
@@ -1429,7 +1444,7 @@ impl SftpSession {
 
     /// When the copy of `path` was taken, if there is one.
     pub fn cached_at(&self, path: String) -> Result<Option<i64>> {
-        let Some(c) = self.inner.cache.as_ref() else {
+        let Some(c) = self.cache() else {
             return Ok(None);
         };
         Ok(self

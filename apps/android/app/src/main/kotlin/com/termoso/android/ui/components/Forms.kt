@@ -85,13 +85,14 @@ fun FormField(
     visual: VisualTransformation = VisualTransformation.None,
     trailing: (@Composable () -> Unit)? = null,
     enabled: Boolean = true,
+    singleLine: Boolean = true,
 ) {
     OutlinedTextField(
         value = value,
         onValueChange = onChange,
         label = { Text(label) },
         placeholder = placeholder?.let { { Text(it) } },
-        singleLine = true,
+        singleLine = singleLine,
         enabled = enabled,
         modifier = Modifier.fillMaxWidth(),
         keyboardOptions = KeyboardOptions(

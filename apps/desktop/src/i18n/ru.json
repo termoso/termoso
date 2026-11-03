@@ -2834,7 +2834,7 @@
   "Files you open are kept encrypted on this device and can be browsed when the host is unreachable.": "Открытые файлы сохраняются на этом устройстве в зашифрованном виде и доступны, когда хост недоступен.",
   "Max file size (MiB)": "Макс. размер файла (МиБ)",
   "Total size limit (MiB)": "Общий лимит (МиБ)",
-  "Only these paths (comma-separated, empty = all)": "Только эти пути (через запятую, пусто = все)",
+  "Only these paths (one per line, empty = all)": "Только эти пути (по одному в строке, пусто = все)",
   "Never these paths": "Никогда эти пути",
   "{files} files from {hosts} hosts, {size}": "{files} файлов с {hosts} хостов, {size}",
   "Encrypted offline copies of remote files. Turn them on per host under Files.": "Зашифрованные офлайн-копии удалённых файлов. Включаются для каждого хоста в его настройках."

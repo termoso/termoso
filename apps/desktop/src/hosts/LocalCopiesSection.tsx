@@ -19,11 +19,48 @@ export function fmtBytes(n: number): string {
   return `${v < 10 ? v.toFixed(1) : Math.round(v)} ${units[i]}`;
 }
 
+// One path per line; commas are part of a path, not a separator.
 const splitPaths = (v: string) =>
   v
-    .split(/[,\n]/)
+    .split("\n")
     .map((p) => p.trim())
     .filter(Boolean);
+
+/** Multi-line path list that keeps the text as typed until it is saved. */
+function PathListField({
+  label,
+  placeholder,
+  paths,
+  onChange,
+  onBlur,
+}: {
+  label: string;
+  placeholder: string;
+  paths: string[];
+  onChange: (paths: string[]) => void;
+  onBlur: () => void;
+}) {
+  const [text, setText] = useState<string | null>(null);
+  return (
+    <Field label={label}>
+      <TextField
+        size="small"
+        multiline
+        minRows={1}
+        value={text ?? paths.join("\n")}
+        onChange={(e) => {
+          setText(e.target.value);
+          onChange(splitPaths(e.target.value));
+        }}
+        onBlur={() => {
+          setText(null);
+          onBlur();
+        }}
+        placeholder={placeholder}
+      />
+    </Field>
+  );
+}
 
 /**
  * Host → Files: keep encrypted local copies of files read over SFTP so the
@@ -85,24 +122,20 @@ export function LocalCopiesSection({ hostId }: { hostId: Uuid }) {
         <>
           {num(tr("Max file size (MiB)"), "maxFileMib")}
           {num(tr("Total size limit (MiB)"), "maxTotalMib")}
-          <Field label={tr("Only these paths (comma-separated, empty = all)")}>
-            <TextField
-              size="small"
-              value={draft.includePaths.join(", ")}
-              onChange={(e) => setDraft({ ...draft, includePaths: splitPaths(e.target.value) })}
-              onBlur={() => save.mutate(draft)}
-              placeholder="/var/www, /home/me/docs"
-            />
-          </Field>
-          <Field label={tr("Never these paths")}>
-            <TextField
-              size="small"
-              value={draft.excludePaths.join(", ")}
-              onChange={(e) => setDraft({ ...draft, excludePaths: splitPaths(e.target.value) })}
-              onBlur={() => save.mutate(draft)}
-              placeholder="/home/me/.ssh"
-            />
-          </Field>
+          <PathListField
+            label={tr("Only these paths (one per line, empty = all)")}
+            placeholder={"/var/www\n/home/me/docs"}
+            paths={draft.includePaths}
+            onChange={(includePaths) => setDraft({ ...draft, includePaths })}
+            onBlur={() => save.mutate(draft)}
+          />
+          <PathListField
+            label={tr("Never these paths")}
+            placeholder="/home/me/.ssh"
+            paths={draft.excludePaths}
+            onChange={(excludePaths) => setDraft({ ...draft, excludePaths })}
+            onBlur={() => save.mutate(draft)}
+          />
         </>
       )}
     </SectionCard>

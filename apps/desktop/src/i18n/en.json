@@ -1689,7 +1689,7 @@
   "Only the author or a vault manager can delete this recording": "Only the author or a vault manager can delete this recording",
   "Only the public key is saved. On connect the agent signs with the matching private key; if it is not loaded there, the connection fails instead of falling back to other keys.": "Only the public key is saved. On connect the agent signs with the matching private key; if it is not loaded there, the connection fails instead of falling back to other keys.",
   "Only these actions (optional)": "Only these actions (optional)",
-  "Only these paths (comma-separated, empty = all)": "Only these paths (comma-separated, empty = all)",
+  "Only these paths (one per line, empty = all)": "Only these paths (one per line, empty = all)",
   "Only when I ask": "Only when I ask",
   "Only when the certificate is issued to a different name than the address — a share behind a reverse proxy reached by IP, or a name that is not in DNS. Sent as SNI and Host and checked against the certificate.": "Only when the certificate is issued to a different name than the address — a share behind a reverse proxy reached by IP, or a name that is not in DNS. Sent as SNI and Host and checked against the certificate.",
   "Only you": "Only you",

@@ -844,15 +844,15 @@ private fun FilesSection(state: HostEditorState, draft: HostDraft, vm: HostEdito
                         stringResource(R.string.local_copies_max_total_mib),
                         keyboard = KeyboardType.Number,
                     )
-                    FormField(
-                        fc.includePaths.joinToString(", "),
-                        { v -> vm.updateFileCache { it.copy(includePaths = splitPaths(v)) } },
+                    PathListField(
+                        fc.includePaths,
+                        { v -> vm.updateFileCache { it.copy(includePaths = v) } },
                         stringResource(R.string.local_copies_include_paths),
-                        placeholder = "/var/www, /home/me/docs",
+                        placeholder = "/var/www\n/home/me/docs",
                     )
-                    FormField(
-                        fc.excludePaths.joinToString(", "),
-                        { v -> vm.updateFileCache { it.copy(excludePaths = splitPaths(v)) } },
+                    PathListField(
+                        fc.excludePaths,
+                        { v -> vm.updateFileCache { it.copy(excludePaths = v) } },
                         stringResource(R.string.local_copies_exclude_paths),
                         placeholder = "/home/me/.ssh",
                     )
@@ -868,8 +868,27 @@ private fun FilesSection(state: HostEditorState, draft: HostDraft, vm: HostEdito
     }
 }
 
-private fun splitPaths(v: String): List<String> =
-    v.split(',', '\n').map { it.trim() }.filter { it.isNotEmpty() }
+/**
+ * One path per line. The text is kept as typed (a half-written line or a
+ * blank one stays), only the parsed list goes to the draft; commas are part
+ * of a path, not a separator.
+ */
+@Composable
+private fun PathListField(paths: List<String>, onChange: (List<String>) -> Unit, label: String, placeholder: String) {
+    var text by remember(paths) {
+        mutableStateOf(paths.joinToString("\n").takeIf { it.isNotEmpty() })
+    }
+    FormField(
+        text ?: paths.joinToString("\n"),
+        { v ->
+            text = v
+            onChange(v.lines().map { it.trim() }.filter { it.isNotEmpty() })
+        },
+        label,
+        placeholder = placeholder,
+        singleLine = false,
+    )
+}
 
 @Composable
 private fun CodingAgentRow(state: HostEditorState, draft: HostDraft, onPick: (String?) -> Unit) {

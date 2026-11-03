@@ -1789,7 +1789,7 @@
     <string name="keep_local_copies_summary">Открытые файлы сохраняются на устройстве в зашифрованном виде и доступны, когда хост недоступен.</string>
     <string name="local_copies_max_file_mib">Макс. размер файла (МиБ)</string>
     <string name="local_copies_max_total_mib">Общий лимит (МиБ)</string>
-    <string name="local_copies_include_paths">Только эти пути (через запятую, пусто = все)</string>
+    <string name="local_copies_include_paths">Только эти пути (по одному в строке, пусто = все)</string>
     <string name="local_copies_exclude_paths">Никогда эти пути</string>
     <string name="local_copies_serve_in_files">Отдавать копии в «Файлы» без вопроса</string>
     <string name="local_copies_serve_in_files_summary">Когда хост недоступен, системный выбор файлов сразу показывает локальные копии.</string>
