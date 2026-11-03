@@ -24,6 +24,9 @@ the server's only metrics are opt-in Prometheus counters on a private listener.
 * Downloads: [GitHub Releases](https://github.com/termoso/termoso/releases)
   (`.deb` / `.rpm` / AppImage, NSIS / MSI, `.dmg`, APK, unsigned `.ipa`)
 * License: [AGPL-3.0](LICENSE)
+* Translations: [Hosted Weblate](https://hosted.weblate.org/projects/termoso/)
+  [![Translation status](https://hosted.weblate.org/widget/termoso/svg-badge.svg)](https://hosted.weblate.org/projects/termoso/)
+  — translate in the browser, no git needed
 
 ## Contents
 
