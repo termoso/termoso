@@ -1,9 +1,9 @@
 //! S3 client against a real S3-compatible server (RustFS / MinIO) at
 //! `TERMOSO_TEST_S3_ENDPOINT` (default `http://127.0.0.1:9000`) with
 //! `TERMOSO_TEST_S3_ACCESS_KEY` / `TERMOSO_TEST_S3_SECRET_KEY` (default
-//! `minioadmin`) and an existing bucket `TERMOSO_TEST_S3_BUCKET` (default
-//! `termoso-core-test-s3`). Skips when the endpoint is unreachable unless
-//! `TERMOSO_TEST_REQUIRE_SERVICES` is set.
+//! `minioadmin`); the bucket `TERMOSO_TEST_S3_BUCKET` (default
+//! `termoso-core-test-s3`) is created when missing. Skips when the endpoint
+//! is unreachable unless `TERMOSO_TEST_REQUIRE_SERVICES` is set.
 
 use std::time::Duration;
 
@@ -53,6 +53,11 @@ async fn client() -> Option<S3> {
         spool_dir: Some(std::env::temp_dir()),
         ..S3Config::default()
     };
+    S3::new(cfg.clone())
+        .expect("config")
+        .create_bucket()
+        .await
+        .expect("create bucket");
     Some(S3::connect(cfg).await.expect("connect"))
 }
 

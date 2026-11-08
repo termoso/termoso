@@ -371,6 +371,30 @@ impl S3 {
         }
     }
 
+    /// Create the bucket (`PutBucket`); a bucket this key already owns is
+    /// fine. For first-run setups against a self-hosted server.
+    pub async fn create_bucket(&self) -> Result<()> {
+        let body = if self.inner.region == DEFAULT_REGION {
+            Bytes::new()
+        } else {
+            Bytes::from(format!(
+                "<CreateBucketConfiguration><LocationConstraint>{}</LocationConstraint></CreateBucketConfiguration>",
+                xml_escape(&self.inner.region)
+            ))
+        };
+        let resp = self.call(Method::PUT, "", &[], &[], body).await?;
+        match Self::check(resp, "/").await {
+            Ok(_) => Ok(()),
+            Err(CoreError::S3 { message, .. })
+                if message.starts_with("BucketAlreadyOwnedByYou")
+                    || message.starts_with("BucketAlreadyExists") =>
+            {
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
+    }
+
     /// `host[:port]` of the endpoint.
     pub fn host(&self) -> &str {
         &self.inner.host
