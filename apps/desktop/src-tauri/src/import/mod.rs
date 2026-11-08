@@ -764,6 +764,7 @@ pub fn apply(
                 ..TelnetForm::default()
             }),
             webdav: None,
+            s3: None,
             env_variables: h.env_variables.clone(),
             keep_alive_interval: h.keep_alive_interval,
             timeout: h.timeout,
@@ -1234,6 +1235,7 @@ fn build_chain(
                     mac_address: None,
                     telnet: None,
                     webdav: None,
+                    s3: None,
                     env_variables: Vec::new(),
                     keep_alive_interval: None,
                     timeout: None,
