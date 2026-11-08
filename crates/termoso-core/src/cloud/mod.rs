@@ -15,7 +15,7 @@
 mod aws;
 mod azure;
 mod digitalocean;
-mod sigv4;
+pub(crate) mod sigv4;
 pub(crate) mod xml;
 
 use std::time::Duration;

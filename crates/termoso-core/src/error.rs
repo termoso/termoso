@@ -80,6 +80,14 @@ pub enum CoreError {
         /// Human message (never includes credentials).
         message: String,
     },
+    /// S3 failure; `status` is the HTTP status when the server answered.
+    #[error("s3: {message}")]
+    S3 {
+        /// HTTP status of the failed request, if any.
+        status: Option<u16>,
+        /// Human message (never includes credentials).
+        message: String,
+    },
     /// The server presented a TLS certificate that is neither publicly trusted
     /// nor pinned for this host; `fingerprint` is its SHA-256 (`aa:bb:…`) so
     /// the caller can offer to pin it.
@@ -182,6 +190,7 @@ impl CoreError {
             CoreError::AuthFailed { .. } => "auth_failed",
             CoreError::Sftp(_) => "sftp",
             CoreError::WebDav { .. } => "webdav",
+            CoreError::S3 { .. } => "s3",
             CoreError::CertificateRejected { .. } => "certificate_rejected",
             CoreError::Terminal(_) => "terminal",
             CoreError::Key(_) => "key",

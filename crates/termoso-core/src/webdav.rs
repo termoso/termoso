@@ -592,7 +592,7 @@ pub fn normalize_path(path: &str) -> Result<String> {
     }
 }
 
-fn name_of(path: &str) -> String {
+pub(crate) fn name_of(path: &str) -> String {
     path.trim_end_matches('/')
         .rsplit('/')
         .next()
@@ -795,7 +795,7 @@ fn name_override(cfg: &WebDavConfig, base: &Url) -> Option<String> {
 }
 
 /// Does `cfg` need the URL host resolved before the client can be built?
-fn needs_lookup(cfg: &WebDavConfig) -> Option<(String, u16)> {
+pub(crate) fn needs_lookup(cfg: &WebDavConfig) -> Option<(String, u16)> {
     let base = normalize_url(&cfg.url).ok()?;
     name_override(cfg, &base)?;
     match base.host()? {
@@ -871,6 +871,51 @@ fn reqwest_proxy(p: &crate::ssh::proxy::ProxyConfig) -> Result<reqwest::Proxy> {
     reqwest::Proxy::all(url).map_err(|e| CoreError::Invalid(format!("proxy: {e}")))
 }
 
+/// HTTP client plus the URL requests hang off and the `host[:port]` for
+/// messages, built from the TLS / proxy / name-override part of a
+/// [`WebDavConfig`]. Shared with the S3 client, which speaks the same
+/// transport.
+pub(crate) struct Transport {
+    pub(crate) http: reqwest::Client,
+    pub(crate) base: Url,
+    pub(crate) host: String,
+}
+
+pub(crate) fn transport(cfg: &WebDavConfig) -> Result<Transport> {
+    let origin = normalize_url(&cfg.url)?;
+    let Target { base, resolve } = target(cfg)?;
+    let tls = match &cfg.tls {
+        TlsPolicy::System => None,
+        TlsPolicy::Pinned(fp) => {
+            let pin = parse_fingerprint(fp)?;
+            Some(tls_config_with(
+                Arc::new(PinVerifier {
+                    pin,
+                    provider: Arc::new(rustls::crypto::ring::default_provider()),
+                }),
+                cfg.client_identity.as_ref(),
+            )?)
+        }
+        TlsPolicy::PrivateCa(pem) => {
+            let provider = Arc::new(rustls::crypto::ring::default_provider());
+            let verifier = rustls::client::WebPkiServerVerifier::builder_with_provider(
+                Arc::new(ca_roots(pem)?),
+                provider,
+            )
+            .build()
+            .map_err(|e| CoreError::Invalid(format!("CA certificate: {e}")))?;
+            Some(tls_config_with(verifier, cfg.client_identity.as_ref())?)
+        }
+    };
+    let http = http_client(cfg, tls, resolve.as_ref())?;
+    // Messages name the address the socket opens to, not the TLS name.
+    let host = match origin.port() {
+        Some(p) => format!("{}:{p}", origin.host_str().unwrap_or("")),
+        None => origin.host_str().unwrap_or("").to_string(),
+    };
+    Ok(Transport { http, base, host })
+}
+
 fn http_client(
     cfg: &WebDavConfig,
     tls: Option<rustls::ClientConfig>,
@@ -939,7 +984,7 @@ fn connection_was_aborted(e: &reqwest::Error) -> bool {
 
 /// Did the server close the handshake because of *our* certificate (missing
 /// or not accepted)? Returns the alert name for the message.
-fn client_certificate_alert(e: &reqwest::Error) -> Option<String> {
+pub(crate) fn client_certificate_alert(e: &reqwest::Error) -> Option<String> {
     if let Some(rustls::Error::AlertReceived(a)) = rustls_error(e)
         && matches!(
             a,
@@ -968,7 +1013,7 @@ fn client_certificate_alert(e: &reqwest::Error) -> Option<String> {
 
 /// Is this transport error a certificate rejection? Walks the source chain,
 /// descending into nested `io::Error`s (hyper wraps the rustls error twice).
-fn is_tls_error(e: &reqwest::Error) -> bool {
+pub(crate) fn is_tls_error(e: &reqwest::Error) -> bool {
     matches!(rustls_error(e), Some(rustls::Error::InvalidCertificate(_)))
 }
 
@@ -1232,7 +1277,7 @@ fn parse_http_status(s: &str) -> Option<u16> {
     s.split_whitespace().nth(1)?.parse().ok()
 }
 
-fn parse_http_date(s: &str) -> Option<u32> {
+pub(crate) fn parse_http_date(s: &str) -> Option<u32> {
     let t = s.trim();
     let dt = chrono::DateTime::parse_from_rfc2822(t)
         .or_else(|_| chrono::DateTime::parse_from_rfc3339(t))
@@ -1344,37 +1389,7 @@ impl std::fmt::Debug for WebDav {
 impl WebDav {
     /// Build a client without touching the network.
     pub fn new(cfg: WebDavConfig) -> Result<Self> {
-        let origin = normalize_url(&cfg.url)?;
-        let Target { base, resolve } = target(&cfg)?;
-        let tls = match &cfg.tls {
-            TlsPolicy::System => None,
-            TlsPolicy::Pinned(fp) => {
-                let pin = parse_fingerprint(fp)?;
-                Some(tls_config_with(
-                    Arc::new(PinVerifier {
-                        pin,
-                        provider: Arc::new(rustls::crypto::ring::default_provider()),
-                    }),
-                    cfg.client_identity.as_ref(),
-                )?)
-            }
-            TlsPolicy::PrivateCa(pem) => {
-                let provider = Arc::new(rustls::crypto::ring::default_provider());
-                let verifier = rustls::client::WebPkiServerVerifier::builder_with_provider(
-                    Arc::new(ca_roots(pem)?),
-                    provider,
-                )
-                .build()
-                .map_err(|e| CoreError::Invalid(format!("CA certificate: {e}")))?;
-                Some(tls_config_with(verifier, cfg.client_identity.as_ref())?)
-            }
-        };
-        let http = http_client(&cfg, tls, resolve.as_ref())?;
-        // Messages name the address the socket opens to, not the TLS name.
-        let host = match origin.port() {
-            Some(p) => format!("{}:{p}", origin.host_str().unwrap_or("")),
-            None => origin.host_str().unwrap_or("").to_string(),
-        };
+        let Transport { http, base, host } = transport(&cfg)?;
         let bearer_token = cfg.bearer_token.filter(|t| !t.is_empty());
         let username = cfg.username.filter(|u| !u.is_empty());
         let password = if username.is_some() {

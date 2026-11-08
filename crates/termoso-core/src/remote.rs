@@ -1,6 +1,6 @@
 //! Protocol-neutral view of a remote filesystem, implemented by
-//! [`Sftp`](crate::sftp::Sftp), [`WebDav`](crate::webdav::WebDav) and
-//! [`LocalFs`](crate::localfs::LocalFs) so the file panels, transfer queues
+//! [`Sftp`](crate::sftp::Sftp), [`WebDav`](crate::webdav::WebDav),
+//! [`S3`](crate::s3::S3) and [`LocalFs`](crate::localfs::LocalFs) so the file panels, transfer queues
 //! and the Android documents provider drive any of them through one object.
 
 use std::path::Path;
@@ -21,16 +21,19 @@ pub enum RemoteProtocol {
     Sftp,
     /// WebDAV over HTTP(S).
     WebDav,
+    /// S3-compatible object storage over HTTP(S).
+    S3,
     /// A directory on this device.
     Local,
 }
 
 impl RemoteProtocol {
-    /// Lowercase wire name (`"sftp"`, `"webdav"`, `"local"`).
+    /// Lowercase wire name (`"sftp"`, `"webdav"`, `"s3"`, `"local"`).
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Sftp => "sftp",
             Self::WebDav => "webdav",
+            Self::S3 => "s3",
             Self::Local => "local",
         }
     }

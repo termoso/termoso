@@ -55,6 +55,7 @@ pub mod osdetect;
 pub mod policy;
 pub mod posture;
 pub mod remote;
+pub mod s3;
 pub mod secrets;
 pub mod sftp;
 pub mod ssh;

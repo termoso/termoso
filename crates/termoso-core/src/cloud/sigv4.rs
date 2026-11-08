@@ -1,5 +1,6 @@
-//! AWS Signature Version 4 for a single POST request (what the EC2 Query
-//! API and the Lightsail JSON API need). Reference:
+//! AWS Signature Version 4 ([`sign`] for the POST requests of the EC2 Query
+//! and Lightsail APIs, [`sign_request`] for any method with a query string,
+//! as S3 needs). Reference:
 //! <https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_sigv-create-signed-request.html>
 
 use chrono::{DateTime, Utc};
@@ -35,6 +36,52 @@ pub struct Request<'a> {
 
 /// Sign a POST request at `now`.
 pub fn sign(req: &Request<'_>, access_key: &str, secret_key: &str, now: DateTime<Utc>) -> Signed {
+    sign_request(
+        &GenericRequest {
+            method: "POST",
+            service: req.service,
+            region: req.region,
+            host: req.host,
+            path: req.path,
+            query: "",
+            headers: req.headers,
+            payload_hash: &hex::encode(Sha256::digest(req.body)),
+        },
+        access_key,
+        secret_key,
+        now,
+    )
+}
+
+/// Inputs for one request of any method.
+pub struct GenericRequest<'a> {
+    /// `GET`, `PUT`, …
+    pub method: &'a str,
+    /// `s3`, `ec2`.
+    pub service: &'a str,
+    /// `us-east-1`.
+    pub region: &'a str,
+    /// Host header (no scheme, includes port when non-default).
+    pub host: &'a str,
+    /// Request path, already URI-encoded the AWS way (`/` kept).
+    pub path: &'a str,
+    /// Canonical query string: `k=v` pairs sorted by name, AWS-encoded,
+    /// joined with `&`; empty when there is none.
+    pub query: &'a str,
+    /// Extra headers to sign (name → trimmed value), besides `host` and
+    /// `x-amz-date`.
+    pub headers: &'a [(&'a str, &'a str)],
+    /// Lowercase hex SHA-256 of the body (`UNSIGNED-PAYLOAD` for streams).
+    pub payload_hash: &'a str,
+}
+
+/// Sign any request at `now`.
+pub fn sign_request(
+    req: &GenericRequest<'_>,
+    access_key: &str,
+    secret_key: &str,
+    now: DateTime<Utc>,
+) -> Signed {
     let amz_date = now.format("%Y%m%dT%H%M%SZ").to_string();
     let date = now.format("%Y%m%d").to_string();
 
@@ -53,11 +100,13 @@ pub fn sign(req: &Request<'_>, access_key: &str, secret_key: &str, now: DateTime
         .map(|(k, _)| k.as_str())
         .collect::<Vec<_>>()
         .join(";");
-    let payload_hash = hex::encode(Sha256::digest(req.body));
+    let payload_hash = req.payload_hash;
 
     let canonical_request = format!(
-        "POST\n{path}\n\n{canonical_headers}\n{signed_headers}\n{payload_hash}",
+        "{method}\n{path}\n{query}\n{canonical_headers}\n{signed_headers}\n{payload_hash}",
+        method = req.method,
         path = if req.path.is_empty() { "/" } else { req.path },
+        query = req.query,
     );
     let scope = format!("{date}/{}/{}/aws4_request", req.region, req.service);
     let string_to_sign = format!(
