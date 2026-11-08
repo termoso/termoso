@@ -26,6 +26,7 @@ mod presence;
 mod prompts;
 mod quick;
 mod rotation;
+mod s3;
 mod security;
 mod sessions;
 mod sftp;

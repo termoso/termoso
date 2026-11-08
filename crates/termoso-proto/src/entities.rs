@@ -19,6 +19,7 @@ pub const KINDS: &[&str] = &[
     "ssh_config",
     "telnet_config",
     "webdav_config",
+    "s3_config",
     "serial_config",
     "identity",
     "ssh_key",
@@ -158,6 +159,9 @@ pub mod payload {
             /// WebDAV settings (a file share on this host).
             #[serde(default, skip_serializing_if = "Option::is_none")]
             pub webdav_config_id: Option<Uuid>,
+            /// S3 settings (a bucket on this endpoint).
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub s3_config_id: Option<Uuid>,
             /// Serial settings (local hosts).
             #[serde(default, skip_serializing_if = "Option::is_none")]
             pub serial_config_id: Option<Uuid>,
@@ -326,6 +330,54 @@ pub mod payload {
             #[serde(default, skip_serializing_if = "Option::is_none")]
             pub ca_certificate: Option<String>,
             /// Identity.
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub identity_id: Option<Uuid>,
+            /// SHA-256 fingerprint (`aa:bb:…`) of a self-signed or private-CA
+            /// server certificate the user chose to trust; `None` = system roots.
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub certificate_fingerprint: Option<String>,
+        }
+    }
+
+    schema! {
+        /// S3-compatible bucket settings. The host's address is the endpoint
+        /// (`s3.eu-central-1.amazonaws.com`, `minio.lan`, an R2 account host).
+        /// Credentials live in the referenced identity: `username` is the
+        /// access key ID, `password` the secret access key.
+        #[derive(Default, PartialEq, Eq)]
+        pub struct S3Config {
+            /// Bucket name.
+            pub bucket: String,
+            /// Signing region; empty = `us-east-1` (`auto` for Cloudflare R2).
+            #[serde(default, skip_serializing_if = "String::is_empty")]
+            pub region: String,
+            /// TCP port; `None` = 443 (or 80 with `http`).
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub port: Option<u16>,
+            /// Path below the host where the S3 API is mounted (a reverse
+            /// proxy prefix); empty = `/`.
+            #[serde(default, skip_serializing_if = "String::is_empty")]
+            pub path: String,
+            /// Key prefix the share's root maps to (`backups/2026`); empty =
+            /// the bucket root.
+            #[serde(default, skip_serializing_if = "String::is_empty")]
+            pub prefix: String,
+            /// Plain HTTP instead of HTTPS.
+            #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+            pub http: bool,
+            /// `bucket.host/key` addressing (AWS default) instead of
+            /// `host/bucket/key` (MinIO, RustFS, most self-hosted servers).
+            #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+            pub virtual_host: bool,
+            /// TLS: name sent as SNI and checked against the certificate
+            /// when it differs from the host's address.
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub tls_server_name: Option<String>,
+            /// TLS: PEM bundle of a private certificate authority the
+            /// server certificate must chain to, instead of the system roots.
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub ca_certificate: Option<String>,
+            /// Identity (access key ID + secret).
             #[serde(default, skip_serializing_if = "Option::is_none")]
             pub identity_id: Option<Uuid>,
             /// SHA-256 fingerprint (`aa:bb:…`) of a self-signed or private-CA

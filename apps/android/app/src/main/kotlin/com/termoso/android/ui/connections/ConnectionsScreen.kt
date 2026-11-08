@@ -581,6 +581,7 @@ private fun SftpRow(
         is SessionState.Connected ->
             when (conn.protocol) {
                 FileProtocol.WEBDAV -> stringResource(R.string.webdav_target, conn.target)
+                FileProtocol.S3 -> "S3 · ${conn.target}"
                 FileProtocol.LOCAL -> conn.target
                 FileProtocol.SFTP -> stringResource(R.string.sftp, conn.target)
             } +
@@ -594,7 +595,7 @@ private fun SftpRow(
         subtitle = subtitle,
         leading = {
             when (conn.protocol) {
-                FileProtocol.WEBDAV -> IconTile(Icons.Filled.CloudQueue)
+                FileProtocol.WEBDAV, FileProtocol.S3 -> IconTile(Icons.Filled.CloudQueue)
                 FileProtocol.LOCAL -> IconTile(Icons.Filled.PhoneAndroid)
                 FileProtocol.SFTP -> IconTile(Icons.Filled.FolderOpen)
             }

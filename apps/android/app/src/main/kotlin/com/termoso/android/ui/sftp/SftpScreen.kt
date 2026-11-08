@@ -247,8 +247,7 @@ fun SftpScreen(
                                 Text(
                                     when (conn.protocol) {
                                         FileProtocol.WEBDAV -> stringResource(R.string.webdav_target, conn.target)
-                                        FileProtocol.LOCAL -> conn.target
-                                        FileProtocol.SFTP -> conn.target
+                                        FileProtocol.S3, FileProtocol.LOCAL, FileProtocol.SFTP -> conn.target
                                     },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,

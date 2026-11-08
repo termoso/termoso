@@ -54,6 +54,12 @@ pub enum SftpTarget {
         #[serde(default)]
         vault_id: Option<Uuid>,
     },
+    /// Open the S3 section of a saved host.
+    S3 {
+        host_id: Uuid,
+        #[serde(default)]
+        vault_id: Option<Uuid>,
+    },
     /// Browse the offline copies of a saved host (read-only, no connection).
     Offline { host_id: Uuid },
 }
@@ -460,6 +466,16 @@ async fn connect<R: Runtime>(
         }
         SftpTarget::Webdav { host_id, vault_id } => {
             let conn = crate::webdav::connect(app, id, *host_id, *vault_id).await?;
+            Ok(Connected {
+                title: conn.label,
+                display: conn.display,
+                host_id: Some(*host_id),
+                fs: conn.fs,
+                keepalive: Vec::new(),
+            })
+        }
+        SftpTarget::S3 { host_id, vault_id } => {
+            let conn = crate::s3::connect(app, id, *host_id, *vault_id).await?;
             Ok(Connected {
                 title: conn.label,
                 display: conn.display,

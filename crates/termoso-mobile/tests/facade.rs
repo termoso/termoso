@@ -461,7 +461,12 @@ fn connecting_checks_the_host_vault() {
         .expect("foreign vault");
     assert!(matches!(err, MobileError::Invalid { .. }), "{err}");
     let err = app
-        .webdav_host(host.id.clone(), other, files.clone())
+        .webdav_host(host.id.clone(), other.clone(), files.clone())
+        .err()
+        .expect("foreign vault");
+    assert!(matches!(err, MobileError::Invalid { .. }), "{err}");
+    let err = app
+        .s3_host(host.id.clone(), other, files.clone())
         .err()
         .expect("foreign vault");
     assert!(matches!(err, MobileError::Invalid { .. }), "{err}");

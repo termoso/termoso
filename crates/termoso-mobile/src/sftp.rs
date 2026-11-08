@@ -30,6 +30,7 @@ use crate::connect::{
 };
 use crate::error::{MobileError, Result};
 use crate::presence::Slot;
+use crate::s3::connect_s3;
 use crate::session::SessionState;
 use crate::settings::MobileSettings;
 use crate::webdav::connect_webdav;
@@ -63,6 +64,8 @@ impl From<sftp::EntryKind> for EntryKind {
 pub enum FileProtocol {
     Sftp,
     Webdav,
+    /// S3-compatible object storage.
+    S3,
     /// The local shell's home directory on this device.
     Local,
 }
@@ -73,6 +76,7 @@ impl FileProtocol {
         match self {
             Self::Sftp => "sftp",
             Self::Webdav => "webdav",
+            Self::S3 => "s3",
             Self::Local => "local",
         }
     }
@@ -359,6 +363,13 @@ pub(crate) enum Backend {
         /// PUT.
         spool_dir: PathBuf,
     },
+    /// The S3 section of a saved host.
+    S3 {
+        resolved: ResolvedHost,
+        /// App-writable directory where write-mode files spool before the
+        /// upload.
+        spool_dir: PathBuf,
+    },
     /// The local shell's home; paths are relative to it and cannot leave it.
     Local { root: PathBuf, home: String },
     /// SFTP over the SSH connection of an open terminal: no new login, no
@@ -376,6 +387,7 @@ impl Backend {
         match self {
             Self::Sftp { .. } | Self::Session { .. } => FileProtocol::Sftp,
             Self::WebDav { .. } => FileProtocol::Webdav,
+            Self::S3 { .. } => FileProtocol::S3,
             Self::Local { .. } => FileProtocol::Local,
         }
     }
@@ -389,7 +401,7 @@ impl Backend {
                 server_copy: false,
                 resume_upload: true,
             },
-            Self::WebDav { .. } => FileCapabilities {
+            Self::WebDav { .. } | Self::S3 { .. } => FileCapabilities {
                 permissions: false,
                 symlinks: false,
                 ownership: false,
@@ -725,7 +737,9 @@ impl CacheCtx {
             Backend::Sftp {
                 resolved: Some(r), ..
             } => (r.host.id, r.host.vault_id),
-            Backend::WebDav { resolved, .. } => (resolved.host.id, resolved.host.vault_id),
+            Backend::WebDav { resolved, .. } | Backend::S3 { resolved, .. } => {
+                (resolved.host.id, resolved.host.vault_id)
+            }
             Backend::Session {
                 host_id: Some(h), ..
             } => {
@@ -1604,6 +1618,15 @@ async fn run(inner: Arc<Inner>, backend: Backend, settings: MobileSettings) {
                 .map(|w| w.url.clone())
                 .unwrap_or_default(),
         ),
+        Backend::S3 { resolved, .. } => (
+            Some(resolved.host.id),
+            resolved.host.data.label.clone(),
+            resolved
+                .s3
+                .as_ref()
+                .and_then(|s| termoso_core::s3::display_url(&resolved.host.data.address, s).ok())
+                .unwrap_or_default(),
+        ),
         Backend::Session {
             host_id,
             label,
@@ -1650,6 +1673,16 @@ async fn run(inner: Arc<Inner>, backend: Backend, settings: MobileSettings) {
                 let dav = connect_webdav(&inner.conn, resolved, spool_dir.clone()).await?;
                 Ok(Live {
                     fs: Arc::new(dav),
+                    ssh: None,
+                })
+            }
+            Backend::S3 {
+                resolved,
+                spool_dir,
+            } => {
+                let s3 = connect_s3(&inner.conn, resolved, spool_dir.clone()).await?;
+                Ok(Live {
+                    fs: Arc::new(s3),
                     ssh: None,
                 })
             }

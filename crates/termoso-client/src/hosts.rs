@@ -7,8 +7,8 @@ use std::collections::{HashMap, HashSet};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use termoso_core::model::{
-    ClientCertificate, Entity, Group, Host, HostChain, HostSnippet, Identity, Proxy, SerialConfig,
-    Snippet, SshCertificate, SshConfig, SshKey, Tag, TelnetConfig, WebDavConfig,
+    ClientCertificate, Entity, Group, Host, HostChain, HostSnippet, Identity, Proxy, S3Config,
+    SerialConfig, Snippet, SshCertificate, SshConfig, SshKey, Tag, TelnetConfig, WebDavConfig,
 };
 use termoso_core::store::Store;
 use termoso_core::webdav::client_certificate_fingerprint;
@@ -29,8 +29,8 @@ pub struct HostCard {
     pub address: String,
     pub group_id: Option<Uuid>,
     pub group_path: Vec<String>,
-    /// Primary protocol: `ssh`, or `telnet` / `webdav` when the host has no
-    /// SSH section.
+    /// Primary protocol: `ssh`, or `telnet` / `webdav` / `s3` when the host
+    /// has no SSH section.
     pub protocol: String,
     /// Effective username of the primary protocol.
     pub username: String,
@@ -40,6 +40,9 @@ pub struct HostCard {
     pub telnet_port: Option<u16>,
     /// Base URL of the host's WebDAV share, when it has one.
     pub webdav_url: Option<String>,
+    /// `host[:port]/bucket/prefix/` of the host's S3 section, when it has one.
+    #[serde(default)]
+    pub s3_url: Option<String>,
     /// The SSH section connects over Mosh by default.
     pub use_mosh: bool,
     pub tags: Vec<String>,
@@ -128,6 +131,9 @@ pub struct HostForm {
     /// WebDAV section, when the host exposes a file share over HTTP(S).
     #[serde(default)]
     pub webdav: Option<WebDavForm>,
+    /// S3 section, when the host is an S3-compatible endpoint with a bucket.
+    #[serde(default)]
+    pub s3: Option<S3Form>,
     #[serde(default)]
     pub env_variables: Vec<(String, String)>,
     #[serde(default)]
@@ -243,6 +249,57 @@ fn default_webdav_auth() -> String {
 
 pub const WEBDAV_AUTH_PASSWORD: &str = "password";
 pub const WEBDAV_AUTH_TOKEN: &str = "token";
+
+/// S3 section of the host editor: bucket, endpoint details, access key and
+/// the certificate the user chose to trust. The host's address is the
+/// endpoint host.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct S3Form {
+    /// Bucket name.
+    #[serde(default)]
+    pub bucket: String,
+    /// Signing region; empty = `us-east-1` (`auto` for R2).
+    #[serde(default)]
+    pub region: String,
+    /// TCP port; `None` = 443 (80 with `http`).
+    #[serde(default)]
+    pub port: Option<u16>,
+    /// Path below the host where the S3 API is mounted; empty = `/`.
+    #[serde(default)]
+    pub path: String,
+    /// Key prefix the share's root maps to; empty = the bucket root.
+    #[serde(default)]
+    pub prefix: String,
+    /// Plain HTTP instead of HTTPS.
+    #[serde(default)]
+    pub http: bool,
+    /// `bucket.host` addressing instead of `host/bucket`.
+    #[serde(default)]
+    pub virtual_host: bool,
+    /// TLS name (SNI + certificate check) when it differs from the address.
+    #[serde(default)]
+    pub tls_server_name: Option<String>,
+    /// PEM bundle of a private CA to trust instead of the system roots.
+    #[serde(default)]
+    pub ca_certificate: Option<String>,
+    /// Access key ID.
+    #[serde(default)]
+    pub access_key: String,
+    /// Secret access key; `None` keeps the stored one when editing,
+    /// `Some("")` clears it.
+    #[serde(default)]
+    pub secret_key: Option<String>,
+    /// Reference an existing (visible) identity instead of the inline one.
+    #[serde(default)]
+    pub identity_id: Option<Uuid>,
+    /// Pinned SHA-256 fingerprint of a self-signed server certificate.
+    #[serde(default)]
+    pub certificate_fingerprint: Option<String>,
+    /// Set when the stored identity has a secret key.
+    #[serde(default)]
+    pub has_secret_key: bool,
+}
 
 /// Serial line settings as edited in the Serial tab.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -363,6 +420,64 @@ fn is_telnet_only(h: &Host) -> bool {
 /// Telnet.
 fn is_webdav_only(h: &Host) -> bool {
     h.webdav_config_id.is_some() && h.ssh_config_id.is_none() && h.telnet_config_id.is_none()
+}
+
+/// S3 is the primary protocol only when the host has no other section.
+fn is_s3_only(h: &Host) -> bool {
+    h.s3_config_id.is_some()
+        && h.ssh_config_id.is_none()
+        && h.telnet_config_id.is_none()
+        && h.webdav_config_id.is_none()
+}
+
+/// Validate the S3 section's connection fields; identity and pin are
+/// filled in by the caller.
+fn clean_s3_section(s: &S3Form) -> Result<S3Config> {
+    if s.port == Some(0) {
+        return Err(ClientError::invalid("S3 port must be 1–65535"));
+    }
+    let bucket = termoso_core::s3::validate_bucket(&s.bucket)
+        .map_err(|e| ClientError::invalid(format!("S3: {e}")))?;
+    let name = s
+        .tls_server_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|n| !n.is_empty() && !s.http);
+    let tls_server_name = match name {
+        Some(n) => Some(
+            termoso_core::webdav::validate_server_name(n)
+                .map_err(|e| ClientError::invalid(format!("S3 TLS: {e}")))?,
+        ),
+        None => None,
+    };
+    let ca = s
+        .ca_certificate
+        .as_deref()
+        .map(str::trim)
+        .filter(|c| !c.is_empty() && !s.http);
+    let ca_certificate = match ca {
+        Some(pem) => {
+            termoso_core::webdav::validate_ca_bundle(pem)
+                .map_err(|e| ClientError::invalid(format!("S3 TLS: {e}")))?;
+            Some(pem.to_string())
+        }
+        None => None,
+    };
+    Ok(S3Config {
+        bucket,
+        region: s.region.trim().to_string(),
+        port: s.port,
+        path: termoso_core::webdav::normalize_share_path(&s.path),
+        prefix: termoso_core::s3::normalize_prefix(&s.prefix)
+            .trim_end_matches('/')
+            .to_string(),
+        http: s.http,
+        virtual_host: s.virtual_host,
+        tls_server_name,
+        ca_certificate,
+        identity_id: None,
+        certificate_fingerprint: None,
+    })
 }
 
 /// Validate the WebDAV section's connection fields; identity and pin are
@@ -602,7 +717,11 @@ pub fn cards(store: &Store, vault_id: Option<Uuid>) -> Result<Vec<HostCard>> {
         let r = store.resolve_host(h.id)?;
         let telnet_only = is_telnet_only(&h.data);
         let webdav_only = is_webdav_only(&h.data);
+        let s3_only = is_s3_only(&h.data);
         let telnet_port = r.telnet.as_ref().map(|t| t.port.unwrap_or(23));
+        let s3_url =
+            r.s3.as_ref()
+                .and_then(|s| termoso_core::s3::display_url(&h.data.address, s).ok());
         let webdav_url = r
             .webdav
             .as_ref()
@@ -616,11 +735,20 @@ pub fn cards(store: &Store, vault_id: Option<Uuid>) -> Result<Vec<HostCard>> {
                 .and_then(|u| url::Url::parse(u).ok())
                 .and_then(|u| u.port_or_known_default())
                 .unwrap_or(443)
+        } else if s3_only {
+            r.s3.as_ref()
+                .and_then(|s| s.port.or(if s.http { Some(80) } else { Some(443) }))
+                .unwrap_or(443)
         } else {
             r.port()
         };
         let username = if webdav_only {
             r.webdav_identity
+                .as_ref()
+                .map(|i| i.data.username.clone())
+                .unwrap_or_default()
+        } else if s3_only {
+            r.s3_identity
                 .as_ref()
                 .map(|i| i.data.username.clone())
                 .unwrap_or_default()
@@ -631,6 +759,8 @@ pub fn cards(store: &Store, vault_id: Option<Uuid>) -> Result<Vec<HostCard>> {
             "telnet"
         } else if webdav_only {
             "webdav"
+        } else if s3_only {
+            "s3"
         } else {
             "ssh"
         };
@@ -646,6 +776,7 @@ pub fn cards(store: &Store, vault_id: Option<Uuid>) -> Result<Vec<HostCard>> {
             port,
             telnet_port,
             webdav_url,
+            s3_url,
             use_mosh: protocol == "ssh" && r.ssh.use_mosh,
             tags: r.tags,
             os_name: h.data.os_name.clone(),
@@ -846,6 +977,32 @@ pub fn form(store: &Store, id: Uuid) -> Result<HostForm> {
         Some(c) => store.get::<WebDavConfig>(c)?.map(|e| e.data),
         None => None,
     };
+    let s3_cfg = match host.data.s3_config_id {
+        Some(c) => store.get::<S3Config>(c)?.map(|e| e.data),
+        None => None,
+    };
+    let s3 = match &s3_cfg {
+        Some(s) => {
+            let login = flatten_identity(store, s.identity_id)?;
+            Some(S3Form {
+                bucket: s.bucket.clone(),
+                region: s.region.clone(),
+                port: s.port,
+                path: s.path.clone(),
+                prefix: s.prefix.clone(),
+                http: s.http,
+                virtual_host: s.virtual_host,
+                tls_server_name: s.tls_server_name.clone(),
+                ca_certificate: s.ca_certificate.clone(),
+                access_key: login.username,
+                secret_key: None,
+                identity_id: login.identity_id,
+                certificate_fingerprint: s.certificate_fingerprint.clone(),
+                has_secret_key: login.has_password,
+            })
+        }
+        None => None,
+    };
     let ssh_login = flatten_identity(store, ssh.as_ref().and_then(|s| s.identity_id))?;
     let webdav = match &webdav_cfg {
         Some(w) => {
@@ -897,7 +1054,7 @@ pub fn form(store: &Store, id: Uuid) -> Result<HostForm> {
         address: host.data.address,
         group_id: host.data.group_id,
         // Hosts without any section (legacy rows) edit as SSH.
-        ssh: ssh.is_some() || (telnet_cfg.is_none() && webdav_cfg.is_none()),
+        ssh: ssh.is_some() || (telnet_cfg.is_none() && webdav_cfg.is_none() && s3_cfg.is_none()),
         port: ssh.as_ref().and_then(|s| s.port),
         username: ssh_login.username,
         password: None,
@@ -923,6 +1080,7 @@ pub fn form(store: &Store, id: Uuid) -> Result<HostForm> {
         gateway_id: ssh.as_ref().and_then(|s| s.gateway_id),
         telnet,
         webdav,
+        s3,
         env_variables: ssh
             .as_ref()
             .map(|s| s.env_variables.clone())
@@ -954,13 +1112,22 @@ fn inline_identity_of(
 /// webdav_config and their hidden identities.
 pub fn save(store: &Store, f: &HostForm) -> Result<HostCard> {
     let label = f.label.trim();
-    if !f.ssh && f.telnet.is_none() && f.webdav.is_none() {
+    if !f.ssh && f.telnet.is_none() && f.webdav.is_none() && f.s3.is_none() {
         return Err(ClientError::invalid(
-            "a host needs an SSH, Telnet or WebDAV section",
+            "a host needs an SSH, Telnet, WebDAV or S3 section",
         ));
     }
     let webdav_section = match &f.webdav {
         Some(w) => Some(clean_webdav_section(w)?),
+        None => None,
+    };
+    let s3_section = match &f.s3 {
+        Some(s) => {
+            if s.identity_id.is_none() && s.access_key.trim().is_empty() {
+                return Err(ClientError::invalid("S3: access key is required"));
+            }
+            Some(clean_s3_section(s)?)
+        }
         None => None,
     };
     let address = f.address.trim();
@@ -970,6 +1137,10 @@ pub fn save(store: &Store, f: &HostForm) -> Result<HostCard> {
     if let Some(w) = &webdav_section {
         termoso_core::webdav::share_url(address, w)
             .map_err(|e| ClientError::invalid(format!("WebDAV: {e}")))?;
+    }
+    if let Some(s) = &s3_section {
+        termoso_core::s3::config_for(address, s)
+            .map_err(|e| ClientError::invalid(format!("S3: {e}")))?;
     }
     if let Some(gid) = f.group_id {
         let g = store.require::<Group>(gid)?;
@@ -1007,6 +1178,12 @@ pub fn save(store: &Store, f: &HostForm) -> Result<HostCard> {
         store,
         existing_webdav.as_ref().and_then(|w| w.data.identity_id),
     )?;
+    let existing_s3 = match existing.as_ref().and_then(|h| h.data.s3_config_id) {
+        Some(c) => store.get::<S3Config>(c)?,
+        None => None,
+    };
+    let s3_inline_identity =
+        inline_identity_of(store, existing_s3.as_ref().and_then(|s| s.data.identity_id))?;
     // Serial consoles are no longer saved hosts; drop a leftover config.
     if let Some(cid) = existing.as_ref().and_then(|h| h.data.serial_config_id)
         && store.get::<SerialConfig>(cid)?.is_some()
@@ -1179,6 +1356,48 @@ pub fn save(store: &Store, f: &HostForm) -> Result<HostCard> {
         None
     };
 
+    let s3_config_id = if let (Some(sf), Some(section)) = (&f.s3, s3_section) {
+        let identity_id = upsert_identity(
+            store,
+            f.vault_id,
+            s3_inline_identity.as_ref(),
+            &Credentials {
+                identity_id: sf.identity_id,
+                username: &sf.access_key,
+                password: sf.secret_key.as_deref(),
+                totp_secret: None,
+                ssh_key_id: None,
+                ssh_certificate_id: None,
+                ssh_id: false,
+                ssh_id_key_type: None,
+                label: identity_label,
+                webdav: None,
+            },
+        )?;
+        let s = S3Config {
+            identity_id,
+            certificate_fingerprint: clean_fingerprint(&sf.certificate_fingerprint)?,
+            ..section
+        };
+        Some(match &existing_s3 {
+            Some(e) => {
+                if e.data != s {
+                    store.update(e.id, &s)?;
+                }
+                e.id
+            }
+            None => store.insert(f.vault_id, &s)?,
+        })
+    } else {
+        if let Some(i) = &s3_inline_identity {
+            store.delete(i.id)?;
+        }
+        if let Some(e) = &existing_s3 {
+            store.delete(e.id)?;
+        }
+        None
+    };
+
     let mut host = existing
         .as_ref()
         .map(|e| e.data.clone())
@@ -1193,6 +1412,7 @@ pub fn save(store: &Store, f: &HostForm) -> Result<HostCard> {
     host.ssh_config_id = ssh_config_id;
     host.telnet_config_id = telnet_config_id;
     host.webdav_config_id = webdav_config_id;
+    host.s3_config_id = s3_config_id;
     host.serial_config_id = None;
     host.tag_ids = f.tag_ids.clone();
     host.notes = f.notes.clone();
@@ -1250,6 +1470,12 @@ pub fn delete(store: &Store, id: Uuid) -> Result<()> {
     }
     if let Some(cid) = host.data.webdav_config_id
         && let Some(cfg) = store.get::<WebDavConfig>(cid)?
+    {
+        identity_refs.extend(cfg.data.identity_id);
+        store.delete(cfg.id)?;
+    }
+    if let Some(cid) = host.data.s3_config_id
+        && let Some(cfg) = store.get::<S3Config>(cid)?
     {
         identity_refs.extend(cfg.data.identity_id);
         store.delete(cfg.id)?;
@@ -1901,6 +2127,10 @@ fn copy_host_with(
         Some(c) => store.get::<WebDavConfig>(c)?.map(|e| e.data),
         None => None,
     };
+    let s3 = match src.data.s3_config_id {
+        Some(c) => store.get::<S3Config>(c)?.map(|e| e.data),
+        None => None,
+    };
     if let Some(i) = load_identity(store, ssh.as_ref().and_then(|s| s.identity_id))? {
         if i.data.is_visible && i.vault_id == vault_id {
             f.identity_id = Some(i.id);
@@ -1942,6 +2172,17 @@ fn copy_host_with(
             wf.password = i.data.password.clone();
         }
     }
+    if let Some(sf) = f.s3.as_mut()
+        && let Some(i) = load_identity(store, s3.as_ref().and_then(|s| s.identity_id))?
+    {
+        if i.data.is_visible && i.vault_id == vault_id {
+            sf.identity_id = Some(i.id);
+        } else {
+            sf.identity_id = None;
+            sf.access_key = i.data.username.clone();
+            sf.secret_key = i.data.password.clone();
+        }
+    }
     if creds == CopyCredentials::Personal {
         f.username = String::new();
         f.password = None;
@@ -1958,6 +2199,11 @@ fn copy_host_with(
             wf.username = String::new();
             wf.password = None;
             wf.identity_id = None;
+        }
+        if let Some(sf) = f.s3.as_mut() {
+            sf.access_key = String::new();
+            sf.secret_key = None;
+            sf.identity_id = None;
         }
     }
     if !same_vault {
@@ -2165,6 +2411,7 @@ mod tests {
             mac_address: None,
             telnet: None,
             webdav: None,
+            s3: None,
             env_variables: vec![],
             keep_alive_interval: None,
             timeout: None,
@@ -2455,6 +2702,72 @@ mod tests {
         assert!(davs.is_empty());
         let identities: Vec<Entity<Identity>> = s.list(Some(vault)).unwrap();
         assert_eq!(identities.len(), 1);
+    }
+
+    #[test]
+    fn s3_section_saves_bucket_and_keys() {
+        let s = store();
+        let vault = s.local_vault().unwrap().id;
+        let mut f = new_form(vault);
+        f.ssh = false;
+        f.address = "minio.lan".into();
+        f.s3 = Some(S3Form {
+            bucket: "Backups".into(),
+            access_key: "AKIA".into(),
+            secret_key: Some("s3cr3t".into()),
+            ..S3Form::default()
+        });
+        assert!(save(&s, &f).is_err(), "bucket names are lowercase");
+        let sf = f.s3.as_mut().unwrap();
+        sf.bucket = "backups".into();
+        sf.port = Some(9000);
+        sf.http = true;
+        sf.prefix = "/termoso/".into();
+        let card = save(&s, &f).unwrap();
+        assert_eq!(card.protocol, "s3");
+        assert_eq!(card.port, 9000);
+        assert_eq!(card.username, "AKIA");
+        assert_eq!(
+            card.s3_url.as_deref(),
+            Some("minio.lan:9000/backups/termoso/")
+        );
+        let identities: Vec<Entity<Identity>> = s.list(Some(vault)).unwrap();
+        assert_eq!(identities.len(), 1, "the SSH login is not kept");
+
+        let f = form(&s, card.id).unwrap();
+        assert!(!f.ssh);
+        let sf = f.s3.clone().expect("s3 section");
+        assert_eq!(sf.bucket, "backups");
+        assert_eq!(sf.prefix, "termoso");
+        assert_eq!(sf.access_key, "AKIA");
+        assert!(sf.has_secret_key);
+        assert!(sf.secret_key.is_none());
+        let r = s.resolve_host(card.id).unwrap();
+        assert_eq!(r.protocol(), "s3");
+        assert_eq!(
+            r.s3_identity.as_ref().unwrap().data.password.as_deref(),
+            Some("s3cr3t")
+        );
+        let cfg = termoso_core::s3::config_for(&card.address, r.s3.as_ref().unwrap())
+            .unwrap()
+            .with_identity(r.s3_identity.as_ref().map(|i| &i.data))
+            .unwrap();
+        assert_eq!(cfg.endpoint, "http://minio.lan:9000/");
+        assert_eq!(cfg.access_key, "AKIA");
+        assert_eq!(cfg.secret_key, "s3cr3t");
+
+        let mut bad = f.clone();
+        bad.s3.as_mut().unwrap().access_key = String::new();
+        assert!(save(&s, &bad).is_err(), "access key required");
+
+        let mut f = f;
+        f.s3 = None;
+        f.ssh = true;
+        let card = save(&s, &f).unwrap();
+        assert_eq!(card.protocol, "ssh");
+        assert_eq!(card.s3_url, None);
+        let cfgs: Vec<Entity<S3Config>> = s.list(Some(vault)).unwrap();
+        assert!(cfgs.is_empty());
     }
 
     #[test]

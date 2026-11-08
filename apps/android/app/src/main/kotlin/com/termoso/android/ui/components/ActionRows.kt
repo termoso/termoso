@@ -77,12 +77,13 @@ fun OpenSftpRow(conn: SftpConnection, onOpen: () -> Unit, onClose: () -> Unit) {
     val state by conn.state.collectAsStateWithLifecycle()
     OpenRow(
         icon = when (conn.protocol) {
-            FileProtocol.WEBDAV -> Icons.Filled.CloudQueue
+            FileProtocol.WEBDAV, FileProtocol.S3 -> Icons.Filled.CloudQueue
             FileProtocol.LOCAL -> Icons.Filled.PhoneAndroid
             FileProtocol.SFTP -> Icons.Filled.FolderOpen
         },
         title = when (conn.protocol) {
             FileProtocol.WEBDAV -> "WebDAV"
+            FileProtocol.S3 -> "S3"
             FileProtocol.LOCAL -> stringResource(R.string.local_shell_files)
             FileProtocol.SFTP -> "SFTP"
         },

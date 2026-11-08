@@ -223,6 +223,7 @@ fn validate_payload(kind: &str, data: &serde_json::Value) -> Result<()> {
         "ssh_config" => m::SshConfig,
         "telnet_config" => m::TelnetConfig,
         "webdav_config" => m::WebDavConfig,
+        "s3_config" => m::S3Config,
         "identity" => m::Identity,
         "ssh_key" => m::SshKey,
         "ssh_certificate" => m::SshCertificate,

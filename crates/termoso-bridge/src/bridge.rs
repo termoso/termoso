@@ -9,7 +9,7 @@ use termoso_crypto::keys::KeyPair;
 use termoso_crypto::sealed;
 use termoso_proto::bridge::BridgeSelf;
 use termoso_proto::entities::payload::{
-    Group, Host, Identity, Snippet, SshConfig, SshKey, Tag, TelnetConfig, WebDavConfig,
+    Group, Host, Identity, S3Config, Snippet, SshConfig, SshKey, Tag, TelnetConfig, WebDavConfig,
 };
 use termoso_proto::sync::{EntityChange, EntityDelete, PullRequest, PushRequest, PushResult};
 use tokio::sync::Mutex;
@@ -890,6 +890,7 @@ fn plan_host(v: &VaultState, external_id: &str, req: &HostRequest) -> Result<Pla
         ssh_config_id,
         telnet_config_id,
         webdav_config_id: old.webdav_config_id,
+        s3_config_id: old.s3_config_id,
         serial_config_id: old.serial_config_id,
         tag_ids,
         notes: req.notes.clone().unwrap_or(old.notes),
@@ -1181,10 +1182,24 @@ fn plan_delete_webdav(v: &VaultState, plan: &mut Plan, id: Option<Uuid>) {
     }
 }
 
+fn plan_delete_s3(v: &VaultState, plan: &mut Plan, id: Option<Uuid>) {
+    let Some(id) = id else { return };
+    if let Some(cfg) = v.get::<S3Config>(id, "s3_config") {
+        if let Some(iid) = cfg.identity_id
+            && v.get::<Identity>(iid, "identity")
+                .is_some_and(|i| !i.is_visible)
+        {
+            plan.delete(iid);
+        }
+        plan.delete(id);
+    }
+}
+
 fn plan_delete_host(v: &VaultState, plan: &mut Plan, id: Uuid, h: &Host) {
     plan_delete_ssh(v, plan, h.ssh_config_id);
     plan_delete_telnet(v, plan, h.telnet_config_id);
     plan_delete_webdav(v, plan, h.webdav_config_id);
+    plan_delete_s3(v, plan, h.s3_config_id);
     plan.delete(id);
 }
 

@@ -182,6 +182,94 @@ impl S3Config {
     }
 }
 
+impl S3Config {
+    /// Take the login material a vault identity holds: `username` is the
+    /// access key ID, `password` the secret access key; a client certificate
+    /// is used for mTLS when the identity carries one.
+    pub fn with_identity(mut self, identity: Option<&crate::model::Identity>) -> Result<Self> {
+        let Some(identity) = identity else {
+            return Ok(self);
+        };
+        self.access_key = identity.username.trim().to_string();
+        self.secret_key = identity.password.clone().unwrap_or_default();
+        self.client_identity = match &identity.client_certificate {
+            Some(c) => Some(ClientIdentity::from_pem(&c.certificate, &c.private_key)?),
+            None => None,
+        };
+        Ok(self)
+    }
+}
+
+/// Endpoint URL of a host's S3 section: scheme from `http`, the host's
+/// address, the port when it is not the scheme default, the mount path.
+pub fn endpoint_url(address: &str, section: &crate::model::S3Config) -> Result<Url> {
+    let host = address.trim();
+    if host.is_empty() {
+        return Err(CoreError::Invalid("address is required".into()));
+    }
+    let host = if host.contains(':') && !host.starts_with('[') {
+        format!("[{host}]")
+    } else {
+        host.to_string()
+    };
+    let scheme = if section.http { "http" } else { "https" };
+    let default_port = if section.http { 80 } else { 443 };
+    let port = match section.port {
+        Some(p) if p != default_port => format!(":{p}"),
+        _ => String::new(),
+    };
+    webdav::normalize_url(&format!(
+        "{scheme}://{host}{port}{}",
+        webdav::normalize_share_path(&section.path)
+    ))
+}
+
+/// `host[:port]/bucket/prefix` of a section, for host cards and titles.
+pub fn display_url(address: &str, section: &crate::model::S3Config) -> Result<String> {
+    let url = endpoint_url(address, section)?;
+    let mut s = url.to_string();
+    if let Some(rest) = s
+        .strip_prefix("https://")
+        .or_else(|| s.strip_prefix("http://"))
+    {
+        s = rest.to_string();
+    }
+    if !s.ends_with('/') {
+        s.push('/');
+    }
+    s.push_str(section.bucket.trim());
+    s.push('/');
+    s.push_str(&normalize_prefix(&section.prefix));
+    Ok(s)
+}
+
+/// Runtime connection parameters for a host's S3 section: endpoint from
+/// the address and section, certificate policy from the pin or CA it
+/// carries (a pin wins), SNI / name override from `tls_server_name`.
+/// Credentials come separately through [`S3Config::with_identity`].
+pub fn config_for(address: &str, section: &crate::model::S3Config) -> Result<S3Config> {
+    let tls = match (&section.certificate_fingerprint, &section.ca_certificate) {
+        (Some(fp), _) if !fp.trim().is_empty() => TlsPolicy::Pinned(fp.clone()),
+        (_, Some(ca)) if !ca.trim().is_empty() => TlsPolicy::PrivateCa(ca.clone()),
+        _ => TlsPolicy::System,
+    };
+    Ok(S3Config {
+        endpoint: endpoint_url(address, section)?.to_string(),
+        bucket: validate_bucket(&section.bucket)?,
+        region: section.region.trim().to_string(),
+        prefix: normalize_prefix(&section.prefix),
+        path_style: !section.virtual_host,
+        tls,
+        server_name: section
+            .tls_server_name
+            .as_deref()
+            .map(str::trim)
+            .filter(|n| !n.is_empty())
+            .map(str::to_string),
+        ..S3Config::default()
+    })
+}
+
 /// Validate a bucket name the way S3 does (3–63 chars, lowercase letters,
 /// digits, `.` and `-`, no leading/trailing separators).
 pub fn validate_bucket(name: &str) -> Result<String> {
@@ -1634,6 +1722,49 @@ mod tests {
                 ..S3Config::default()
             })
             .is_err()
+        );
+    }
+
+    #[test]
+    fn section_builds_endpoint_and_display() {
+        let section = crate::model::S3Config {
+            bucket: "bkt".into(),
+            port: Some(9000),
+            http: true,
+            prefix: "/a/b".into(),
+            ..Default::default()
+        };
+        assert_eq!(
+            endpoint_url("minio.lan", &section).unwrap().as_str(),
+            "http://minio.lan:9000/"
+        );
+        assert_eq!(
+            display_url("minio.lan", &section).unwrap(),
+            "minio.lan:9000/bkt/a/b/"
+        );
+        let cfg = config_for("minio.lan", &section).unwrap();
+        assert!(cfg.path_style);
+        assert_eq!(cfg.prefix, "a/b/");
+        let aws = crate::model::S3Config {
+            bucket: "bkt".into(),
+            virtual_host: true,
+            region: "eu-central-1".into(),
+            certificate_fingerprint: Some("aa:bb".into()),
+            ..Default::default()
+        };
+        assert_eq!(
+            endpoint_url("s3.eu-central-1.amazonaws.com", &aws)
+                .unwrap()
+                .as_str(),
+            "https://s3.eu-central-1.amazonaws.com/"
+        );
+        let cfg = config_for("s3.eu-central-1.amazonaws.com", &aws).unwrap();
+        assert!(!cfg.path_style);
+        assert!(matches!(cfg.tls, TlsPolicy::Pinned(_)));
+        assert!(config_for("x", &crate::model::S3Config::default()).is_err());
+        assert_eq!(
+            endpoint_url("::1", &section).unwrap().as_str(),
+            "http://[::1]:9000/"
         );
     }
 

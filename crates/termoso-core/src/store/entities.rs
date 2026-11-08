@@ -13,7 +13,7 @@ use uuid::Uuid;
 use super::{LocalVault, Store, parse_time, parse_uuid};
 use crate::error::{CoreError, Result};
 use crate::model::{
-    AnyEntity, Entity, Group, Host, Identity, Payload, Proxy, ResolvedHost, SerialConfig,
+    AnyEntity, Entity, Group, Host, Identity, Payload, Proxy, ResolvedHost, S3Config, SerialConfig,
     SshCertificate, SshConfig, SshKey, Tag, TagHost, TelnetConfig, WebDavConfig,
 };
 
@@ -641,6 +641,14 @@ impl Store {
             Some(id) => self.get_in::<Identity>(id, vault)?,
             None => None,
         };
+        let s3 = match host.data.s3_config_id {
+            Some(cid) => self.get_in::<S3Config>(cid, vault)?.map(|c| c.data),
+            None => None,
+        };
+        let s3_identity = match s3.as_ref().and_then(|s| s.identity_id) {
+            Some(id) => self.get_in::<Identity>(id, vault)?,
+            None => None,
+        };
 
         let identity_id = ssh.identity_id.or_else(|| {
             if host.data.ssh_config_id.is_none() {
@@ -723,6 +731,8 @@ impl Store {
             serial,
             webdav,
             webdav_identity,
+            s3,
+            s3_identity,
             group_path,
             tags,
         })

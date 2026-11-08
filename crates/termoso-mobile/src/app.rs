@@ -2004,6 +2004,38 @@ impl TermosoApp {
         ))
     }
 
+    /// Open the S3 section of a saved host as a file session. Same session
+    /// type as SFTP; `capabilities()` tells the UI what to hide (no
+    /// permissions, owners or symlinks). `vault_id` as in
+    /// [`Self::connect_host`].
+    pub fn s3_host(
+        &self,
+        host_id: String,
+        vault_id: String,
+        listener: Arc<dyn SftpListener>,
+    ) -> Result<Arc<SftpSession>> {
+        let resolved = self.resolve_host_in(&host_id, &vault_id)?;
+        if resolved.s3.is_none() {
+            return Err(MobileError::invalid("this host has no S3 section"));
+        }
+        let presence = Some(self.presence.slot(resolved.host.id, "s3"));
+        Ok(SftpSession::launch(
+            RUNTIME.handle().clone(),
+            SftpLaunch {
+                store: self.store.clone(),
+                secrets: self.secrets.clone(),
+                backend: FileBackend::S3 {
+                    resolved,
+                    spool_dir: self.profile_dir.join("s3-spool"),
+                },
+                settings: MobileSettings::load(&self.store)?,
+                listener,
+                presence,
+                cache_dir: self.profile_dir.join(FCACHE_DIR),
+            },
+        ))
+    }
+
     /// Browse `root` — what the local shell sees as `/` (an installed Linux
     /// system's tree, or the Android shell's home) — as a file session that
     /// starts in `start`, a path inside it. Paths are relative to the root

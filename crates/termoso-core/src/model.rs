@@ -30,6 +30,7 @@ payloads! {
     SshConfig => "ssh_config",
     TelnetConfig => "telnet_config",
     WebDavConfig => "webdav_config",
+    S3Config => "s3_config",
     SerialConfig => "serial_config",
     Identity => "identity",
     SshKey => "ssh_key",
@@ -118,6 +119,12 @@ pub struct ResolvedHost {
     /// Identity referenced by the WebDAV config.
     #[serde(default)]
     pub webdav_identity: Option<Entity<Identity>>,
+    /// S3 bucket on this endpoint, with its own identity (never inherited).
+    #[serde(default)]
+    pub s3: Option<S3Config>,
+    /// Identity referenced by the S3 config (access key + secret).
+    #[serde(default)]
+    pub s3_identity: Option<Entity<Identity>>,
     /// Group labels from root to the host's group.
     pub group_path: Vec<String>,
     /// Tag labels.
@@ -125,8 +132,8 @@ pub struct ResolvedHost {
 }
 
 impl ResolvedHost {
-    /// `ssh` | `telnet` | `serial` | `webdav`, from which config the host
-    /// carries.
+    /// `ssh` | `telnet` | `serial` | `webdav` | `s3`, from which config the
+    /// host carries.
     pub fn protocol(&self) -> &'static str {
         if self.host.data.ssh_config_id.is_some() {
             "ssh"
@@ -136,6 +143,8 @@ impl ResolvedHost {
             "telnet"
         } else if self.webdav.is_some() {
             "webdav"
+        } else if self.s3.is_some() {
+            "s3"
         } else {
             "ssh"
         }

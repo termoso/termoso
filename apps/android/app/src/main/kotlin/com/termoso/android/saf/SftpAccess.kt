@@ -243,6 +243,7 @@ class SftpAccess(private val container: AppContainer) {
     private fun offers(host: HostItem, protocol: FileProtocol): Boolean = host.filesProvider && when (protocol) {
         FileProtocol.SFTP -> host.protocol == "ssh"
         FileProtocol.WEBDAV -> host.webdavUrl != null
+        FileProtocol.S3 -> host.s3Url != null
         FileProtocol.LOCAL -> false
     }
 

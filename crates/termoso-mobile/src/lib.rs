@@ -28,6 +28,7 @@ mod linux;
 mod live;
 mod presence;
 mod quiet;
+mod s3;
 mod serial;
 mod session;
 mod settings;

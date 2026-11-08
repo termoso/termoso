@@ -90,8 +90,8 @@ pub struct HostItem {
     pub address: String,
     pub group_id: Option<String>,
     pub group_path: Vec<String>,
-    /// `ssh` | `telnet` | `webdav` (the primary protocol; `webdav` only
-    /// when the host has no SSH or Telnet section).
+    /// `ssh` | `telnet` | `webdav` | `s3` (the primary protocol; `webdav` /
+    /// `s3` only when the host has no SSH or Telnet section).
     pub protocol: String,
     /// The SSH section opens over Mosh by default.
     pub use_mosh: bool,
@@ -102,6 +102,8 @@ pub struct HostItem {
     pub telnet_port: Option<u16>,
     /// Set when the host has a WebDAV section.
     pub webdav_url: Option<String>,
+    /// `host[:port]/bucket/prefix/`, set when the host has an S3 section.
+    pub s3_url: Option<String>,
     pub tags: Vec<String>,
     pub os_name: Option<String>,
     pub icon: Option<String>,
@@ -126,6 +128,7 @@ impl From<hosts::HostCard> for HostItem {
             protocol: c.protocol,
             telnet_port: c.telnet_port,
             webdav_url: c.webdav_url,
+            s3_url: c.s3_url,
             use_mosh: c.use_mosh,
             username: c.username,
             port: c.port,
@@ -215,7 +218,9 @@ pub struct HostDraft {
     pub telnet: Option<TelnetDraft>,
     /// WebDAV section; `None` = no share on this host.
     pub webdav: Option<WebDavDraft>,
-    /// Expose the SFTP / WebDAV share to the system file picker (SAF).
+    /// S3 section; `None` = no bucket on this host.
+    pub s3: Option<S3Draft>,
+    /// Expose the SFTP / WebDAV / S3 share to the system file picker (SAF).
     pub files_provider: bool,
     /// Shell integration override: `None` follows the app setting,
     /// `Some(false)` never types the hooks into this host.
@@ -280,6 +285,64 @@ impl From<hosts::WebDavForm> for WebDavDraft {
             client_certificate: None,
             client_key: None,
             client_certificate_fingerprint: w.client_certificate_fingerprint,
+        }
+    }
+}
+
+/// S3 section of the host editor. The host's address is the endpoint host;
+/// credentials are the bucket's own access key and secret.
+#[derive(Debug, Clone, Default, PartialEq, Eq, uniffi::Record)]
+pub struct S3Draft {
+    /// Bucket name.
+    pub bucket: String,
+    /// Signing region; empty = `us-east-1` (`auto` for Cloudflare R2).
+    pub region: String,
+    /// TCP port; `None` = 443 (80 with `http`).
+    pub port: Option<u16>,
+    /// Path below the host where the S3 API is mounted; empty = `/`.
+    pub path: String,
+    /// Key prefix the share's root maps to; empty = the bucket root.
+    pub prefix: String,
+    /// Plain HTTP instead of HTTPS.
+    pub http: bool,
+    /// `bucket.host` addressing (AWS default) instead of `host/bucket`
+    /// (MinIO, RustFS, most self-hosted servers).
+    pub virtual_host: bool,
+    /// TLS: name sent as SNI and checked against the certificate when it
+    /// differs from the address.
+    pub tls_server_name: Option<String>,
+    /// TLS: PEM bundle of a private CA to trust instead of the system roots.
+    pub ca_certificate: Option<String>,
+    /// Access key ID.
+    pub access_key: String,
+    /// Secret access key; `None` keeps the stored one when editing,
+    /// `Some("")` clears it.
+    pub secret_key: Option<String>,
+    pub identity_id: Option<String>,
+    /// SHA-256 of the server certificate to trust instead of the system
+    /// roots; `None` = system roots.
+    pub certificate_fingerprint: Option<String>,
+    /// Set by the core when the stored identity has a secret key.
+    pub has_secret_key: bool,
+}
+
+impl From<hosts::S3Form> for S3Draft {
+    fn from(s: hosts::S3Form) -> Self {
+        Self {
+            bucket: s.bucket,
+            region: s.region,
+            port: s.port,
+            path: s.path,
+            prefix: s.prefix,
+            http: s.http,
+            virtual_host: s.virtual_host,
+            tls_server_name: s.tls_server_name,
+            ca_certificate: s.ca_certificate,
+            access_key: s.access_key,
+            secret_key: None,
+            identity_id: s.identity_id.map(|i| i.to_string()),
+            certificate_fingerprint: s.certificate_fingerprint,
+            has_secret_key: s.has_secret_key,
         }
     }
 }
@@ -350,6 +413,7 @@ impl HostDraft {
             ssh: true,
             telnet: None,
             webdav: None,
+            s3: None,
             files_provider: false,
             shell_integration: None,
             totp_secret: None,
@@ -402,6 +466,7 @@ impl From<hosts::HostForm> for HostDraft {
             ssh: f.ssh,
             telnet: f.telnet.map(Into::into),
             webdav: f.webdav.map(Into::into),
+            s3: f.s3.map(Into::into),
             files_provider: f.files_provider,
             shell_integration: f.shell_integration,
         }
@@ -417,7 +482,8 @@ impl HostDraft {
         base.label = self.label;
         base.address = self.address;
         base.group_id = parse_opt_id(&self.group_id)?;
-        base.ssh = self.ssh || (self.telnet.is_none() && self.webdav.is_none());
+        base.ssh =
+            self.ssh || (self.telnet.is_none() && self.webdav.is_none() && self.s3.is_none());
         base.port = self.port;
         base.username = self.username;
         base.password = self.password;
@@ -505,6 +571,37 @@ impl HostDraft {
                 })
             }
         };
+        base.s3 = match self.s3 {
+            None => None,
+            Some(s) => {
+                let stored = base.s3.take().unwrap_or_default();
+                Some(hosts::S3Form {
+                    bucket: s.bucket.trim().to_string(),
+                    region: s.region.trim().to_string(),
+                    port: s.port,
+                    path: s.path.trim().to_string(),
+                    prefix: s.prefix.trim().to_string(),
+                    http: s.http,
+                    virtual_host: s.virtual_host,
+                    tls_server_name: s
+                        .tls_server_name
+                        .map(|n| n.trim().to_string())
+                        .filter(|n| !n.is_empty()),
+                    ca_certificate: s
+                        .ca_certificate
+                        .map(|c| c.trim().to_string())
+                        .filter(|c| !c.is_empty()),
+                    access_key: s.access_key.trim().to_string(),
+                    secret_key: s.secret_key,
+                    identity_id: parse_opt_id(&s.identity_id)?,
+                    certificate_fingerprint: s
+                        .certificate_fingerprint
+                        .map(|f| f.trim().to_string())
+                        .filter(|f| !f.is_empty()),
+                    has_secret_key: stored.has_secret_key,
+                })
+            }
+        };
         Ok(base)
     }
 }
@@ -541,6 +638,7 @@ pub(crate) fn blank_form(vault_id: Uuid) -> hosts::HostForm {
         mac_address: None,
         telnet: None,
         webdav: None,
+        s3: None,
         env_variables: Vec::new(),
         keep_alive_interval: None,
         timeout: None,

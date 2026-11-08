@@ -58,6 +58,7 @@ data class DocumentId(val hostId: String, val path: String, val protocol: FilePr
     companion object {
         private val UUID_RE = Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
         private const val WEBDAV_SUFFIX = "+webdav"
+        private const val S3_SUFFIX = "+s3"
 
         /** Stands in for the host id of the local shell's home directory. */
         const val LOCAL = "local"
@@ -67,10 +68,11 @@ data class DocumentId(val hostId: String, val path: String, val protocol: FilePr
         /** The local shell's home directory. */
         fun local(path: String = ""): DocumentId = DocumentId(LOCAL, path, FileProtocol.LOCAL)
 
-        /** The root id of a host's share: the uuid, `+webdav` appended for WebDAV; [LOCAL] for the local home. */
+        /** The root id of a host's share: the uuid, `+webdav` / `+s3` appended for WebDAV / S3; [LOCAL] for the local home. */
         fun rootId(hostId: String, protocol: FileProtocol): String = when (protocol) {
             FileProtocol.SFTP -> hostId
             FileProtocol.WEBDAV -> hostId + WEBDAV_SUFFIX
+            FileProtocol.S3 -> hostId + S3_SUFFIX
             FileProtocol.LOCAL -> LOCAL
         }
 
@@ -84,7 +86,10 @@ data class DocumentId(val hostId: String, val path: String, val protocol: FilePr
             if (host == LOCAL) {
                 protocol = FileProtocol.LOCAL
             } else {
-                if (host.endsWith(WEBDAV_SUFFIX)) {
+                if (host.endsWith(S3_SUFFIX)) {
+                    host = host.removeSuffix(S3_SUFFIX)
+                    protocol = FileProtocol.S3
+                } else if (host.endsWith(WEBDAV_SUFFIX)) {
                     host = host.removeSuffix(WEBDAV_SUFFIX)
                     protocol = FileProtocol.WEBDAV
                 }
