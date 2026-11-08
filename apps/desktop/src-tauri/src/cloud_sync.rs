@@ -1309,6 +1309,7 @@ mod tests {
                 mac_address: None,
                 telnet: None,
                 webdav: None,
+                s3: None,
                 env_variables: vec![],
                 keep_alive_interval: None,
                 timeout: None,
