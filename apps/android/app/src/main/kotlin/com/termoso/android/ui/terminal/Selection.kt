@@ -130,7 +130,7 @@ internal fun SelectionOverlay(
     grid: CellGrid,
     metrics: CellMetrics,
     viewport: IntSize,
-    onChange: (TermSelection) -> Unit,
+    onChange: ((TermSelection) -> TermSelection) -> Unit,
     onDragAt: (Offset) -> Unit,
     onCopy: () -> Unit,
     onPaste: () -> Unit,
@@ -150,7 +150,11 @@ internal fun SelectionOverlay(
 
     // Each handle owns one end of the selection (anchor or focus) so the ends can
     // cross without the gesture jumping to the other handle; the shape follows
-    // whichever end is currently first, like the system text selection.
+    // whichever end is currently first, like the system text selection. The other
+    // end is taken from the current selection at drag time, not from this
+    // composition: while the view auto-scrolls, the frame tick shifts the
+    // selection with the text between pointer events, and a stale copy would
+    // undo that shift and let the fixed end drift away from its text.
     val anchorFirst = selection.anchor <= selection.focus
     SelectionHandle(
         at = px(selection.anchor, right = !anchorFirst),
@@ -162,7 +166,8 @@ internal fun SelectionOverlay(
         key = "anchor",
         onDrag = { p ->
             onDragAt(p)
-            onChange(TermSelection(anchor = metrics.cellAt(p - Offset(0f, ch / 2), grid), focus = selection.focus))
+            val at = metrics.cellAt(p - Offset(0f, ch / 2), grid)
+            onChange { it.copy(anchor = at) }
         },
     )
     SelectionHandle(
@@ -175,7 +180,8 @@ internal fun SelectionOverlay(
         key = "focus",
         onDrag = { p ->
             onDragAt(p)
-            onChange(TermSelection(anchor = selection.anchor, focus = metrics.cellAt(p - Offset(0f, ch / 2), grid)))
+            val at = metrics.cellAt(p - Offset(0f, ch / 2), grid)
+            onChange { it.copy(focus = at) }
         },
     )
 

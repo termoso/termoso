@@ -428,7 +428,7 @@ fun TerminalView(
                 grid = g,
                 metrics = metrics,
                 viewport = size,
-                onChange = { selection = it },
+                onChange = { update -> selection = selection?.let(update) },
                 onDragAt = { p -> autoScrollAt(p, metrics, size) },
                 onCopy = {
                     onCopy(g.textAcross(sel) { a, b, c, d -> session.rust.textRange(a, b, c, d) })
