@@ -75,7 +75,7 @@ zeroize = { version = "1", features = ["derive"] }
 subtle = "2"
 bip39 = { version = "3", features = ["rand"] }
 base64 = "0.23"
-webauthn-rs = { version = "0.5", features = ["danger-allow-state-serialisation"] }
+webauthn-rs = { version = "0.6", features = ["danger-allow-state-serialisation"] }
 totp-rs = { version = "6", features = ["gen_secret", "otpauth"] }
 openidconnect = "4"
 oauth2 = "5"
