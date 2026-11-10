@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { Box } from "@mui/material";
-import { TerminalPane } from "./TerminalPane";
+import { PaneSlot } from "./PaneHost";
 import { clampRatio, type SplitNode } from "./layout";
 import { setSplitRatio } from "./store";
 import type { Uuid } from "@/ipc/types";
@@ -16,15 +16,7 @@ interface Props {
 
 /** Renders a split tree; every inner node is two children with a draggable divider. */
 export function SplitView({ tabId, node, activePaneId, showFrame }: Props) {
-  if (node.kind === "leaf") {
-    return (
-      <TerminalPane
-        paneId={node.paneId}
-        active={activePaneId === node.paneId}
-        showFrame={showFrame}
-      />
-    );
-  }
+  if (node.kind === "leaf") return <PaneSlot paneId={node.paneId} />;
   return (
     <SplitBranch tabId={tabId} node={node} activePaneId={activePaneId} showFrame={showFrame} />
   );

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type DragEvent } from "react";
+import { createPortal } from "react-dom";
 import { Box, Button, IconButton, Stack, Tooltip, Typography, alpha } from "@mui/material";
 import ReplayRoundedIcon from "@mui/icons-material/ReplayRounded";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
@@ -17,6 +18,7 @@ import { HostGlyph } from "@/hosts/HostAvatar";
 import {
   closePane,
   focusPane,
+  mergeInto,
   mountPane,
   openTerminal,
   reconnectPane,
@@ -31,18 +33,33 @@ import { ConnectionView } from "./ConnectionView";
 import { usePaneTheme } from "./useTerminalTheme";
 import { dismissControlHint, useMultiplayer } from "./multiplayer";
 import type { TerminalTheme } from "./themes";
-import { tr } from "@/i18n";
+import { tr, trn } from "@/i18n";
+import { useSnackbar } from "@/components/Snackbar";
+import { MAX_PANES, nearestSide, type DropSide } from "./layout";
+import {
+  hideDockPreview,
+  setSessionDrag,
+  showDockPreview,
+  useDockPreview,
+  useSessionDrag,
+} from "./dragState";
 import { TypingBadge } from "./TypingBadge";
 import { ZmodemBar } from "./ZmodemBar";
 
 interface Props {
   paneId: Uuid;
-  active: boolean;
-  showFrame: boolean;
 }
 
-export function TerminalPane({ paneId, active, showFrame }: Props) {
+/**
+ * One session's terminal. Rendered once per pane by `PaneLayer` and moved
+ * between layout slots, so docking or detaching never rebuilds it.
+ */
+export function TerminalPane({ paneId }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
+  const tab = useTerminal((s) => s.tabs.find((t) => t.paneIds.includes(paneId)));
+  const active = tab?.activePaneId === paneId;
+  // Panes of a split are framed (with a header); a list-mode pane stands alone.
+  const showFrame = tab !== undefined && tab.viewMode !== "list" && tab.paneIds.length > 1;
   const pane = useTerminal((s) => s.panes[paneId]);
   const queued = useTerminal((s) => s.reconnect?.paneIds.includes(paneId) ?? false);
   const theme = usePaneTheme(paneId);
@@ -90,6 +107,7 @@ export function TerminalPane({ paneId, active, showFrame }: Props) {
       }}
     >
       {showFrame && <PaneHeader pane={pane} active={active} theme={theme} />}
+      <DockOverlay paneId={paneId} />
       <Box sx={{ flex: 1, minHeight: 0, position: "relative", display: "flex" }}>
         <Box
           ref={hostRef}
@@ -141,6 +159,131 @@ export function TerminalPane({ paneId, active, showFrame }: Props) {
       )}
     </Box>
   );
+}
+
+const PANE_MIME = "application/x-termoso-pane";
+
+/**
+ * While a tab or another pane is being dragged, covers this pane with drop
+ * zones: the nearest edge shows where the dragged session will dock.
+ */
+function DockOverlay({ paneId }: { paneId: Uuid }) {
+  const drag = useSessionDrag();
+  const tab = useTerminal((s) => s.tabs.find((t) => t.paneIds.includes(paneId)));
+  const incoming = useTerminal((s) => {
+    if (!drag) return 0;
+    if (drag.kind === "pane") return 1;
+    return s.tabs.find((t) => t.id === drag.id)?.paneIds.length ?? 0;
+  });
+  const snackbar = useSnackbar();
+  if (!drag || !tab) return null;
+  if (drag.kind === "tab" && drag.id === tab.id) return null;
+  if (drag.kind === "pane" && drag.id === paneId) return null;
+  const sameTab = drag.kind === "pane" && tab.paneIds.includes(drag.id);
+  const full = !sameTab && tab.paneIds.length + incoming > MAX_PANES;
+  return (
+    <Box
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = full ? "none" : "move";
+        showDockPreview({ rect: dockTargetAt(e).rect, full });
+      }}
+      onDragLeave={hideDockPreview}
+      onDrop={(e) => {
+        e.preventDefault();
+        const at = dockTargetAt(e);
+        hideDockPreview();
+        const result = mergeInto(drag, tab.id, paneId, at.side, at.scope);
+        if (result === "full") {
+          snackbar.notify(
+            trn(
+              MAX_PANES,
+              "A window holds up to {count} session",
+              "A window holds up to {count} sessions",
+            ),
+          );
+        }
+      }}
+      sx={{ position: "absolute", inset: 0, zIndex: 30 }}
+    ></Box>
+  );
+}
+
+/** The one docking preview: glides between zones and fades in and out. Mount once. */
+export function DockPreviewLayer() {
+  const { preview, last: at, slide } = useDockPreview();
+  const shown = preview !== null;
+  if (!at) return null;
+  return createPortal(
+    <Box
+      sx={{
+        position: "fixed",
+        ...at.rect,
+        zIndex: 1500,
+        borderRadius: 1.5,
+        pointerEvents: "none",
+        opacity: shown ? 1 : 0,
+        bgcolor: (t) => alpha(at.full ? t.palette.error.main : t.palette.primary.main, 0.22),
+        border: 2,
+        borderColor: at.full ? "error.main" : "primary.main",
+        transition: slide
+          ? "left 140ms cubic-bezier(0.2, 0.8, 0.2, 1), top 140ms cubic-bezier(0.2, 0.8, 0.2, 1), width 140ms cubic-bezier(0.2, 0.8, 0.2, 1), height 140ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 120ms"
+          : "opacity 120ms",
+      }}
+    />,
+    document.body,
+  );
+}
+
+interface DockTarget {
+  side: DropSide;
+  /** `window`: along the whole window's edge; `pane`: beside this pane only. */
+  scope: "pane" | "window";
+  /** Viewport rectangle of the half that the docked session will take. */
+  rect: { left: number; top: number; width: number; height: number };
+}
+
+const EDGE_SLACK = 12;
+
+/**
+ * Where a drag over a pane would dock. When the nearest edge is also an edge of
+ * the window, the session docks along the whole window (and previews half of
+ * it); an edge shared with a neighbouring pane docks beside this pane only.
+ */
+function dockTargetAt(e: DragEvent<HTMLElement>): DockTarget {
+  const pane = e.currentTarget.getBoundingClientRect();
+  const side = nearestSide(
+    (e.clientX - pane.left) / pane.width,
+    (e.clientY - pane.top) / pane.height,
+  );
+  const rootEl = e.currentTarget.closest("[data-dock-root]");
+  let box = pane;
+  let scope: "pane" | "window" = "pane";
+  if (rootEl) {
+    const r = rootEl.getBoundingClientRect();
+    const pad = parseFloat(getComputedStyle(rootEl).paddingLeft) || 0;
+    const root = new DOMRect(r.left + pad, r.top + pad, r.width - 2 * pad, r.height - 2 * pad);
+    const onEdge =
+      (side === "left" && Math.abs(pane.left - root.left) <= EDGE_SLACK) ||
+      (side === "right" && Math.abs(pane.right - root.right) <= EDGE_SLACK) ||
+      (side === "up" && Math.abs(pane.top - root.top) <= EDGE_SLACK) ||
+      (side === "down" && Math.abs(pane.bottom - root.bottom) <= EDGE_SLACK);
+    if (onEdge) {
+      box = root;
+      scope = "window";
+    }
+  }
+  const w = box.width / 2;
+  const h = box.height / 2;
+  const rect =
+    side === "left"
+      ? { left: box.left, top: box.top, width: w, height: box.height }
+      : side === "right"
+        ? { left: box.left + w, top: box.top, width: w, height: box.height }
+        : side === "up"
+          ? { left: box.left, top: box.top, width: box.width, height: h }
+          : { left: box.left, top: box.top + h, width: box.width, height: h };
+  return { side, scope, rect };
 }
 
 /**
@@ -202,8 +345,16 @@ function PaneHeader({
     <Stack
       direction="row"
       spacing={0.75}
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData(PANE_MIME, pane.id);
+        e.dataTransfer.setData("text/plain", pane.title);
+        e.dataTransfer.effectAllowed = "move";
+        setSessionDrag({ kind: "pane", id: pane.id });
+      }}
       sx={{
         alignItems: "center",
+        cursor: "grab",
         pl: 1,
         pr: 0.5,
         height: 28,

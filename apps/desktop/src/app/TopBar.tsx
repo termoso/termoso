@@ -1,4 +1,4 @@
-import { Box, Divider, IconButton, Tooltip, Typography } from "@mui/material";
+import { Box, Divider, IconButton, Tooltip, Typography, alpha, keyframes } from "@mui/material";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import AddBoxRoundedIcon from "@mui/icons-material/AddBoxRounded";
@@ -18,16 +18,20 @@ import DriveFileRenameOutlineRoundedIcon from "@mui/icons-material/DriveFileRena
 import BookmarkAddedRoundedIcon from "@mui/icons-material/BookmarkAddedRounded";
 import ContentCopyRoundedIcon from "@mui/icons-material/ContentCopyRounded";
 import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
-import type { DragEvent, MouseEvent, ReactNode } from "react";
+import { Fragment, type DragEvent, type MouseEvent, type ReactNode } from "react";
 import type { HostCard, Uuid } from "@/ipc/types";
 import { PqBadge, StatusDot } from "@/terminal/TerminalPane";
+import { dragStore, setSessionDrag, useSessionDrag, type SessionDrag } from "@/terminal/dragState";
+import { MAX_PANES } from "@/terminal/layout";
 import { MultiplayerTabButton } from "@/terminal/MultiplayerControl";
 import {
   HOME_TAB,
   clearBuffer,
   closeTab,
   isWorkspaceTab,
+  mergeInto,
   moveTab,
+  movePaneToNewTab,
   openTerminal,
   renameTab,
   resetZoom,
@@ -67,7 +71,7 @@ import { VaultMenu, useActiveVault } from "./vault";
 import { IS_MAC, MAC_TRAFFIC_LIGHTS_WIDTH } from "@/lib/platform";
 import { withHint } from "./shortcuts";
 import { useEffect, useState } from "react";
-import { tr } from "@/i18n";
+import { tr, trn } from "@/i18n";
 
 /**
  * Persistent top strip, doubling as the window title bar (the native frame is
@@ -82,6 +86,47 @@ export function TopBar() {
   const sftpCount = useSftp((s) => s.order.length);
   const active = tabs.find((t) => t.id === activeTabId);
   const [dragging, setDragging] = useState<string | null>(null);
+  // A pane dragged out of a split is over free tab-strip space: preview its new tab there.
+  const sessionDrag = useSessionDrag();
+  /** Where the detached pane's tab would land: before this tab id (`null` = at the end). */
+  const [ghostAt, setGhostAt] = useState<{
+    beforeId: string | null;
+    drag: SessionDrag | null;
+  } | null>(null);
+  // Tied to the drag that set it, so a stale spot never shows in the next drag.
+  const setGhost = (at: { beforeId: string | null } | null) =>
+    setGhostAt(at && { ...at, drag: dragStore.get().drag });
+  const ghost = ghostAt?.drag === sessionDrag ? ghostAt : null;
+  const draggedPaneTitle = useTerminal((s) =>
+    sessionDrag?.kind === "pane" ? (s.panes[sessionDrag.id]?.title ?? null) : null,
+  );
+  const showGhost = sessionDrag?.kind === "pane" && ghost !== null;
+  const ghostTab = (
+    <Box
+      aria-hidden
+      sx={{
+        display: "flex",
+        alignItems: "center",
+        alignSelf: "center",
+        height: 30,
+        px: 1.25,
+        mx: 0.25,
+        maxWidth: 220,
+        flexShrink: 0,
+        borderRadius: 1.5,
+        border: "1.5px dashed var(--mui-palette-primary-main)",
+        bgcolor: (t) => alpha(t.palette.primary.main, 0.14),
+        color: "text.primary",
+        pointerEvents: "none",
+        transformOrigin: "left center",
+        animation: `${ghostIn} 150ms cubic-bezier(0.2, 0.8, 0.2, 1)`,
+      }}
+    >
+      <Typography variant="body2" noWrap sx={{ fontWeight: 500 }}>
+        {draggedPaneTitle ?? tr("New Tab")}
+      </Typography>
+    </Box>
+  );
   const [newWorkspaceOver, mountNewWorkspaceDrop] = useHostDropNewWorkspace();
   const vault = useActiveVault();
   const [vaultMenu, setVaultMenu] = useState<HTMLElement | null>(null);
@@ -149,6 +194,27 @@ export function TopBar() {
       {tabs.length > 0 && <Divider orientation="vertical" flexItem sx={{ my: 1.25, mx: 0.5 }} />}
       <Box
         data-tauri-drag-region
+        // A pane dragged out of a split and dropped on free space becomes its own tab.
+        onDragOver={(e) => {
+          if (dragStore.get().drag?.kind !== "pane") return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+          // Over a tab, that tab reports the spot; free space means the end of the strip.
+          const onTab = e.target instanceof Element && e.target.closest('[role="tab"]') !== null;
+          if (!onTab) setGhost({ beforeId: null });
+        }}
+        onDragLeave={(e) => {
+          if (!(e.relatedTarget instanceof Node) || !e.currentTarget.contains(e.relatedTarget)) {
+            setGhost(null);
+          }
+        }}
+        onDrop={(e) => {
+          setGhost(null);
+          const sd = dragStore.get().drag;
+          if (e.defaultPrevented || sd?.kind !== "pane") return;
+          e.preventDefault();
+          movePaneToNewTab(sd.id, null);
+        }}
         sx={{
           flex: 1,
           minWidth: 0,
@@ -159,14 +225,18 @@ export function TopBar() {
         }}
       >
         {tabs.map((t) => (
-          <TerminalTopTab
-            key={t.id}
-            tab={t}
-            active={t.id === activeTabId}
-            dragging={dragging}
-            onDragState={setDragging}
-          />
+          <Fragment key={t.id}>
+            {showGhost && ghost.beforeId === t.id && ghostTab}
+            <TerminalTopTab
+              tab={t}
+              active={t.id === activeTabId}
+              dragging={dragging}
+              onDragState={setDragging}
+              onGhost={setGhost}
+            />
+          </Fragment>
         ))}
+        {showGhost && ghost.beforeId === null && ghostTab}
         {activeTabId === NEW_TAB && (
           <TopTab
             active
@@ -261,6 +331,11 @@ function PaneTools({ tab }: { tab: TerminalTab }) {
 
 const TAB_MIME = "application/x-termoso-tab";
 
+const ghostIn = keyframes`
+  from { opacity: 0; transform: scaleX(0.6); }
+  to { opacity: 1; transform: scaleX(1); }
+`;
+
 /** Where a drag hovers a tab: reorder before / after it, or drop hosts into it. */
 type DropSide = "before" | "after" | "into" | null;
 
@@ -276,12 +351,15 @@ function TerminalTopTab({
   active,
   dragging,
   onDragState,
+  onGhost,
 }: {
   tab: TerminalTab;
   active: boolean;
   /** Id of the tab currently being dragged, if any. */
   dragging: string | null;
   onDragState: (id: string | null) => void;
+  /** A pane being dragged out would become a tab before `beforeId` (`null` = the end); `null` = nowhere. */
+  onGhost: (at: { beforeId: string | null } | null) => void;
 }) {
   const pane = useTerminal((s) => s.panes[tab.activePaneId]);
   const title = useTerminal((s) => tabTitle(tab, s));
@@ -390,9 +468,18 @@ function TerminalTopTab({
     setMenu({ left: e.clientX, top: e.clientY });
   };
 
-  const side = (e: DragEvent<HTMLElement>) => {
+  /**
+   * Dropping on a tab reorders as it always did: before or after, by which half. Holding
+   * Shift docks the dragged session into this tab's window instead.
+   */
+  const zone = (e: DragEvent<HTMLElement>): "before" | "after" | "into" => {
+    if (e.shiftKey) return "into";
     const r = e.currentTarget.getBoundingClientRect();
     return e.clientX < r.left + r.width / 2 ? "before" : "after";
+  };
+  const nextTabId = () => {
+    const all = terminalStore.get().tabs;
+    return all[all.findIndex((t) => t.id === tab.id) + 1]?.id ?? null;
   };
   const drag = {
     draggable: true,
@@ -400,6 +487,7 @@ function TerminalTopTab({
       e.dataTransfer.setData(TAB_MIME, tab.id);
       e.dataTransfer.effectAllowed = "move";
       onDragState(tab.id);
+      setSessionDrag({ kind: "tab", id: tab.id });
     },
     onDragEnd: () => {
       onDragState(null);
@@ -412,14 +500,32 @@ function TerminalTopTab({
         setOver("into");
         return;
       }
+      const sd = dragStore.get().drag;
+      if (sd?.kind === "pane") {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        const where = zone(e);
+        // Shift: docks into this tab (outlined). Otherwise a ghost tab shows the new spot.
+        setOver(where === "into" ? "into" : null);
+        onGhost(
+          where === "into"
+            ? null
+            : { beforeId: where === "before" ? tab.id : (nextTabId() ?? null) },
+        );
+        return;
+      }
       if (!dragging || dragging === tab.id) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = "move";
-      setOver(side(e));
+      setOver(zone(e));
     },
-    onDragLeave: () => setOver(null),
+    onDragLeave: () => {
+      setOver(null);
+      onGhost(null);
+    },
     onDrop: (e: DragEvent<HTMLElement>) => {
       setOver(null);
+      onGhost(null);
       const dropped = droppedHostIds(e);
       if (dropped.length > 0) {
         e.preventDefault();
@@ -437,15 +543,34 @@ function TerminalTopTab({
         }
         return;
       }
+      const where = zone(e);
+      const full = () =>
+        snackbar.notify(
+          trn(
+            MAX_PANES,
+            "A window holds up to {count} session",
+            "A window holds up to {count} sessions",
+          ),
+        );
+      const sd = dragStore.get().drag;
+      if (sd?.kind === "pane") {
+        // A pane dragged out of a split: dock it here, or make it a tab at this spot.
+        e.preventDefault();
+        if (where === "into") {
+          if (mergeInto(sd, tab.id, tab.activePaneId, "right") === "full") full();
+        } else {
+          movePaneToNewTab(sd.id, where === "before" ? tab.id : nextTabId());
+        }
+        return;
+      }
       const id = e.dataTransfer.getData(TAB_MIME) || dragging;
       if (!id || id === tab.id) return;
       e.preventDefault();
-      const tabs = terminalStore.get().tabs;
-      if (side(e) === "before") moveTab(id, tab.id);
-      else {
-        const idx = tabs.findIndex((t) => t.id === tab.id);
-        moveTab(id, tabs[idx + 1]?.id ?? null);
-      }
+      if (where === "into") {
+        // Drop one session tab onto another: they share a window, split side by side.
+        if (mergeInto({ kind: "tab", id }, tab.id, tab.activePaneId, "right") === "full") full();
+      } else if (where === "before") moveTab(id, tab.id);
+      else moveTab(id, nextTabId());
     },
   };
 

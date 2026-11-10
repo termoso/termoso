@@ -263,6 +263,7 @@
   "A vault manager turned on session logging: every member's sessions to this vault's hosts are recorded and shared with the vault.": "A vault manager turned on session logging: every member's sessions to this vault's hosts are recorded and shared with the vault.",
   "A vault was shared with you, someone joined your shared terminal, this device was signed out.": "A vault was shared with you, someone joined your shared terminal, this device was signed out.",
   "a WebDAV config": "a WebDAV config",
+  "A window holds up to {count} sessions": "A window holds up to {count} sessions",
   "a workspace": "a workspace",
   "a workspace template": "a workspace template",
   "Aa": "Aa",

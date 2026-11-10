@@ -61,12 +61,15 @@ import {
 } from "./shellIntegration";
 import {
   MAX_PANES,
+  insertBeside,
   leaf,
   leaves,
   neighbor,
   removeLeaf,
   setRatio,
   splitLeaf,
+  wrapRoot,
+  type DropSide,
   type Rect,
   type Side,
   type SplitDirection,
@@ -1904,11 +1907,93 @@ export function focusNeighbor(tabId: string, side: Side) {
   }
 }
 
-/** Detach a pane from its split tab into a tab of its own. */
-export function movePaneToNewTab(paneId: Uuid) {
+export type MergeSource = { kind: "tab"; id: string } | { kind: "pane"; id: Uuid };
+export type MergeResult = "ok" | "full" | "invalid";
+
+/**
+ * Drag-and-drop docking: put a whole tab (all its panes) or a single pane next
+ * to `targetPaneId` in tab `dstTabId`, on the given side. A window holds up to
+ * `MAX_PANES` sessions; the source tab disappears once it is empty.
+ */
+export function mergeInto(
+  source: MergeSource,
+  dstTabId: string,
+  targetPaneId: Uuid,
+  side: DropSide,
+  scope: "pane" | "window" = "pane",
+): MergeResult {
+  const s = terminalStore.get();
+  const dst = s.tabs.find((t) => t.id === dstTabId);
+  const src =
+    source.kind === "tab"
+      ? s.tabs.find((t) => t.id === source.id)
+      : s.tabs.find((t) => t.paneIds.includes(source.id));
+  if (!dst || !src || !dst.paneIds.includes(targetPaneId)) return "invalid";
+  const moving = source.kind === "tab" ? src.paneIds : [source.id];
+  if (scope === "pane" && moving.includes(targetPaneId)) return "invalid";
+  if (source.kind === "tab" && src.id === dst.id) return "invalid";
+  const incoming = src.id === dst.id ? 0 : moving.length;
+  if (dst.paneIds.length + incoming > MAX_PANES) return "full";
+
+  const piece = source.kind === "tab" ? src.layout : leaf(source.id);
+  const splitId = uuid();
+  update((st) => {
+    const tabs: TerminalTab[] = [];
+    for (const t of st.tabs) {
+      if (t.id === dst.id) {
+        let layout = t.layout;
+        if (src.id === dst.id)
+          layout = removeLeaf(layout, source.kind === "pane" ? source.id : "") ?? layout;
+        const docked =
+          scope === "window"
+            ? wrapRoot(layout, piece, side, splitId)
+            : insertBeside(layout, targetPaneId, piece, side, splitId);
+        const merged = withLayout(t, docked);
+        tabs.push({
+          ...merged,
+          viewMode: "split",
+          focused: false,
+          activePaneId: moving[0] ?? t.activePaneId,
+        });
+      } else if (t.id === src.id) {
+        // A single pane leaves its tab; a dragged tab is consumed whole.
+        if (source.kind === "pane") {
+          const rest = removeLeaf(t.layout, source.id);
+          if (rest) {
+            const kept = withLayout(t, rest);
+            tabs.push({
+              ...kept,
+              activePaneId: kept.paneIds.includes(t.activePaneId)
+                ? t.activePaneId
+                : (kept.paneIds[0] ?? t.activePaneId),
+              broadcast: kept.paneIds.length > 1 && t.broadcast,
+            });
+          }
+        }
+      } else {
+        tabs.push(t);
+      }
+    }
+    return { ...st, tabs, activeTabId: dst.id };
+  });
+  requestAnimationFrame(() => {
+    const merged = terminalStore.get().tabs.find((t) => t.id === dst.id);
+    merged?.paneIds.forEach(fitPane);
+    if (moving[0]) focusPane(moving[0]);
+  });
+  return "ok";
+}
+
+/**
+ * Detach a pane from its split tab into a tab of its own, placed before the tab
+ * `beforeId` (the end of the strip for `null`, right after its old tab if omitted).
+ * Returns the new tab's id.
+ */
+export function movePaneToNewTab(paneId: Uuid, beforeId?: string | null): string | null {
   const s = terminalStore.get();
   const tab = tabOf(s, paneId);
-  if (!tab || tab.paneIds.length < 2) return;
+  if (!tab || tab.paneIds.length < 2) return null;
+  let created = null as string | null;
   update((st) => {
     const tabs: TerminalTab[] = [];
     let fresh: TerminalTab | null = null;
@@ -1929,11 +2014,14 @@ export function movePaneToNewTab(paneId: Uuid) {
         });
       }
       fresh = newTab(leaf(paneId), { zoom: t.zoom, themeOverride: t.themeOverride });
+      created = fresh.id;
       tabs.push(fresh);
     }
     return fresh ? { ...st, tabs, activeTabId: fresh.id } : st;
   });
+  if (created && beforeId !== undefined) moveTab(created, beforeId);
   requestAnimationFrame(() => fitPane(paneId));
+  return created;
 }
 
 // ───────────────────────────── reconnect ─────────────────────────────
