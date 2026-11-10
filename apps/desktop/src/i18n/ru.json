@@ -2851,5 +2851,20 @@
   "Remove S3": "Удалить S3",
   "Secret access key": "Секретный ключ доступа",
   "Signing region; empty means us-east-1 (MinIO, RustFS). Cloudflare R2 takes auto.": "Регион для подписи; пустое поле означает us-east-1 (MinIO, RustFS). Cloudflare R2 принимает auto.",
-  "with S3": "с S3"
+  "with S3": "с S3",
+  "{label} is not in your hosts yet": "{label} ещё нет в ваших хостах",
+  "A window holds up to {count} sessions": "В окне помещается до {count} сессии|В окне помещается до {count} сессий|В окне помещается до {count} сессий",
+  "Added {label} to your hosts": "{label} добавлен в хосты",
+  "Daily": "Ежедневно",
+  "Host label": "Метка хоста",
+  "None, use the password above": "Нет, использовать пароль выше",
+  "Or sign in with an identity from your keychain": "Или войти с identity из связки ключей",
+  "password": "пароль",
+  "S3": "S3",
+  "Save host": "Сохранить хост",
+  "Shell title": "Заголовок оболочки",
+  "Tab title": "Заголовок вкладки",
+  "Use this identity for this host from now on": "Использовать эту identity для этого хоста и дальше",
+  "Weekly": "Еженедельно",
+  "What a tab for a saved host shows: the host's label (its name when it has none), or the title the shell sets, such as the working directory or the running program. Local shells always follow the shell.": "Что показывает вкладка сохранённого хоста: метку хоста (или его имя, если метки нет) либо заголовок, который задаёт оболочка, например рабочий каталог или запущенную программу. Локальные оболочки всегда следуют за оболочкой."
 }

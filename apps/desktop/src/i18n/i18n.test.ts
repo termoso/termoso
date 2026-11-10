@@ -27,6 +27,7 @@ describe("ru table", () => {
   // same in Russian; they still get an entry so Weblate counts them as done.
   const sameInRussian = new Set([
     "Aa",
+    "S3",
     "Access Key ID",
     "Ansible inventory",
     "Authorization: Bearer",
