@@ -2031,7 +2031,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d045de693cb712d0b22c6a64be5b953f67b3ce00ab5ad3dd5d8b441886ab8e1a"
 dependencies = [
  "quote",
- "syn 3.0.5",
+ "syn 2.0.119",
 ]
 
 [[package]]
@@ -9006,7 +9006,7 @@ dependencies = [
 
 [[package]]
 name = "termoso-awslc-rsa"
-version = "0.11.9"
+version = "0.12.0"
 dependencies = [
  "aws-lc-rs",
  "aws-lc-sys",
@@ -9019,7 +9019,7 @@ dependencies = [
 
 [[package]]
 name = "termoso-bridge"
-version = "0.11.9"
+version = "0.12.0"
 dependencies = [
  "axum",
  "bytes",
@@ -9045,7 +9045,7 @@ dependencies = [
 
 [[package]]
 name = "termoso-client"
-version = "0.11.9"
+version = "0.12.0"
 dependencies = [
  "chrono",
  "serde",
@@ -9060,7 +9060,7 @@ dependencies = [
 
 [[package]]
 name = "termoso-core"
-version = "0.11.9"
+version = "0.12.0"
 dependencies = [
  "aes 0.8.4",
  "aes 0.9.3",
@@ -9124,7 +9124,7 @@ dependencies = [
 
 [[package]]
 name = "termoso-crypto"
-version = "0.11.9"
+version = "0.12.0"
 dependencies = [
  "argon2 0.5.3",
  "base64 0.23.1",
@@ -9146,7 +9146,7 @@ dependencies = [
 
 [[package]]
 name = "termoso-desktop"
-version = "0.11.9"
+version = "0.12.0"
 dependencies = [
  "axum",
  "base64 0.23.1",
@@ -9189,7 +9189,7 @@ dependencies = [
 
 [[package]]
 name = "termoso-mobile"
-version = "0.11.9"
+version = "0.12.0"
 dependencies = [
  "alacritty_terminal",
  "async-trait",
@@ -9226,7 +9226,7 @@ dependencies = [
 
 [[package]]
 name = "termoso-proto"
-version = "0.11.9"
+version = "0.12.0"
 dependencies = [
  "chrono",
  "serde",
@@ -9237,7 +9237,7 @@ dependencies = [
 
 [[package]]
 name = "termoso-server"
-version = "0.11.9"
+version = "0.12.0"
 dependencies = [
  "aes 0.8.4",
  "aes-gcm 0.10.3",
@@ -9307,7 +9307,7 @@ dependencies = [
 
 [[package]]
 name = "termoso-wasm"
-version = "0.11.9"
+version = "0.12.0"
 dependencies = [
  "js-sys",
  "serde",
@@ -9999,7 +9999,7 @@ dependencies = [
 
 [[package]]
 name = "uniffi-bindgen"
-version = "0.11.9"
+version = "0.12.0"
 dependencies = [
  "uniffi",
 ]
