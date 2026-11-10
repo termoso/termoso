@@ -311,8 +311,10 @@ const ALACRITTY_NORMAL: [&str; 8] = [
 ];
 
 fn alacritty_toml(name: &str, text: &str) -> Result<ThemeImport> {
+    // toml 1.x parses a bare `Value` as a single value; a document is a `Table`.
     let v: toml::Value = text
-        .parse()
+        .parse::<toml::Table>()
+        .map(toml::Value::Table)
         .map_err(|e| DesktopError::invalid(format!("not an Alacritty TOML file: {e}")))?;
     let colors = v.get("colors").unwrap_or(&v);
     let get = |table: &str, key: &str| -> Option<String> {
