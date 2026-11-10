@@ -55,6 +55,13 @@ ignore = [
   { id = "RUSTSEC-2026-0367", reason = "zip extract via utoipa-swagger-ui build.rs (compile-time) and tauri-plugin-updater (signature-verified bundles only)" },
   { id = "RUSTSEC-2026-0368", reason = "zip extract via utoipa-swagger-ui build.rs (compile-time) and tauri-plugin-updater (signature-verified bundles only)" },
   { id = "RUSTSEC-2026-0369", reason = "zip extract via utoipa-swagger-ui build.rs (compile-time) and tauri-plugin-updater (signature-verified bundles only)" },
+  # Bundled SQLite < 3.54 (CVE-2026-119375): uninitialized page-cache bytes when a
+  # database is opened together with an attacker-written -wal of another page size.
+  # The vault database lives in the app's private data dir; no untrusted
+  # database files are opened. The fix (libsqlite3-sys 0.39 via rusqlite 0.41)
+  # is blocked by sqlx 0.9.0, which pins libsqlite3-sys < 0.38 (links = sqlite3).
+  # Drop when sqlx allows libsqlite3-sys 0.39.
+  { id = "RUSTSEC-2026-0459", reason = "bundled SQLite CVE-2026-119375 needs a hostile -wal next to the vault db in the app's private dir; blocked on sqlx 0.9 pinning libsqlite3-sys < 0.38" },
   # zbus_names / zvariant / zvariant_derive were folded into zbus 6; no
   # vulnerability, just "unmaintained as standalone crates". They reach us only
   # through zbus 5 on Linux desktop: notify-rust (tauri-plugin-notification) and
