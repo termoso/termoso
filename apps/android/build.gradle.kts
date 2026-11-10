@@ -4,7 +4,7 @@
 buildscript {
     dependencies {
         constraints {
-            classpath("com.google.guava:guava:33.7.2-jre") {
+            classpath("com.google.guava:guava:33.8.0-jre") {
                 because("Dependabot high alert on the AGP build classpath")
             }
         }
