@@ -56,6 +56,7 @@ import {
   TERM_TYPES,
   type CursorStyle,
   type RestoreCommands,
+  type TabTitle,
   type Settings,
   type SyncConflict,
   type TermType,
@@ -805,6 +806,23 @@ function Terminal({ s, update }: SectionProps) {
               <MenuItem value="type">{tr("Type, don't run")}</MenuItem>
               <MenuItem value="run">{tr("Run automatically")}</MenuItem>
               <MenuItem value="never">{tr("Directory only")}</MenuItem>
+            </TextField>
+          }
+        />
+        <SettingRow
+          label={tr("Tab title")}
+          hint={tr(
+            "What a tab for a saved host shows: the host's label (its name when it has none), or the title the shell sets, such as the working directory or the running program. Local shells always follow the shell.",
+          )}
+          control={
+            <TextField
+              select
+              value={s.tabTitle}
+              onChange={(e) => update({ tabTitle: e.target.value as TabTitle })}
+              sx={{ width: 200 }}
+            >
+              <MenuItem value="label">{tr("Host label")}</MenuItem>
+              <MenuItem value="shell">{tr("Shell title")}</MenuItem>
             </TextField>
           }
         />

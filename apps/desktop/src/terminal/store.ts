@@ -77,6 +77,7 @@ import {
 } from "./layout";
 import { resolveTerminalTheme, toXtermTheme, type TerminalTheme } from "./themes";
 import { KeywordHighlighter } from "./highlight";
+import { sessionTitle } from "./sessionTitle";
 import { leafState, type LeafState, restoreKeystrokes, withLeafState } from "./restore";
 import {
   RECONNECT_ATTEMPTS,
@@ -662,7 +663,10 @@ function createRuntime(paneId: Uuid): Runtime {
     }),
     term.onTitleChange((title) => {
       const pane = terminalStore.get().panes[paneId];
-      if (pane && title.trim()) patchPane(paneId, { title: title.trim() });
+      // Saved-host tabs keep the host's label (or its name) unless Settings → Terminal →
+      // Tab title is "Shell title"; local shells and quick connections always follow it.
+      const followShell = !pane?.hostId || currentSettings?.tabTitle === "shell";
+      if (pane && followShell && title.trim()) patchPane(paneId, { title: title.trim() });
     }),
     term.onSelectionChange(() => {
       if (currentSettings?.copyOnSelect && term.hasSelection()) {
@@ -1579,7 +1583,7 @@ function startSession(paneId: Uuid, target: OpenTarget) {
     })
     .then((info) => {
       patchPane(paneId, {
-        title: info.title,
+        title: sessionTitle(info),
         subtitle: info.target,
         protocol: info.protocol,
         hostId: info.hostId,
@@ -2350,13 +2354,16 @@ function onSessionEvent(ev: SessionEvent) {
   switch (ev.type) {
     case "connecting":
       patchPane(ev.id, {
-        title: ev.info.title,
+        title: sessionTitle(ev.info),
         subtitle: ev.info.target,
         protocol: ev.info.protocol,
         hostId: ev.info.hostId,
         hostTheme: ev.info.colorScheme,
       });
-      appendLog(ev.id, tr("Connecting to {value}", { value: ev.info.target || ev.info.title }));
+      appendLog(
+        ev.id,
+        tr("Connecting to {value}", { value: ev.info.target || sessionTitle(ev.info) }),
+      );
       applyPaneLook(ev.id);
       break;
     case "connected":

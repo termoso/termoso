@@ -325,6 +325,9 @@ pub struct Settings {
     /// saved: `type` puts it on the prompt for the user to confirm, `run`
     /// executes it, `never` restores only the working directory.
     pub restore_commands: String,
+    /// What a saved host's tab is titled with: `label` keeps the host's label (or
+    /// its name), `shell` follows the title the shell sets (cwd, running program).
+    pub tab_title: String,
     pub terminal_bell: bool,
     /// Render bold text with the bright ANSI colours.
     pub bright_bold: bool,
@@ -451,6 +454,7 @@ impl Default for Settings {
             shell_integration: true,
             triggers: Vec::new(),
             restore_commands: "type".into(),
+            tab_title: "label".into(),
             terminal_bell: false,
             bright_bold: false,
             term_type: "xterm-256color".into(),
@@ -558,6 +562,9 @@ impl Settings {
             return Err(DesktopError::invalid(
                 "restoreCommands must be type, run or never",
             ));
+        }
+        if !matches!(self.tab_title.as_str(), "label" | "shell") {
+            return Err(DesktopError::invalid("tabTitle must be label or shell"));
         }
         if !matches!(
             self.update_check.as_str(),
@@ -809,6 +816,19 @@ mod tests {
         assert!(!s.record_sessions);
         assert!(s.shortcuts.is_empty());
         s.validate().unwrap();
+    }
+
+    #[test]
+    fn tab_title_defaults_to_the_host_label_and_must_be_known() {
+        let mut s = Settings::default();
+        assert_eq!(s.tab_title, "label");
+        s.tab_title = "shell".into();
+        s.validate().unwrap();
+        s.tab_title = "cwd".into();
+        assert!(s.validate().is_err());
+        // Settings saved before the option existed load with the default.
+        let old: Settings = serde_json::from_str(r#"{"theme":"light"}"#).unwrap();
+        assert_eq!(old.tab_title, "label");
     }
 
     #[test]

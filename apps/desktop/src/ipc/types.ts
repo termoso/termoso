@@ -105,6 +105,8 @@ export interface Settings {
   triggers: Trigger[];
   /** Command a workspace pane was running when saved: put on the prompt, run, or dropped. */
   restoreCommands: RestoreCommands;
+  /** Tab title of a saved host: its label (default) or the title the shell sets. */
+  tabTitle: TabTitle;
   terminalBell: boolean;
   brightBold: boolean;
   termType: TermType;
@@ -165,6 +167,8 @@ export interface Settings {
 export type UpdateCheck = "manual" | "startup" | "every_6h" | "daily" | "weekly";
 
 export type RestoreCommands = "type" | "run" | "never";
+
+export type TabTitle = "label" | "shell";
 
 export interface UpdateInfo {
   currentVersion: string;
