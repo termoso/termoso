@@ -162,6 +162,8 @@ export interface Settings {
   shortcuts: Record<string, string>;
   /** SFTP “Open with” associations: lower-case extension (`""` = none) → app. */
   sftpOpenWith: Record<string, string>;
+  /** OpenSSH ProxyCommand per saved host (host id → command); stored on this device only. */
+  proxyCommands: Record<string, string>;
 }
 
 export type UpdateCheck = "manual" | "startup" | "every_6h" | "daily" | "weekly";

@@ -28,6 +28,7 @@ describe("ru table", () => {
   const sameInRussian = new Set([
     "Aa",
     "S3",
+    "ProxyCommand",
     "Access Key ID",
     "Ansible inventory",
     "Authorization: Bearer",

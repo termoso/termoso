@@ -55,6 +55,7 @@ Where the binary is: `termoso` on the `PATH` from the deb/rpm packages; `/Applic
 | Group, tags, notes        | Groups pass their settings to hosts without their own; tags filter; notes are free text, shown on the card.                                                |
 | Jump host                 | Another saved host to hop through (`ProxyJump`). Chains of several hops work.                                                                              |
 | Proxy                     | HTTP, SOCKS4 or SOCKS5, with optional credentials.                                                                                                         |
+| ProxyCommand              | Desktop only. A program that carries the connection (`cloudflared access ssh -T %h`, `ssh -W %h:%p bastion`); stored on this device, never synced.           |
 | Terminal                  | Color scheme, character set, backspace key, terminal type, startup snippet, environment variables.                                                         |
 | AI coding agent (Android) | Start Claude Code, Gemini CLI, Codex, OpenCode or Aider after connecting — see [Compose and AI](/docs/terminal/compose-and-ai#ai-coding-agent-on-connect). |
 | Agent forwarding, X11     | Off by default; X11 needs an X server on the local machine.                                                                                                |
@@ -91,6 +92,8 @@ A server that was legitimately reinstalled is handled by removing its old entry 
 A **jump host** is any other saved host; Termoso opens an SSH connection to it and tunnels the real connection through, exactly like `ssh -J`. The jump host's own credentials and known-host entry are used, and a jump host can itself have a jump host — three hops through two bastions is a normal setup. Agent forwarding to the jump host is not required.
 
 A **proxy** (HTTP `CONNECT`, SOCKS4, SOCKS5) sits in front of the TCP connection instead, for networks where only a proxy is allowed out. Jump host and proxy can be combined: the proxy carries the connection to the bastion.
+
+A **ProxyCommand** (desktop only) replaces the dial altogether: Termoso starts the program you give and speaks SSH over its stdin and stdout, exactly like OpenSSH does. That is how Cloudflare Access (`cloudflared access ssh -T %h`), Tailscale, AWS SSM or a plain `ssh -W %h:%p bastion` plug in. `%h`, `%p` and `%r` expand to the host, port and user; the command runs through `sh -c` (Windows: `cmd /C`, without a console window). Because a host can be shared through a team vault and a ProxyCommand runs an arbitrary program, the command is stored on this device only, in the app settings, and is never synced or exported: set it on each machine in the host editor under **Proxy**. When set, it takes precedence over a proxy; a gateway still wins over both, and Mosh cannot use it.
 
 ## Post-quantum key exchange
 

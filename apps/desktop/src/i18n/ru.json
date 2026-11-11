@@ -2866,5 +2866,7 @@
   "Tab title": "Заголовок вкладки",
   "Use this identity for this host from now on": "Использовать эту identity для этого хоста и дальше",
   "Weekly": "Еженедельно",
-  "What a tab for a saved host shows: the host's label (its name when it has none), or the title the shell sets, such as the working directory or the running program. Local shells always follow the shell.": "Что показывает вкладка сохранённого хоста: метку хоста (или его имя, если метки нет) либо заголовок, который задаёт оболочка, например рабочий каталог или запущенную программу. Локальные оболочки всегда следуют за оболочкой."
+  "What a tab for a saved host shows: the host's label (its name when it has none), or the title the shell sets, such as the working directory or the running program. Local shells always follow the shell.": "Что показывает вкладка сохранённого хоста: метку хоста (или его имя, если метки нет) либо заголовок, который задаёт оболочка, например рабочий каталог или запущенную программу. Локальные оболочки всегда следуют за оболочкой.",
+  "ProxyCommand": "ProxyCommand",
+  "Program that carries the connection, like OpenSSH ProxyCommand: %h, %p and %r expand to host, port and user. Stored on this device only, never synced. Overrides the proxy above.": "Программа, через которую идёт соединение, как ProxyCommand в OpenSSH: %h, %p и %r заменяются на хост, порт и пользователя. Хранится только на этом устройстве, не синхронизируется. Имеет приоритет над прокси выше."
 }
