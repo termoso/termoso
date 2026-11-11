@@ -691,4 +691,23 @@ mod proxy_command_tests {
         );
         assert_eq!(expand_proxy_command("echo %z %", "h", 1, "u"), "echo %z %");
     }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn child_stream_round_trips_bytes() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let mut s = super::spawn_proxy_command("cat", "h", 22, "u")
+            .await
+            .unwrap();
+        s.write_all(b"SSH-2.0-probe\r\n").await.unwrap();
+        s.flush().await.unwrap();
+        let mut buf = [0u8; 15];
+        s.read_exact(&mut buf).await.unwrap();
+        assert_eq!(&buf, b"SSH-2.0-probe\r\n");
+        assert!(
+            super::spawn_proxy_command("   ", "h", 22, "u")
+                .await
+                .is_err()
+        );
+    }
 }
