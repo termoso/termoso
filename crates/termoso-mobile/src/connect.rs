@@ -816,6 +816,7 @@ async fn ssh_connect(
             keepalive: keepalive(settings, &ssh_cfg),
             timeout: Duration::from_secs(ssh_cfg.timeout.unwrap_or(20).clamp(1, 600) as u64),
             proxy: proxy.clone(),
+            proxy_command: None,
             gateway: conn.gateway_dial(resolved).await,
             env: ssh_cfg.env_variables.clone(),
             agent_forwarding: ssh_cfg.agent_forwarding,

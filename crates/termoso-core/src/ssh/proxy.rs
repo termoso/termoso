@@ -81,6 +81,89 @@ pub enum ProxyStream {
     Tcp(TcpStream),
     /// Tunnelled through a gateway (see `crate::gateway`).
     Ws(Box<crate::gateway::WsStream>),
+    /// The stdin/stdout of a `ProxyCommand` child process.
+    Child(Box<ChildStream>),
+}
+
+/// SSH over the pipes of a helper process (`ProxyCommand`): what the child
+/// prints on stdout is what the server sent, what we write to its stdin goes
+/// to the server. The child is killed when the stream is dropped.
+pub struct ChildStream {
+    _child: tokio::process::Child,
+    stdin: tokio::process::ChildStdin,
+    stdout: tokio::process::ChildStdout,
+}
+
+/// Expand the OpenSSH `ProxyCommand` tokens: `%h` host, `%p` port, `%r`
+/// remote user, `%%` a literal percent sign. Unknown tokens are kept as is.
+pub fn expand_proxy_command(command: &str, host: &str, port: u16, user: &str) -> String {
+    let mut out = String::with_capacity(command.len() + 32);
+    let mut chars = command.chars();
+    while let Some(c) = chars.next() {
+        if c != '%' {
+            out.push(c);
+            continue;
+        }
+        match chars.next() {
+            Some('h') => out.push_str(host),
+            Some('p') => out.push_str(&port.to_string()),
+            Some('r') => out.push_str(user),
+            Some('%') => out.push('%'),
+            Some(other) => {
+                out.push('%');
+                out.push(other);
+            }
+            None => out.push('%'),
+        }
+    }
+    out
+}
+
+/// Start `command` (through the platform shell, like OpenSSH does) and hand
+/// back its pipes as the SSH transport.
+pub async fn spawn_proxy_command(
+    command: &str,
+    host: &str,
+    port: u16,
+    user: &str,
+) -> Result<ProxyStream> {
+    let expanded = expand_proxy_command(command, host, port, user);
+    if expanded.trim().is_empty() {
+        return Err(CoreError::Invalid("ProxyCommand is empty".into()));
+    }
+    #[cfg(windows)]
+    let mut cmd = {
+        let mut c = tokio::process::Command::new("cmd");
+        c.arg("/C").arg(&expanded);
+        c
+    };
+    #[cfg(not(windows))]
+    let mut cmd = {
+        let mut c = tokio::process::Command::new("sh");
+        c.arg("-c").arg(&expanded);
+        c
+    };
+    crate::posture::hide_console_window(&mut cmd);
+    cmd.stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .kill_on_drop(true);
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| CoreError::Ssh(format!("ProxyCommand failed to start: {e}")))?;
+    let stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| CoreError::Ssh("ProxyCommand has no stdin".into()))?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| CoreError::Ssh("ProxyCommand has no stdout".into()))?;
+    Ok(ProxyStream::Child(Box::new(ChildStream {
+        _child: child,
+        stdin,
+        stdout,
+    })))
 }
 
 impl AsyncRead for ProxyStream {
@@ -92,6 +175,7 @@ impl AsyncRead for ProxyStream {
         match self.get_mut() {
             ProxyStream::Tcp(s) => Pin::new(s).poll_read(cx, buf),
             ProxyStream::Ws(s) => Pin::new(s).poll_read(cx, buf),
+            ProxyStream::Child(s) => Pin::new(&mut s.stdout).poll_read(cx, buf),
         }
     }
 }
@@ -105,18 +189,21 @@ impl AsyncWrite for ProxyStream {
         match self.get_mut() {
             ProxyStream::Tcp(s) => Pin::new(s).poll_write(cx, buf),
             ProxyStream::Ws(s) => Pin::new(s).poll_write(cx, buf),
+            ProxyStream::Child(s) => Pin::new(&mut s.stdin).poll_write(cx, buf),
         }
     }
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
         match self.get_mut() {
             ProxyStream::Tcp(s) => Pin::new(s).poll_flush(cx),
             ProxyStream::Ws(s) => Pin::new(s).poll_flush(cx),
+            ProxyStream::Child(s) => Pin::new(&mut s.stdin).poll_flush(cx),
         }
     }
     fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
         match self.get_mut() {
             ProxyStream::Tcp(s) => Pin::new(s).poll_shutdown(cx),
             ProxyStream::Ws(s) => Pin::new(s).poll_shutdown(cx),
+            ProxyStream::Child(s) => Pin::new(&mut s.stdin).poll_shutdown(cx),
         }
     }
 }
@@ -580,5 +667,28 @@ mod tests {
         };
         let err = connect(&cfg, "example.invalid", 22).await.err().unwrap();
         assert!(err.to_string().contains("407"), "{err}");
+    }
+}
+
+#[cfg(test)]
+mod proxy_command_tests {
+    use super::expand_proxy_command;
+
+    #[test]
+    fn expands_openssh_tokens() {
+        assert_eq!(
+            expand_proxy_command(
+                "cloudflared access ssh -T %h",
+                "ssh.example.com",
+                22,
+                "root"
+            ),
+            "cloudflared access ssh -T ssh.example.com"
+        );
+        assert_eq!(
+            expand_proxy_command("nc -X 5 -x p:1080 %h %p %r 100%%", "h", 2222, "u"),
+            "nc -X 5 -x p:1080 h 2222 u 100%"
+        );
+        assert_eq!(expand_proxy_command("echo %z %", "h", 1, "u"), "echo %z %");
     }
 }

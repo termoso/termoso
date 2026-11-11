@@ -410,6 +410,11 @@ pub struct Settings {
     /// SFTP "Open with" associations: lower-case extension (`""` = files
     /// without one) → application name or path.
     pub sftp_open_with: BTreeMap<String, String>,
+    /// OpenSSH `ProxyCommand` per saved host (host id → command line, `%h`
+    /// `%p` `%r` expanded). Device-local on purpose: a shared host must not
+    /// be able to run a program on another member's machine.
+    #[serde(default)]
+    pub proxy_commands: BTreeMap<String, String>,
 }
 
 /// Terminal emulation types offered in Settings; all have terminfo entries on
@@ -489,6 +494,7 @@ impl Default for Settings {
             notify_account: true,
             shortcuts: BTreeMap::new(),
             sftp_open_with: BTreeMap::new(),
+            proxy_commands: BTreeMap::new(),
         }
     }
 }
@@ -593,6 +599,18 @@ impl Settings {
             };
             if !ok(command, 64) || !(chord.is_empty() || ok(chord, MAX_SHORTCUT_LEN)) {
                 return Err(DesktopError::invalid("invalid shortcut entry"));
+            }
+        }
+        if self.proxy_commands.len() > MAX_OPEN_WITH {
+            return Err(DesktopError::invalid("too many ProxyCommand entries"));
+        }
+        for (host, command) in &self.proxy_commands {
+            if uuid::Uuid::parse_str(host).is_err()
+                || command.trim().is_empty()
+                || command.len() > 1024
+                || command.contains(['\0', '\n'])
+            {
+                return Err(DesktopError::invalid("invalid ProxyCommand entry"));
             }
         }
         if self.sftp_open_with.len() > MAX_OPEN_WITH {

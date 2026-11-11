@@ -124,6 +124,10 @@ pub struct ConnectOptions {
     pub timeout: Duration,
     /// Optional proxy for the TCP leg.
     pub proxy: Option<proxy::ProxyConfig>,
+    /// OpenSSH-style `ProxyCommand`: run this program and speak SSH over its
+    /// stdin/stdout instead of dialling (`%h`, `%p`, `%r` are expanded).
+    /// Takes precedence over `proxy`; `gateway` still wins over both.
+    pub proxy_command: Option<String>,
     /// Tunnel through a gateway instead of dialling (takes precedence over `proxy`).
     pub gateway: Option<crate::gateway::GatewayDial>,
     /// Environment to request on every shell (`SetEnv`).
@@ -212,6 +216,7 @@ impl ConnectOptions {
             keepalive: Some(Duration::from_secs(30)),
             timeout: Duration::from_secs(20),
             proxy: None,
+            proxy_command: None,
             gateway: None,
             env: Vec::new(),
             agent_forwarding: false,
@@ -345,6 +350,22 @@ impl SshClient {
                 return crate::gateway::dial(g)
                     .await
                     .map(|s| proxy::ProxyStream::Ws(Box::new(s)));
+            }
+            if let Some(cmd) = opts
+                .proxy_command
+                .as_deref()
+                .filter(|c| !c.trim().is_empty())
+            {
+                opts.report(ConnectPhase::Connecting {
+                    via: "ProxyCommand".to_string(),
+                });
+                return proxy::spawn_proxy_command(
+                    cmd,
+                    &opts.target.host,
+                    opts.target.port,
+                    &opts.target.username,
+                )
+                .await;
             }
             match &opts.proxy {
                 Some(p) => {

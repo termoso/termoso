@@ -44,15 +44,17 @@ import {
 } from "@/components/ui";
 import {
   useDeleteHost,
+  useGateways,
   useGroups,
   useHostChains,
   useHostForm,
   useInherited,
   useProxies,
   useSaveHost,
+  useSaveSettings,
+  useSettings,
   useSnippets,
   useTags,
-  useGateways,
 } from "@/ipc/hooks";
 import {
   emptyHostForm,
@@ -190,6 +192,48 @@ const primaryOf = (f: HostForm): ConnectTarget | null =>
           : null;
 
 /** Terminal sections need an address; a WebDAV-only host carries its own URL. */
+
+/**
+ * OpenSSH-style ProxyCommand for one saved host. Lives in the app settings on
+ * this device only (never in the vault, never synced): a shared host must not
+ * be able to run a program on another member's machine.
+ */
+function ProxyCommandField({ hostId }: { hostId: Uuid }) {
+  const settings = useSettings();
+  const save = useSaveSettings();
+  const stored = settings.data?.proxyCommands[hostId] ?? "";
+  // `null` = not edited yet, show what is stored.
+  const [edited, setEdited] = useState<string | null>(null);
+  const value = edited ?? stored;
+  const commit = () => {
+    const s = settings.data;
+    if (!s || value.trim() === stored) return;
+    const rest = Object.fromEntries(
+      Object.entries(s.proxyCommands).filter(([id]) => id !== hostId),
+    );
+    const proxyCommands = value.trim() ? { ...rest, [hostId]: value.trim() } : rest;
+    save.mutate({ ...s, proxyCommands }, { onSuccess: () => setEdited(null) });
+  };
+  return (
+    <Field
+      label={tr("ProxyCommand")}
+      hint={tr(
+        "Program that carries the connection, like OpenSSH ProxyCommand: %h, %p and %r expand to host, port and user. Stored on this device only, never synced. Overrides the proxy above.",
+      )}
+    >
+      <TextField
+        value={value}
+        onChange={(e) => setEdited(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") commit();
+        }}
+        placeholder="cloudflared access ssh -T %h"
+        slotProps={{ input: { sx: { fontFamily: monoFontFamily } } }}
+      />
+    </Field>
+  );
+}
 
 /**
  * Host Details laid out the Termius way: Address → General → "SSH on … port"
@@ -808,6 +852,7 @@ function HostEditor({
                     </TextField>
                   </Field>
                   {proxyField}
+                  {hostId && <ProxyCommandField hostId={hostId} />}
                   <Field label={tr("Gateway")}>
                     <TextField
                       select

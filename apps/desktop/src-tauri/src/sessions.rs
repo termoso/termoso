@@ -1087,6 +1087,15 @@ async fn open_mosh<R: Runtime>(
             "Mosh cannot go through a proxy; remove it or connect with SSH",
         ));
     }
+    if state
+        .settings()
+        .ok()
+        .is_some_and(|s| s.proxy_commands.contains_key(&resolved.host.id.to_string()))
+    {
+        return Err(DesktopError::invalid(
+            "Mosh cannot go through a ProxyCommand; remove it or connect with SSH",
+        ));
+    }
     emit_connecting(
         app,
         id,
@@ -1570,6 +1579,16 @@ async fn ssh_connect<R: Runtime>(
         Some(p) => Some(proxy_config(&state, &p.data)?),
         None => None,
     };
+    // Device-local ProxyCommand (Settings), only for the leg this app dials
+    // itself: hops ride over the previous SSH connection.
+    let proxy_command = match (resolved, via.is_none()) {
+        (Some(r), true) => state
+            .settings()
+            .ok()
+            .and_then(|s| s.proxy_commands.get(&r.host.id.to_string()).cloned())
+            .filter(|c| !c.trim().is_empty()),
+        _ => None,
+    };
     let mut pin: Option<Zeroizing<String>> = None;
 
     let mut attempts = 0;
@@ -1672,6 +1691,7 @@ async fn ssh_connect<R: Runtime>(
             keepalive: keepalive(&state, &ssh_cfg),
             timeout: Duration::from_secs(ssh_cfg.timeout.unwrap_or(20).clamp(1, 600) as u64),
             proxy: proxy.clone(),
+            proxy_command: proxy_command.clone(),
             gateway: gateway_dial(app, resolved).await,
             env: ssh_cfg.env_variables.clone(),
             agent_forwarding: ssh_cfg.agent_forwarding,
