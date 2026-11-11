@@ -147,8 +147,17 @@ final class SmokeUITests: XCTestCase {
         snap("13-connections-live")
 
         // Disconnect from inside the terminal and confirm the closed state.
-        app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'connections.session.'")).firstMatch.tap()
-        XCTAssertTrue(canvas.waitForExistence(timeout: 5))
+        // Reopening right after the list appeared can lose the tap to the
+        // navigation transition on a slow simulator, so wait for the row
+        // to be hittable and tap again if the terminal did not come up.
+        let row = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'connections.session.'")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        var reopened = false
+        for _ in 0 ..< 3 where !reopened {
+            if row.exists && row.isHittable { row.tap() }
+            reopened = canvas.waitForExistence(timeout: 10)
+        }
+        XCTAssertTrue(reopened, "terminal did not reopen from the Connections list")
         el("terminal.more").tap()
         // Confirmation-dialog actions do not carry SwiftUI identifiers.
         let disconnect = app.buttons["Disconnect"].firstMatch
