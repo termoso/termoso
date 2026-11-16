@@ -94,7 +94,7 @@ fido2-soft = ["fido2-ctap", "dep:ed25519-dalek"]
 termoso-core = { path = ".", features = ["fido2-soft"] }
 tempfile = "3"
 # In-process WebDAV server for the client tests (plain, Basic/Digest, TLS).
-dav-server = { version = "0.11", default-features = false, features = ["memfs"] }
+dav-server = { version = "0.12", default-features = false, features = ["memfs"] }
 hyper = { version = "1", features = ["server", "http1"] }
 hyper-util = { version = "0.1", features = ["server", "http1", "tokio", "service"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
